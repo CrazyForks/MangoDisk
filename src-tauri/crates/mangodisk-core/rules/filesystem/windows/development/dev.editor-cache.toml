@@ -1,0 +1,45 @@
+id = "dev.editor-cache"
+schema_version = 3
+rule_version = 1
+platform = "windows"
+category = "development"
+risk = "recoverable"
+default_selected = false
+required_stopped_processes = ["Code.exe", "Cursor.exe", "Windsurf.exe", "VSCodium.exe"]
+
+[[applicability]]
+kind = "anyRootExists"
+
+[[roots]]
+template = "${roaming_app_data}"
+kind = "childDirectories"
+child_names = ["Code", "Cursor", "Windsurf", "VSCodium"]
+suffixes = [
+  "Cache",
+  "Code Cache",
+  "GPUCache",
+  "CachedData",
+  "CachedExtensions",
+  "CachedExtensionVSIXs",
+  "DawnCache",
+  "DawnGraphiteCache",
+  "DawnWebGPUCache",
+  "logs",
+]
+
+[matcher]
+kind = "all"
+
+[execution]
+kind = "deleteMatchingContents"
+requires_app_close = true
+
+[verification]
+lifecycle = "verified"
+evidence = "The rule selects only directories explicitly named as renderer, extension-package, generated-data, GPU, or log caches under supported Electron editor user-data roots; User settings, workspace storage, extensions, and backups are excluded"
+verified_at = "2026-07-18"
+verified_platform = "windows"
+references = [
+  "https://code.visualstudio.com/docs/configure/command-line#_advanced-cli-options",
+  "https://www.electronjs.org/docs/latest/api/app#appgetpathname",
+]

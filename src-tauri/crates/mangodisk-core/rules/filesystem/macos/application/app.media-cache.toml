@@ -1,0 +1,46 @@
+# Only standard application roots under Library/Caches are used. Spotify
+# PersistentCache, podcast downloads, music libraries, and video files are
+# outside the rule boundary.
+id = "app.media-cache"
+schema_version = 3
+rule_version = 1
+platform = "macos"
+category = "application"
+risk = "safe"
+default_selected = true
+required_stopped_processes = ["Spotify", "Music", "Podcasts", "TV", "VLC", "IINA"]
+
+[[applicability]]
+kind = "anyRootExists"
+
+[[roots]]
+template = "${user_library}/Caches/com.spotify.client"
+
+[[roots]]
+template = "${user_library}/Caches/com.apple.Music"
+
+[[roots]]
+template = "${user_library}/Caches/com.apple.podcasts"
+
+[[roots]]
+template = "${user_library}/Caches/com.apple.TV"
+
+[[roots]]
+template = "${user_library}/Caches/org.videolan.vlc"
+
+[[roots]]
+template = "${user_library}/Caches/com.colliderli.iina"
+
+[matcher]
+kind = "all"
+
+[execution]
+kind = "deleteMatchingContents"
+requires_app_close = true
+
+[verification]
+lifecycle = "verified"
+evidence = "The rule is confined to application-specific directories under Library/Caches, which Apple designates for discardable files; media libraries, playlists, downloads, and offline content remain outside the roots"
+verified_at = "2026-07-17"
+verified_platform = "macos"
+references = ["https://developer.apple.com/documentation/foundation/url/cachesdirectory"]

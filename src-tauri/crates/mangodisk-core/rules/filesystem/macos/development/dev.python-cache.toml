@@ -1,0 +1,48 @@
+id = "dev.python-cache"
+schema_version = 3
+rule_version = 2
+platform = "macos"
+category = "development"
+risk = "recoverable"
+default_selected = false
+required_stopped_processes = []
+
+[[applicability]]
+kind = "anyRootExists"
+
+[[roots]]
+template = "${user_library}/Caches/pip"
+
+[[roots]]
+template = "${user_library}/Caches/pypoetry"
+
+[[roots]]
+template = "${home}/.pyenv/cache"
+
+[[roots]]
+template = "${home}/.cache/poetry"
+
+[[roots]]
+template = "${home}/.cache/ruff"
+
+[[roots]]
+template = "${home}/.cache/mypy"
+
+[matcher]
+kind = "all"
+
+[execution]
+kind = "deleteMatchingContents"
+requires_app_close = false
+
+[verification]
+lifecycle = "verified"
+evidence = "Python package managers, pyenv, Ruff, and mypy keep rebuildable downloads or analysis data in dedicated cache directories"
+verified_at = "2026-07-30"
+verified_platform = "macos"
+references = [
+  "https://pip.pypa.io/en/stable/topics/caching/",
+  "https://python-poetry.org/docs/configuration/#cache-dir",
+  "https://docs.astral.sh/ruff/configuration/#cache-dir",
+  "https://mypy.readthedocs.io/en/stable/command_line.html#cmdoption-mypy-cache-dir",
+]

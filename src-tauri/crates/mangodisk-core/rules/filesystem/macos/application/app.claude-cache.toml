@@ -1,0 +1,34 @@
+# Claude Desktop cleanup is limited to its standard bundle cache. Sessions,
+# credentials, and logs are outside this rule boundary.
+id = "app.claude-cache"
+schema_version = 3
+rule_version = 1
+platform = "macos"
+category = "application"
+risk = "safe"
+default_selected = true
+required_stopped_processes = ["Claude"]
+
+[[applicability]]
+kind = "anyOf"
+items = [
+  { kind = "applicationInstalled", identifiers = ["com.anthropic.claudefordesktop", "Claude"] },
+  { kind = "anyRootExists" },
+]
+
+[[roots]]
+template = "${user_library}/Caches/com.anthropic.claudefordesktop"
+
+[matcher]
+kind = "all"
+
+[execution]
+kind = "deleteMatchingContents"
+requires_app_close = true
+
+[verification]
+lifecycle = "verified"
+evidence = "The rule selects only Claude Desktop's bundle directory under Library/Caches, which Apple designates for discardable files; sessions, credentials, settings, and logs remain outside the root"
+verified_at = "2026-07-17"
+verified_platform = "macos"
+references = ["https://developer.apple.com/documentation/foundation/url/cachesdirectory"]

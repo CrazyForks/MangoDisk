@@ -1,0 +1,40 @@
+id = "app.electron-cache"
+schema_version = 3
+rule_version = 2
+platform = "windows"
+category = "application"
+risk = "safe"
+default_selected = false
+required_stopped_processes = ["Discord.exe", "Slack.exe", "Teams.exe", "Figma.exe", "Notion.exe", "Obsidian.exe", "Postman.exe", "Insomnia.exe", "Claude.exe", "GitHubDesktop.exe"]
+
+[[applicability]]
+kind = "anyRootExists"
+
+[[roots]]
+template = "${roaming_app_data}"
+kind = "childDirectories"
+child_names = ["discord", "Slack", "Microsoft Teams", "Figma", "Notion", "obsidian", "Postman", "Insomnia", "Claude", "GitHub Desktop"]
+suffixes = ["Cache", "Code Cache", "GPUCache", "DawnCache", "DawnGraphiteCache", "DawnWebGPUCache", "GrShaderCache", "GraphiteDawnCache", "logs", "Crashpad/reports"]
+
+[[roots]]
+template = "${local_app_data}"
+kind = "childDirectories"
+child_names = ["discord", "Slack", "Microsoft Teams", "Figma", "Notion", "obsidian", "Postman", "Insomnia", "Claude", "GitHub Desktop"]
+suffixes = ["Cache", "Code Cache", "GPUCache", "DawnCache", "DawnGraphiteCache", "DawnWebGPUCache", "GrShaderCache", "GraphiteDawnCache", "logs", "Crashpad/reports"]
+
+[matcher]
+kind = "all"
+
+[execution]
+kind = "deleteMatchingContents"
+requires_app_close = true
+
+[verification]
+lifecycle = "verified"
+evidence = "The rule expands only known Electron product directories and selects Cache, Code Cache, GPUCache, shader-cache, and Dawn cache suffixes; settings, workspaces, cookies, Local Storage, IndexedDB, and downloads are excluded"
+verified_at = "2026-07-18"
+verified_platform = "windows"
+references = [
+  "https://www.electronjs.org/docs/latest/api/app#appgetpathname",
+  "https://chromium.googlesource.com/chromium/src/+/main/docs/user_data_dir.md",
+]

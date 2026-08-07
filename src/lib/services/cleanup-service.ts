@@ -1,0 +1,84 @@
+import { invoke } from '@tauri-apps/api/core';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+
+import { EVENT_NAMES } from '@/lib/models/telemetry';
+import type {
+  CleanupExecutionProgress,
+  CleanupResult,
+  CleanupScanResult,
+  CleanupSourceSelection,
+} from '@/lib/models/cleanup';
+import type { TraversalProgress } from '@/lib/models/progress';
+
+export class CleanupService {
+  static scan(deepProjectDiscovery = false): Promise<CleanupScanResult> {
+    return invoke<CleanupScanResult>('scan_cleanup_candidates', { deepProjectDiscovery });
+  }
+
+  /**
+   * The listener must be active before the command starts and released on every
+   * completion path. Keeping that lifecycle here prevents stores from leaking
+   * Tauri event listeners.
+   */
+  static async scanWithProgress(
+    deepProjectDiscovery: boolean,
+    handler: (progress: TraversalProgress) => void
+  ): Promise<CleanupScanResult> {
+    let unlisten: UnlistenFn | undefined;
+    try {
+      unlisten = await CleanupService.listenProgress(handler);
+      return await CleanupService.scan(deepProjectDiscovery);
+    } finally {
+      unlisten?.();
+    }
+  }
+
+  static listenProgress(handler: (progress: TraversalProgress) => void): Promise<UnlistenFn> {
+    return listen<TraversalProgress>(EVENT_NAMES.cleanupScanProgress, event => handler(event.payload));
+  }
+
+  static cancelScan(): Promise<void> {
+    return invoke<void>('cancel_cleanup_scan');
+  }
+
+  static cancelExecution(): Promise<void> {
+    return invoke<void>('cancel_cleanup_execution');
+  }
+
+  static execute(
+    ruleIds: string[],
+    sourceSelections: CleanupSourceSelection[],
+    dryRun: boolean,
+    deepCleanupOperationId: string
+  ): Promise<CleanupResult> {
+    return invoke<CleanupResult>('execute_cleanup', {
+      request: { ruleIds, sourceSelections, dryRun },
+      deepCleanupOperationId,
+    });
+  }
+
+  /**
+   * Register the progress listener before invoking cleanup so the first
+   * preflight snapshot cannot be lost. Always release it when the command
+   * settles to avoid accumulating listeners across repeated cleanup runs.
+   */
+  static async executeWithProgress(
+    ruleIds: string[],
+    sourceSelections: CleanupSourceSelection[],
+    dryRun: boolean,
+    deepCleanupOperationId: string,
+    handler: (progress: CleanupExecutionProgress) => void
+  ): Promise<CleanupResult> {
+    let unlisten: UnlistenFn | undefined;
+    try {
+      unlisten = await CleanupService.listenExecutionProgress(handler);
+      return await CleanupService.execute(ruleIds, sourceSelections, dryRun, deepCleanupOperationId);
+    } finally {
+      unlisten?.();
+    }
+  }
+
+  static listenExecutionProgress(handler: (progress: CleanupExecutionProgress) => void): Promise<UnlistenFn> {
+    return listen<CleanupExecutionProgress>(EVENT_NAMES.cleanupExecutionProgress, event => handler(event.payload));
+  }
+}

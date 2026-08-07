@@ -1,0 +1,34 @@
+# WPS document recovery, templates, recent-file state, and user documents are
+# excluded. Only the standard macOS application cache is removed.
+id = "app.wps-cache"
+schema_version = 3
+rule_version = 1
+platform = "macos"
+category = "application"
+risk = "safe"
+default_selected = true
+required_stopped_processes = ["wpsoffice", "WPS Office"]
+
+[[applicability]]
+kind = "anyOf"
+items = [
+  { kind = "applicationInstalled", identifiers = ["com.kingsoft.wpsoffice.mac", "wpsoffice", "WPS Office"] },
+  { kind = "anyRootExists" },
+]
+
+[[roots]]
+template = "${user_library}/Caches/com.kingsoft.wpsoffice.mac"
+
+[matcher]
+kind = "all"
+
+[execution]
+kind = "deleteMatchingContents"
+requires_app_close = true
+
+[verification]
+lifecycle = "verified"
+evidence = "The rule selects only WPS Office's bundle directory under Library/Caches, which Apple designates for discardable files; recovery data, templates, documents, accounts, and preferences remain outside the root"
+verified_at = "2026-07-18"
+verified_platform = "macos"
+references = ["https://developer.apple.com/documentation/foundation/url/cachesdirectory"]

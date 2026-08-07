@@ -1,0 +1,209 @@
+<script setup lang="ts">
+import { useI18n } from 'vue-i18n';
+import MdNativeFileIcon from '@/components/custom/md-native-file-icon.vue';
+import MdIcon from '@/components/icons/md-icon.vue';
+import { ICON_NAMES } from '@/lib/models/ui';
+import type { DirectoryEntryInfo } from '@/lib/models/analysis';
+import { FormatUtils } from '@/lib/utils/format';
+
+import MdAnalysisEntryContextMenu from './md-analysis-entry-context-menu.vue';
+
+const { t } = useI18n({ useScope: 'global' });
+
+defineProps<{
+  entries: DirectoryEntryInfo[];
+  totalBytes: number;
+  folderCount: number;
+  fileCount: number;
+}>();
+
+const emit = defineEmits<{
+  activate: [entry: DirectoryEntryInfo];
+  open: [path: string];
+  delete: [entry: DirectoryEntryInfo];
+}>();
+</script>
+
+<template>
+  <aside class="folder-pane border-b @2xl/analysis:border-r @2xl/analysis:border-b-0">
+    <header class="md-workspace-toolbar">
+      <p>
+        {{
+          t(
+            'analysis.folderFileSummary',
+            { folders: FormatUtils.integer(folderCount), files: FormatUtils.integer(fileCount) },
+            fileCount
+          )
+        }}
+      </p>
+    </header>
+    <div class="folder-list scrollbar-stable">
+      <MdAnalysisEntryContextMenu
+        v-for="entry in entries"
+        :key="entry.path"
+        :entry="entry"
+        @open="emit('open', $event)"
+        @delete="emit('delete', $event)"
+      >
+        <div class="folder-row" :class="{ file: !entry.isDirectory }">
+          <button class="folder-entry" type="button" :disabled="!entry.isDirectory" @click="emit('activate', entry)">
+            <MdNativeFileIcon
+              :path="entry.path"
+              :name="entry.name"
+              :directory="entry.isDirectory"
+              directory-mode="generic"
+              compact
+            />
+            <span class="item-copy">
+              <strong class="md-result-primary">{{ entry.name }}</strong>
+              <small>
+                {{ t('common.fileCount', { count: FormatUtils.integer(entry.fileCount) }, entry.fileCount) }}
+              </small>
+            </span>
+            <span class="item-metrics">
+              <span>
+                <strong class="md-result-primary">{{ FormatUtils.bytes(entry.bytes) }}</strong>
+                <small>{{ Math.round(FormatUtils.percent(entry.bytes, totalBytes)) }}%</small>
+              </span>
+              <i>
+                <em :style="{ width: `${FormatUtils.percent(entry.bytes, totalBytes)}%` }" />
+              </i>
+            </span>
+            <span class="chevron">
+              <MdIcon v-if="entry.isDirectory" :name="ICON_NAMES.chevronRight" :size="18" />
+            </span>
+          </button>
+        </div>
+      </MdAnalysisEntryContextMenu>
+    </div>
+  </aside>
+</template>
+
+<style scoped>
+@reference "@assets/main.css";
+
+.folder-pane {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  @apply border-border;
+}
+
+.folder-pane > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 12px;
+}
+
+.folder-pane header p {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  @apply text-muted-foreground;
+  font-size: var(--font-content-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-list {
+  min-height: 0;
+  flex: 1;
+  overflow-x: hidden;
+  padding: 0 8px 8px;
+}
+
+.folder-row {
+  display: grid;
+  width: 100%;
+  grid-template-columns: minmax(0, 1fr);
+  border-radius: 8px;
+  padding: 4px 6px;
+}
+
+.folder-row:hover {
+  @apply bg-accent/65 text-accent-foreground;
+}
+
+.folder-entry {
+  display: grid;
+  min-width: 0;
+  min-height: var(--layout-result-row-height);
+  grid-template-columns: 38px minmax(90px, 1fr) minmax(118px, 0.85fr) 18px;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  padding: 2px 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.folder-row.file .folder-entry {
+  cursor: default;
+}
+
+.item-copy,
+.item-metrics {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.item-copy {
+  gap: 3px;
+}
+
+.item-copy strong,
+.item-metrics strong {
+  @apply text-card-foreground;
+}
+
+.item-copy strong {
+  overflow: hidden;
+  font-size: var(--font-content-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.item-copy small,
+.item-metrics small {
+  @apply text-muted-foreground;
+  font-size: var(--font-content-secondary);
+}
+
+.item-metrics {
+  gap: 5px;
+}
+
+.item-metrics > span {
+  display: flex;
+  justify-content: space-between;
+}
+
+.item-metrics strong {
+  font-size: var(--font-content-body);
+}
+
+.item-metrics > i {
+  height: 5px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: color-mix(in oklab, var(--primary) 12%, var(--card));
+}
+
+.item-metrics em {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  @apply bg-primary;
+}
+
+.chevron {
+  @apply text-muted-foreground;
+}
+</style>

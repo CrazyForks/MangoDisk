@@ -1,0 +1,34 @@
+# Meeting recordings and downloaded files are user content and must never be
+# part of this rule. Only the standard Tencent Meeting bundle cache is used.
+id = "app.tencent-meeting-cache"
+schema_version = 3
+rule_version = 1
+platform = "macos"
+category = "application"
+risk = "safe"
+default_selected = true
+required_stopped_processes = ["TencentMeeting"]
+
+[[applicability]]
+kind = "anyOf"
+items = [
+  { kind = "applicationInstalled", identifiers = ["com.tencent.meeting", "TencentMeeting", "Tencent Meeting"] },
+  { kind = "anyRootExists" },
+]
+
+[[roots]]
+template = "${user_library}/Caches/com.tencent.meeting"
+
+[matcher]
+kind = "all"
+
+[execution]
+kind = "deleteMatchingContents"
+requires_app_close = true
+
+[verification]
+lifecycle = "verified"
+evidence = "The rule selects only Tencent Meeting's bundle directory under Library/Caches, which Apple designates for discardable files; recordings, meeting downloads, accounts, and application support data remain outside the root"
+verified_at = "2026-07-18"
+verified_platform = "macos"
+references = ["https://developer.apple.com/documentation/foundation/url/cachesdirectory"]

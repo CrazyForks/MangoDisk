@@ -1,0 +1,38 @@
+id = "dev.python-tooling-cache"
+schema_version = 3
+rule_version = 2
+platform = "windows"
+category = "development"
+risk = "recoverable"
+default_selected = false
+required_stopped_processes = []
+
+[[applicability]]
+kind = "anyOf"
+items = [
+  { kind = "executableAvailable", names = ["python.exe", "python3.exe"] },
+  { kind = "anyRootExists" },
+]
+
+[[roots]]
+template = "${local_app_data}/pypoetry/Cache"
+
+[[roots]]
+template = "${local_app_data}/pyenv/pyenv-win/install_cache"
+
+[matcher]
+kind = "all"
+
+[execution]
+kind = "deleteMatchingContents"
+requires_app_close = false
+
+[verification]
+lifecycle = "verified"
+evidence = "Poetry documents its platform cache directory and pyenv-win uses install_cache for downloaded installers; environments, installed interpreters, configuration, and credentials are excluded"
+verified_at = "2026-07-18"
+verified_platform = "windows"
+references = [
+  "https://python-poetry.org/docs/configuration/#cache-dir",
+  "https://github.com/pyenv-win/pyenv-win",
+]

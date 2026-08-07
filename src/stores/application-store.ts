@@ -1,0 +1,350 @@
+import { defineStore } from 'pinia';
+
+import type {
+  ApplicationLeftoverCandidate,
+  ApplicationLeftoverResult,
+  ApplicationLeftoverScanResult,
+  ApplicationUninstallBatchPlan,
+  ApplicationUninstallBatchResult,
+  ApplicationUninstallBatchSelection,
+  ApplicationUninstallExecutionProgress,
+  ApplicationUninstallScanResult,
+} from '@/lib/models/application';
+import type { TraversalProgress } from '@/lib/models/progress';
+import { LOG_DOMAINS, LOG_EVENTS } from '@/lib/models/telemetry';
+import { ApplicationService } from '@/lib/services/application-service';
+import { LoggerService } from '@/lib/services/logger-service';
+import { MacOsPermissionService } from '@/lib/services/macos-permission-service';
+import { ApplicationUninstallResultUtils } from '@/lib/utils/application-uninstall-result';
+import { parseCommandError } from '@/lib/utils/error';
+
+import { useAppStore } from './app-store';
+import { useHistoryStore } from './history-store';
+
+interface ApplicationState {
+  leftovers: ApplicationLeftoverScanResult | null;
+  lastResult: ApplicationLeftoverResult | null;
+  scanningLeftovers: boolean;
+  deletingLeftovers: boolean;
+  uninstallCatalog: ApplicationUninstallScanResult | null;
+  scanningUninstallCatalog: boolean;
+  cancellingUninstallCatalog: boolean;
+  uninstallProgress: TraversalProgress | null;
+  uninstallPlan: ApplicationUninstallBatchPlan | null;
+  uninstallPreview: ApplicationUninstallBatchResult | null;
+  uninstallLastResult: ApplicationUninstallBatchResult | null;
+  preparingUninstall: boolean;
+  uninstallPreparationRevision: number;
+  executingUninstall: boolean;
+  cancellingUninstall: boolean;
+  uninstallCancellationRevision: number;
+  uninstallExecutionProgress: ApplicationUninstallExecutionProgress | null;
+  synchronizingUninstallCatalog: boolean;
+}
+
+export const useApplicationStore = defineStore('applications', {
+  state: (): ApplicationState => ({
+    leftovers: null,
+    lastResult: null,
+    scanningLeftovers: false,
+    deletingLeftovers: false,
+    uninstallCatalog: null,
+    scanningUninstallCatalog: false,
+    cancellingUninstallCatalog: false,
+    uninstallProgress: null,
+    uninstallPlan: null,
+    uninstallPreview: null,
+    uninstallLastResult: null,
+    preparingUninstall: false,
+    uninstallPreparationRevision: 0,
+    executingUninstall: false,
+    cancellingUninstall: false,
+    uninstallCancellationRevision: 0,
+    uninstallExecutionProgress: null,
+    synchronizingUninstallCatalog: false,
+  }),
+  actions: {
+    clearPreparedUninstall() {
+      if (this.executingUninstall) return;
+      this.uninstallPreparationRevision += 1;
+      this.preparingUninstall = false;
+      this.uninstallPlan = null;
+      this.uninstallPreview = null;
+    },
+    async prepareUninstall(selections: ApplicationUninstallBatchSelection[]) {
+      if (
+        this.scanningUninstallCatalog ||
+        this.preparingUninstall ||
+        this.executingUninstall ||
+        this.synchronizingUninstallCatalog ||
+        !selections.length
+      )
+        return;
+      const appStore = useAppStore();
+      const catalogRevision = this.uninstallCatalog?.catalogRevision;
+      if (!catalogRevision) {
+        appStore.reportError(new Error('application uninstall catalog revision is unavailable'));
+        return;
+      }
+      this.preparingUninstall = true;
+      const preparationRevision = ++this.uninstallPreparationRevision;
+      this.uninstallPlan = null;
+      this.uninstallPreview = null;
+      appStore.clearError();
+      try {
+        const { plan, preview } = await ApplicationService.prepareUninstallBatch(selections, catalogRevision);
+        if (preparationRevision !== this.uninstallPreparationRevision) return;
+        this.uninstallPreview = preview;
+        if (!preview.failedItemCount) this.uninstallPlan = plan;
+      } catch (error) {
+        if (preparationRevision === this.uninstallPreparationRevision) appStore.reportError(error);
+      } finally {
+        if (preparationRevision === this.uninstallPreparationRevision) this.preparingUninstall = false;
+      }
+    },
+    async executePreparedUninstall() {
+      if (
+        this.scanningUninstallCatalog ||
+        this.preparingUninstall ||
+        this.executingUninstall ||
+        this.synchronizingUninstallCatalog ||
+        !this.uninstallPlan
+      )
+        return;
+      const appStore = useAppStore();
+      const plan = this.uninstallPlan;
+      let result: ApplicationUninstallBatchResult | null = null;
+      this.executingUninstall = true;
+      this.cancellingUninstall = false;
+      this.uninstallExecutionProgress = null;
+      this.uninstallLastResult = null;
+      appStore.clearError();
+      try {
+        result = await ApplicationService.executeUninstallBatchWithProgress(plan, false, progress => {
+          this.uninstallExecutionProgress = progress;
+        });
+      } catch (error) {
+        // Cancellation during the read-only validation stage returns the
+        // typed Core cancellation error because no application has started.
+        // Keep that user-requested outcome silent and close the stale plan.
+        if (this.cancellingUninstall && parseCommandError(error)?.code === 'operationCancelled') {
+          this.uninstallPlan = null;
+          this.uninstallPreview = null;
+          this.uninstallCancellationRevision += 1;
+        } else {
+          appStore.reportError(error);
+        }
+      }
+      if (!result) {
+        this.executingUninstall = false;
+        this.cancellingUninstall = false;
+        this.uninstallExecutionProgress = null;
+        return;
+      }
+
+      // Event delivery and command resolution use separate Tauri channels.
+      // Materialize the final typed snapshot from the authoritative result so
+      // every application row reaches a terminal state even if the last event
+      // is delivered after the invoke promise resolves.
+      this.uninstallExecutionProgress = {
+        stage: 'finalizing',
+        currentApplicationId: null,
+        completedApplications: result.results.map(application => ({
+          applicationId: application.applicationId,
+          status: application.actions.some(action => action.status === 'cancelled')
+            ? 'cancelled'
+            : application.failedItemCount
+              ? 'failed'
+              : 'completed',
+          releasedBytes: application.releasedBytes,
+        })),
+        completedApplicationCount: result.results.length,
+        totalApplicationCount: result.selectedApplicationCount,
+        affectedApplicationCount: result.affectedApplicationCount,
+        failedApplicationCount: result.failedApplicationCount,
+        releasedBytes: result.releasedBytes,
+        elapsedMs: this.uninstallExecutionProgress?.elapsedMs ?? 0,
+      };
+      const cancelled = result.results.some(application =>
+        application.actions.some(action => action.status === 'cancelled')
+      );
+
+      // Keep the execution dialog and finalizing state visible while the
+      // authoritative catalog is refreshed. Publishing the result before this
+      // boundary made the completion toast race ahead of the navigation busy
+      // state and allowed an external Windows uninstaller to look finished
+      // while MangoDisk was still reconciling installed applications.
+      if (this.uninstallCatalog) {
+        this.uninstallCatalog = ApplicationUninstallResultUtils.apply(this.uninstallCatalog, result);
+      }
+      if (cancelled) {
+        // A Windows uninstaller that already owns a system window may continue
+        // independently after Core detaches its wait. Close MangoDisk's batch
+        // immediately and keep the current catalog entry until the user runs a
+        // later refresh that can observe the external uninstaller's outcome.
+        void useHistoryStore().load({ reportError: false });
+        this.uninstallLastResult = result;
+        this.uninstallPlan = null;
+        this.uninstallPreview = null;
+        this.executingUninstall = false;
+        this.cancellingUninstall = false;
+        this.uninstallExecutionProgress = null;
+        return;
+      }
+      this.synchronizingUninstallCatalog = true;
+      try {
+        await Promise.all([
+          useHistoryStore().load({ reportError: false }),
+          ApplicationService.scanUninstallCatalog()
+            .then(refreshedCatalog => {
+              /*
+               * A fresh Core catalog is authoritative. In particular, a
+               * completed Windows installer command may still leave an
+               * application installed or require a restart.
+               */
+              this.uninstallCatalog = refreshedCatalog;
+            })
+            .catch(error => {
+              LoggerService.warn(LOG_DOMAINS.applicationUninstall, LOG_EVENTS.catalogRefreshFailed, { error });
+            }),
+        ]);
+      } finally {
+        this.synchronizingUninstallCatalog = false;
+        this.uninstallLastResult = result;
+        this.uninstallPlan = null;
+        this.uninstallPreview = null;
+        this.executingUninstall = false;
+        this.cancellingUninstall = false;
+        this.uninstallExecutionProgress = null;
+      }
+    },
+    async cancelUninstallExecution() {
+      if (!this.executingUninstall || this.cancellingUninstall) return;
+      this.cancellingUninstall = true;
+      try {
+        await ApplicationService.cancelUninstallExecution();
+      } catch (error) {
+        useAppStore().reportError(error);
+        this.cancellingUninstall = false;
+      }
+    },
+    async scanUninstallCatalog() {
+      if (
+        this.scanningUninstallCatalog ||
+        this.preparingUninstall ||
+        this.executingUninstall ||
+        this.synchronizingUninstallCatalog
+      )
+        return;
+      const appStore = useAppStore();
+      this.scanningUninstallCatalog = true;
+      this.cancellingUninstallCatalog = false;
+      this.uninstallPreparationRevision += 1;
+      this.uninstallPlan = null;
+      this.uninstallPreview = null;
+      this.uninstallLastResult = null;
+      this.uninstallProgress = null;
+      appStore.clearError();
+      let unlisten: (() => void) | undefined;
+      try {
+        unlisten = await ApplicationService.listenUninstallProgress(progress => {
+          this.uninstallProgress = progress;
+        });
+        this.uninstallCatalog = await ApplicationService.scanUninstallCatalog();
+      } catch (error) {
+        // Only the typed Core cancellation outcome is intentionally silent.
+        // An unrelated failure racing with a cancel click must remain visible.
+        if (parseCommandError(error)?.code !== 'operationCancelled') appStore.reportError(error);
+      } finally {
+        unlisten?.();
+        this.uninstallProgress = null;
+        this.scanningUninstallCatalog = false;
+        this.cancellingUninstallCatalog = false;
+      }
+    },
+    async cancelUninstallCatalogScan() {
+      if (!this.scanningUninstallCatalog || this.cancellingUninstallCatalog) return;
+      this.cancellingUninstallCatalog = true;
+      try {
+        await ApplicationService.cancelUninstallCatalogScan();
+      } catch (error) {
+        useAppStore().reportError(error);
+        this.cancellingUninstallCatalog = false;
+      }
+    },
+    async scanLeftovers() {
+      if (this.scanningLeftovers || this.deletingLeftovers) return;
+      const appStore = useAppStore();
+      this.scanningLeftovers = true;
+      // A failed identity refresh must not put candidates from an older
+      // application inventory back into an actionable result.
+      this.leftovers = null;
+      this.lastResult = null;
+      appStore.clearError();
+      try {
+        this.leftovers = await ApplicationService.scanLeftovers();
+        await MacOsPermissionService.recordApplicationDataAccess(this.leftovers);
+      } catch (error) {
+        appStore.reportError(error);
+      } finally {
+        this.scanningLeftovers = false;
+      }
+    },
+    async deleteLeftoversPermanently(
+      candidates: ApplicationLeftoverCandidate[],
+      deepCleanupOperationId = crypto.randomUUID()
+    ) {
+      if (this.scanningLeftovers || this.deletingLeftovers || !candidates.length) return;
+      const appStore = useAppStore();
+      this.deletingLeftovers = true;
+      this.lastResult = null;
+      appStore.clearError();
+      try {
+        const result = await ApplicationService.deleteLeftoversPermanently(
+          candidates.map(candidate => ({
+            candidateId: candidate.candidateId,
+            expectedBytes: candidate.bytes,
+            expectedFileCount: candidate.fileCount,
+            expectedSnapshotFingerprint: candidate.snapshotFingerprint,
+          })),
+          false,
+          deepCleanupOperationId
+        );
+        this.lastResult = result;
+        const invalidatedCandidateIds = new Set(
+          result.actions
+            .filter(action => action.status === 'completed' || action.releasedBytes > 0)
+            .map(action => action.candidateId)
+        );
+        if (this.leftovers && invalidatedCandidateIds.size) {
+          // Any verified partial deletion invalidates the candidate fingerprint
+          // and byte estimate. Remove that stale row just like a completed row;
+          // a later explicit scan can publish a fresh actionable candidate.
+          const remaining = this.leftovers.candidates.filter(
+            candidate => !invalidatedCandidateIds.has(candidate.candidateId)
+          );
+          this.leftovers = {
+            ...this.leftovers,
+            candidates: remaining,
+            totalBytes: remaining.reduce((total, candidate) => total + candidate.bytes, 0),
+            totalFileCount: remaining.reduce((total, candidate) => total + candidate.fileCount, 0),
+          };
+        }
+        if (result.historySaved) await useHistoryStore().load({ reportError: false });
+      } catch (error) {
+        appStore.reportError(error);
+      } finally {
+        this.deletingLeftovers = false;
+      }
+    },
+    async cancelLeftoverDeletion() {
+      if (!this.deletingLeftovers) return;
+      try {
+        await ApplicationService.cancelLeftoverDeletion();
+      } catch (error) {
+        useAppStore().reportError(error);
+        throw error;
+      }
+    },
+  },
+});

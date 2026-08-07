@@ -1,0 +1,127 @@
+import type {
+  ApplicationLeftoverActionResult,
+  ApplicationUninstallActionResult,
+  ApplicationUninstallInstallerKind,
+  ApplicationUninstallPlatform,
+} from './application';
+import type { CleanupActionResult, PresentedCleanupActionResult } from './cleanup';
+
+export type OperationCategory = 'deepCleanup' | 'largeFileCleanup' | 'duplicateFileCleanup' | 'applicationUninstall';
+export type OperationOutcome = 'completed' | 'completedWithWarnings' | 'cancelled';
+
+interface OperationRecordBase {
+  schemaVersion: number;
+  operationId: string;
+  category: OperationCategory;
+  startedAtMs: number;
+  finishedAtMs: number;
+  outcome: OperationOutcome;
+  dryRun: boolean;
+  selectedItemCount: number;
+  affectedItemCount: number;
+  expectedBytes: number;
+  releasedBytes: number | null;
+  releasedBytesIsEstimate: boolean;
+  failedItemCount: number;
+}
+
+export interface CleanupOperationDetails {
+  selectedRuleIds: string[];
+  expectedBytes: number;
+  actions: CleanupActionResult[];
+}
+
+export interface ApplicationLeftoverOperationDetails {
+  candidateIds: string[];
+  expectedBytes: number;
+  actions: ApplicationLeftoverActionResult[];
+}
+
+export interface DeepCleanupOperationRecord extends OperationRecordBase {
+  category: 'deepCleanup';
+  details: {
+    type: 'deepCleanup';
+    payload: {
+      cleanup: CleanupOperationDetails | null;
+      applicationLeftovers: ApplicationLeftoverOperationDetails | null;
+    };
+  };
+}
+
+export interface FileCleanupOperationDetails {
+  items: Array<{
+    path: string;
+    status: 'deleted' | 'failed';
+  }>;
+  omittedItemCount: number;
+}
+
+export interface LargeFileCleanupOperationRecord extends OperationRecordBase {
+  category: 'largeFileCleanup';
+  details: {
+    type: 'largeFileCleanup';
+    payload: FileCleanupOperationDetails;
+  };
+}
+
+export interface DuplicateFileCleanupOperationRecord extends OperationRecordBase {
+  category: 'duplicateFileCleanup';
+  details: {
+    type: 'duplicateFileCleanup';
+    payload: FileCleanupOperationDetails;
+  };
+}
+
+export interface ApplicationUninstallApplicationDetails {
+  restartRequired: boolean;
+  planId: string;
+  applicationId: string;
+  applicationName: string;
+  applicationIdentifier: string;
+  applicationVersion: string | null;
+  applicationPublisher: string | null;
+  applicationPlatform: ApplicationUninstallPlatform;
+  installerKind: ApplicationUninstallInstallerKind | null;
+  componentIds: string[];
+  actions: ApplicationUninstallActionResult[];
+}
+
+export interface ApplicationUninstallOperationDetails {
+  batchId: string;
+  applications: ApplicationUninstallApplicationDetails[];
+  restartRequired: boolean;
+}
+
+export interface ApplicationUninstallOperationRecord extends OperationRecordBase {
+  category: 'applicationUninstall';
+  details: {
+    type: 'applicationUninstall';
+    payload: ApplicationUninstallOperationDetails;
+  };
+}
+
+export type OperationRecord =
+  | DeepCleanupOperationRecord
+  | LargeFileCleanupOperationRecord
+  | DuplicateFileCleanupOperationRecord
+  | ApplicationUninstallOperationRecord;
+
+export type PresentedDeepCleanupOperationRecord = Omit<DeepCleanupOperationRecord, 'details'> & {
+  details: {
+    type: 'deepCleanup';
+    payload: {
+      cleanup:
+        | (Omit<CleanupOperationDetails, 'actions'> & {
+            actions: PresentedCleanupActionResult[];
+          })
+        | null;
+      applicationLeftovers: ApplicationLeftoverOperationDetails | null;
+    };
+  };
+};
+
+export type PresentedOperationRecord =
+  | PresentedDeepCleanupOperationRecord
+  | LargeFileCleanupOperationRecord
+  | DuplicateFileCleanupOperationRecord
+  | ApplicationUninstallOperationRecord;

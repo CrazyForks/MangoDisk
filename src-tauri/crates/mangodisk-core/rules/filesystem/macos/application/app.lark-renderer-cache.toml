@@ -1,0 +1,62 @@
+# Lark stores account and workspace state beside its embedded Chromium data.
+# Only explicit shader, code, and HTTP rendering caches are included.
+id = "app.lark-renderer-cache"
+schema_version = 3
+rule_version = 1
+platform = "macos"
+category = "application"
+risk = "safe"
+default_selected = false
+recommended_selected = true
+required_stopped_processes = ["Lark", "Feishu", "LarkShell"]
+
+[[applicability]]
+kind = "anyOf"
+items = [
+  { kind = "applicationInstalled", identifiers = ["com.bytedance.lark", "Lark", "Feishu"] },
+  { kind = "anyRootExists" },
+]
+
+[[roots]]
+template = "${user_library}/Caches/LarkShell/aha/users"
+kind = "childDirectories"
+include_all_children = true
+suffixes = ["profile_explorer/Cache", "profile_explorer/Code Cache", "profile_main/Cache", "profile_main/Code Cache", "profile_global/Cache", "profile_global/Code Cache"]
+
+[[roots]]
+template = "${application_support}/LarkShell/ShaderCache"
+
+[[roots]]
+template = "${application_support}/LarkShell/GrShaderCache"
+
+[[roots]]
+template = "${application_support}/LarkShell/GraphiteDawnCache"
+
+[[roots]]
+template = "${application_support}/LarkShell/CodeCache"
+
+[[roots]]
+template = "${application_support}/LarkShell/component_crx_cache"
+
+[[roots]]
+template = "${application_support}/LarkShell/iron/Cache"
+
+[[roots]]
+template = "${application_support}/LarkShell/iron/GPUCache"
+
+[[roots]]
+template = "${application_support}/LarkShell/iron/Shared Dictionary/cache"
+
+[matcher]
+kind = "all"
+
+[execution]
+kind = "deleteMatchingContents"
+requires_app_close = true
+
+[verification]
+lifecycle = "verified"
+evidence = "The rule selects only explicitly named Chromium renderer, shader, extension-package, and shared-dictionary cache paths under LarkShell; cookies, Local Storage, IndexedDB, device security state, and other profile data are excluded"
+verified_at = "2026-07-18"
+verified_platform = "macos"
+references = ["https://chromium.googlesource.com/chromium/src/+/main/docs/user_data_dir.md"]

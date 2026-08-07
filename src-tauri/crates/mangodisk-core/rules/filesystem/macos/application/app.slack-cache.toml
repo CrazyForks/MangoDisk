@@ -1,0 +1,44 @@
+# Slack's Electron caches are separate from account and session databases. Only
+# explicit rendering cache directories are included; Local Storage, IndexedDB,
+# cookies, and workspace data are excluded.
+id = "app.slack-cache"
+schema_version = 3
+rule_version = 1
+platform = "macos"
+category = "application"
+risk = "safe"
+default_selected = true
+required_stopped_processes = ["Slack"]
+
+[[applicability]]
+kind = "anyOf"
+items = [
+  { kind = "applicationInstalled", identifiers = ["com.tinyspeck.slackmacgap", "Slack"] },
+  { kind = "anyRootExists" },
+]
+
+[[roots]]
+template = "${user_library}/Caches/com.tinyspeck.slackmacgap"
+
+[[roots]]
+template = "${application_support}/Slack/Cache"
+
+[[roots]]
+template = "${application_support}/Slack/Code Cache"
+
+[[roots]]
+template = "${application_support}/Slack/GPUCache"
+
+[matcher]
+kind = "all"
+
+[execution]
+kind = "deleteMatchingContents"
+requires_app_close = true
+
+[verification]
+lifecycle = "verified"
+evidence = "The rule selects only Slack's Library/Caches bundle directory and Electron Cache, Code Cache, and GPUCache paths; accounts, sessions, workspaces, Local Storage, IndexedDB, and downloads are excluded"
+verified_at = "2026-07-17"
+verified_platform = "macos"
+references = ["https://www.electronjs.org/docs/latest/api/app#appgetpathname"]

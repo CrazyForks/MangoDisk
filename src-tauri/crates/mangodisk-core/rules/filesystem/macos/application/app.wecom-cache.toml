@@ -1,0 +1,35 @@
+# WeCom profiles, messages, files, and mini-program data remain under its
+# sandbox container and are intentionally excluded. Only the bundle cache is
+# treated as rebuildable.
+id = "app.wecom-cache"
+schema_version = 3
+rule_version = 1
+platform = "macos"
+category = "application"
+risk = "safe"
+default_selected = true
+required_stopped_processes = ["WeCom"]
+
+[[applicability]]
+kind = "anyOf"
+items = [
+  { kind = "applicationInstalled", identifiers = ["com.tencent.WeWorkMac", "WeCom"] },
+  { kind = "anyRootExists" },
+]
+
+[[roots]]
+template = "${user_library}/Caches/com.tencent.WeWorkMac"
+
+[matcher]
+kind = "all"
+
+[execution]
+kind = "deleteMatchingContents"
+requires_app_close = true
+
+[verification]
+lifecycle = "verified"
+evidence = "The rule selects only WeCom's bundle directory under Library/Caches, which Apple designates for discardable files; sandboxed profile, account, message, and downloaded content remain outside the root"
+verified_at = "2026-07-18"
+verified_platform = "macos"
+references = ["https://developer.apple.com/documentation/foundation/url/cachesdirectory"]

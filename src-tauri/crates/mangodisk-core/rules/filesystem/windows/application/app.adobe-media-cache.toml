@@ -1,0 +1,38 @@
+# Adobe media caches are rebuildable but increase analysis time when a project
+# is reopened, so this rule is not selected by default. Project media, presets,
+# and Creative Cloud sync directories are outside this boundary.
+id = "app.adobe-media-cache"
+schema_version = 3
+rule_version = 1
+platform = "windows"
+category = "application"
+risk = "recoverable"
+default_selected = false
+required_stopped_processes = ["Adobe Premiere Pro.exe", "AfterFX.exe", "Adobe Media Encoder.exe"]
+
+[[applicability]]
+kind = "anyOf"
+items = [
+  { kind = "applicationInstalled", identifiers = ["Adobe Premiere Pro", "Adobe After Effects", "Adobe Media Encoder"] },
+  { kind = "anyRootExists" },
+]
+
+[[roots]]
+template = "${local_app_data}/Adobe/Common/Media Cache Files"
+
+[[roots]]
+template = "${roaming_app_data}/Adobe/Common/Media Cache Files"
+
+[matcher]
+kind = "all"
+
+[execution]
+kind = "deleteMatchingContents"
+requires_app_close = true
+
+[verification]
+lifecycle = "verified"
+evidence = "Adobe documents Common/Media Cache Files as regenerated accelerator data and provides an in-app deletion workflow; project media, presets, application settings, and Creative Cloud data remain outside the roots"
+verified_at = "2026-07-17"
+verified_platform = "windows"
+references = ["https://helpx.adobe.com/premiere/desktop/troubleshooting/media-issues/manage-media-cache.html"]

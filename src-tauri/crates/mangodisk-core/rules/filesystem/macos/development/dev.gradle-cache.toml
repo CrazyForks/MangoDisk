@@ -1,0 +1,46 @@
+id = "dev.gradle-cache"
+schema_version = 3
+rule_version = 2
+platform = "macos"
+category = "development"
+risk = "recoverable"
+default_selected = false
+recommended_selected = true
+required_stopped_processes = ["gradle", "java"]
+
+[[applicability]]
+kind = "anyOf"
+items = [
+  { kind = "executableAvailable", names = ["gradle", "java"] },
+  { kind = "anyRootExists" },
+]
+
+[[roots]]
+template = "${home}/.gradle/caches"
+verified_rebuildable = true
+
+[[roots]]
+template = "${home}/.gradle/daemon"
+verified_rebuildable = true
+
+[[roots]]
+template = "${home}/.gradle/workers"
+verified_rebuildable = true
+
+[[roots]]
+template = "${home}/.gradle/notifications"
+verified_rebuildable = true
+
+[matcher]
+kind = "all"
+
+[execution]
+kind = "deleteWholeRoot"
+requires_app_close = true
+
+[verification]
+lifecycle = "verified"
+evidence = "Gradle-managed caches and daemon state are rebuildable after the related processes stop"
+verified_at = "2026-07-18"
+verified_platform = "macos"
+references = ["https://docs.gradle.org/current/userguide/directory_layout.html"]

@@ -1,0 +1,336 @@
+@reference "@assets/main.css";
+
+.application-row-line {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  transition: background-color 0.16s ease;
+}
+
+.application-row > .application-row-line:is([data-selected='true'], [data-expanded='true'])::before {
+  background: transparent;
+}
+
+.application-row > .application-row-line:is(:hover, :focus-within)::before {
+  @apply bg-muted/60;
+}
+
+.application-main {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  min-height: var(--layout-result-group-height);
+  grid-template-columns: minmax(0, 1fr) auto minmax(72px, auto) minmax(128px, auto) 30px;
+  align-items: center;
+  gap: 14px;
+}
+
+.application-disclosure {
+  display: grid;
+  min-width: 0;
+  min-height: var(--layout-result-group-height);
+  grid-row: 1;
+  grid-column: 1;
+  grid-template-columns: 40px minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  border: 0;
+  padding: 4px 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.application-actions {
+  z-index: 1;
+  display: flex;
+  grid-row: 1;
+  grid-column: 1;
+  justify-self: end;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.14s ease;
+}
+
+.application-row-line:is(:hover, :focus-within) .application-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.application-row-line:is(:hover, :focus-within) .application-identity {
+  padding-right: 32px;
+}
+
+.application-identity {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.application-identity strong,
+.application-identity small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.application-identity strong {
+  font-size: 14px;
+}
+
+.application-identity small {
+  @apply text-muted-foreground;
+  font-size: 12px;
+}
+
+.application-status {
+  padding-inline: 4px;
+  @apply text-muted-foreground;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.application-status.ready {
+  @apply text-muted-foreground;
+}
+
+.application-status.applicationRunning {
+  border-radius: 999px;
+  padding: 5px 9px;
+  @apply bg-warning/10 text-warning;
+}
+
+.application-size {
+  min-width: 72px;
+  font-size: 13px;
+  text-align: right;
+}
+
+.application-date {
+  min-width: 128px;
+  @apply text-muted-foreground;
+  font-size: 12px;
+  text-align: right;
+}
+
+.application-chevron {
+  @apply text-muted-foreground;
+  transition: transform 0.18s ease;
+}
+
+.application-expand {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  padding: 0;
+  background: transparent;
+}
+
+.application-expand:hover {
+  @apply bg-muted/70;
+}
+
+.application-chevron.expanded {
+  transform: rotate(180deg);
+}
+
+.application-details {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+  padding-block: 4px 8px;
+}
+
+.application-details small,
+.application-details span {
+  @apply text-muted-foreground;
+  font-size: 12px;
+}
+
+.application-details strong {
+  overflow: hidden;
+  @apply text-muted-foreground;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.association-warning {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-inline: var(--result-table-hierarchy-indent) 14px;
+  @apply text-warning;
+  font-size: 11px;
+}
+
+.possible-related-list {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+  border-width: 1px;
+  border-radius: 11px;
+  margin-inline: var(--result-table-hierarchy-indent) 14px;
+  padding: 10px 11px;
+  @apply border-border bg-background;
+}
+
+.possible-related-list > p {
+  margin: 0;
+  @apply text-muted-foreground;
+  font-size: 11px;
+}
+
+.possible-related-location {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+
+.possible-related-location small {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.possible-related-location > :deep(.result-row-action) {
+  position: absolute;
+  right: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.14s ease;
+}
+
+.possible-related-location:is(:hover, :focus-within) > :deep(.result-row-action) {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.possible-related-location:is(:hover, :focus-within) small {
+  padding-right: 32px;
+}
+
+.component-row {
+  display: grid;
+  min-width: 0;
+  min-height: var(--layout-result-child-row-height);
+  grid-template-columns: 17px 34px minmax(0, 1fr) max-content minmax(64px, max-content);
+  align-items: center;
+  gap: 10px;
+  border-radius: calc(var(--radius) - 5px);
+  padding-block: 2px;
+  transition: background-color 0.16s ease;
+}
+
+.application-details .component-row[data-selected='true']::before {
+  background: transparent;
+}
+
+.application-details .component-row:is(:hover, :focus-within)::before {
+  @apply bg-muted/60;
+}
+
+.component-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 10px;
+  @apply bg-primary/10 text-primary;
+}
+
+.component-main {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.component-primary {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+
+.component-primary .component-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.component-actions {
+  position: absolute;
+  right: 0;
+  display: flex;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.14s ease;
+}
+
+.component-row:is(:hover, :focus-within) .component-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.component-row:is(:hover, :focus-within) .component-main {
+  padding-right: 32px;
+}
+
+.component-main strong,
+.component-main small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.component-size {
+  min-width: 64px;
+  text-align: right;
+}
+
+.component-main strong {
+  font-size: 12px;
+}
+
+.component-main small {
+  @apply text-muted-foreground;
+  font-size: 10px;
+}
+
+.component-risk {
+  border-radius: 999px;
+  padding: 4px 7px;
+  @apply bg-muted text-muted-foreground;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.component-risk.rebuildable {
+  @apply bg-success/10 text-success;
+}
+
+.component-risk.userData {
+  @apply bg-warning/10 text-warning;
+}
+
+@container application-uninstall (max-width: 760px) {
+  .application-status,
+  .application-date {
+    display: none;
+  }
+
+  .application-main {
+    grid-template-columns: minmax(0, 1fr) minmax(72px, auto) 30px;
+  }
+}

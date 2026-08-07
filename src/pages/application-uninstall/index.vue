@@ -1,0 +1,779 @@
+<script setup lang="ts">
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
+import { toast } from 'vue-sonner';
+
+import MdEmptyState from '@/components/custom/md-empty-state.vue';
+import MdOperationProgress from '@/components/custom/md-operation-progress.vue';
+import MdOperationWorkspace from '@/components/custom/md-operation-workspace.vue';
+import MdPageShell from '@/components/custom/md-page-shell.vue';
+import MdResultCheckbox from '@/components/custom/md-result-checkbox.vue';
+import MdResultFilterToolbar from '@/components/custom/md-result-filter-toolbar.vue';
+import MdResultSummary from '@/components/custom/md-result-summary.vue';
+import MdResultTable from '@/components/custom/md-result-table.vue';
+import MdResultWorkspace from '@/components/custom/md-result-workspace.vue';
+import MdSelectionActionBar from '@/components/custom/md-selection-action-bar.vue';
+import MdDestructiveActionDialog from '@/components/custom/md-destructive-action-dialog.vue';
+import MdDialogContent from '@/components/custom/md-dialog-content.vue';
+import MdIcon from '@/components/icons/md-icon.vue';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import type {
+  ApplicationUninstallBatchPlan,
+  ApplicationUninstallBatchResult,
+  ApplicationUninstallBatchSelection,
+  ApplicationUninstallCandidate,
+  ApplicationUninstallComponentSummary,
+  ApplicationUninstallExecutionProgress,
+  ApplicationUninstallScanResult,
+} from '@/lib/models/application';
+import type { TraversalProgress } from '@/lib/models/progress';
+import { ICON_NAMES } from '@/lib/models/ui';
+import { ApplicationIconService } from '@/lib/services/application-icon-service';
+import { FormatUtils } from '@/lib/utils/format';
+
+import {
+  applicationCatalogSortAscending,
+  applicationCatalogSortKey,
+  applicationIsReady,
+  applicationSupportsUninstall,
+  filterAndSortApplications,
+  nextApplicationCatalogSort,
+  type ApplicationCatalogFilter,
+  type ApplicationCatalogSort,
+  type ApplicationCatalogSortKey,
+} from './application-uninstall-catalog';
+import {
+  applicationBatchRequiresElevation,
+  shouldNotifyUninstallCancellation,
+  UNINSTALL_CANCELLATION_TOAST_ID,
+} from './application-uninstall-confirmation';
+import {
+  selectedApplicationBytes,
+  selectionIncludesUserData,
+  setVisibleApplicationSelection,
+  toggleApplicationComponent,
+  toggleApplicationSelection,
+} from './application-uninstall-selection';
+import MdApplicationUninstallRow from './components/md-application-uninstall-row.vue';
+
+const { t } = useI18n({ useScope: 'global' });
+const props = defineProps<{
+  catalog: ApplicationUninstallScanResult | null;
+  scanning: boolean;
+  cancelling: boolean;
+  progress: TraversalProgress | null;
+  executionProgress: ApplicationUninstallExecutionProgress | null;
+  plan: ApplicationUninstallBatchPlan | null;
+  preview: ApplicationUninstallBatchResult | null;
+  lastResult: ApplicationUninstallBatchResult | null;
+  preparing: boolean;
+  executing: boolean;
+  cancellingExecution: boolean;
+  cancellationRevision: number;
+  synchronizing: boolean;
+}>();
+const emit = defineEmits<{
+  scan: [];
+  cancelScan: [];
+  prepare: [selections: ApplicationUninstallBatchSelection[]];
+  cancelPlan: [];
+  execute: [];
+  cancelExecution: [];
+  open: [path: string];
+}>();
+
+const query = ref('');
+const filter = ref<ApplicationCatalogFilter>('all');
+const sort = ref<ApplicationCatalogSort>('sizeDescending');
+const expandedId = ref<string | null>(null);
+const selectedIds = ref<string[]>([]);
+const selectedComponentIds = ref<Record<string, string[]>>({});
+const confirmOpen = ref(false);
+const cancellationConfirmOpen = ref(false);
+const executionList = ref<HTMLElement | null>(null);
+const applicationList = ref<InstanceType<typeof MdResultTable> | null>(null);
+const iconUrls = ref<ReadonlyMap<string, string>>(new Map());
+const busy = computed(() => props.scanning || props.preparing || props.executing || props.synchronizing);
+const confirmationLoading = computed(() => props.preparing || (confirmOpen.value && !props.plan && !props.preview));
+const candidates = computed(() => props.catalog?.candidates ?? []);
+const windowsCatalog = computed(() => candidates.value.some(candidate => candidate.platform === 'windowsRegistry'));
+const catalogBytes = computed(() => candidates.value.reduce((total, candidate) => total + candidate.totalBytes, 0));
+const actionableCandidates = computed(() => candidates.value.filter(applicationSupportsUninstall));
+const filteredCandidates = computed(() =>
+  filterAndSortApplications(candidates.value, query.value, filter.value, sort.value)
+);
+const filteredReadyIds = computed(() =>
+  filteredCandidates.value.filter(applicationSupportsUninstall).map(candidate => candidate.applicationId)
+);
+const selectedSet = computed(() => new Set(selectedIds.value));
+const selectedCandidates = computed(() =>
+  actionableCandidates.value.filter(candidate => selectedSet.value.has(candidate.applicationId))
+);
+const includesElevation = computed(() => applicationBatchRequiresElevation(selectedCandidates.value));
+const selection = computed(() => ({
+  applicationIds: selectedIds.value,
+  componentIds: selectedComponentIds.value,
+}));
+const selectedBytes = computed(() => selectedApplicationBytes(actionableCandidates.value, selection.value));
+const includesUserData = computed(() => selectionIncludesUserData(actionableCandidates.value, selection.value));
+const allFilteredSelected = computed(
+  () =>
+    filteredReadyIds.value.length > 0 &&
+    filteredReadyIds.value.every(applicationId => selectedSet.value.has(applicationId))
+);
+const someFilteredSelected = computed(() =>
+  filteredReadyIds.value.some(applicationId => selectedSet.value.has(applicationId))
+);
+const filterCounts = computed(() => ({
+  all: candidates.value.length,
+  ready: candidates.value.filter(applicationIsReady).length,
+  requiresElevation: candidates.value.filter(candidate => candidate.capability === 'requiresElevation').length,
+  running: candidates.value.filter(candidate => candidate.capability === 'applicationRunning').length,
+  unavailable: candidates.value.filter(
+    candidate =>
+      !applicationSupportsUninstall(candidate) &&
+      candidate.capability !== 'requiresElevation' &&
+      candidate.capability !== 'applicationRunning'
+  ).length,
+}));
+const nativeBatch = computed(
+  () =>
+    (Boolean(props.plan?.plans.length) &&
+      props.plan?.plans.every(applicationPlan =>
+        applicationPlan.items.some(item => item.kind === 'nativeInstaller')
+      )) ||
+    (selectedCandidates.value.length > 0 &&
+      selectedCandidates.value.every(candidate =>
+        candidate.components.some(component => component.kind === 'nativeInstaller')
+      ))
+);
+const scanStage = computed(() => props.progress?.currentStage ?? 'discoveringApplications');
+const scanStageText = computed(() => {
+  if (scanStage.value === 'checkingProcesses') return t('applicationUninstall.checkingProcesses');
+  if (scanStage.value === 'validatingApplications') return t('applicationUninstall.validatingApplications');
+  if (scanStage.value === 'inspectingApplications') return t('applicationUninstall.inspectingApplication');
+  return t('applicationUninstall.readingApplicationCatalog');
+});
+const scanPathLabel = computed(() =>
+  scanStage.value === 'inspectingApplications'
+    ? t('applicationUninstall.currentApplication')
+    : scanStage.value === 'discoveringApplications' || scanStage.value === 'validatingApplications'
+      ? t('applicationUninstall.currentApplicationSource')
+      : t('applicationUninstall.currentScanStage')
+);
+const executionProgressValue = computed(() => {
+  const completed = props.executionProgress?.completedApplicationCount ?? 0;
+  const total = props.executionProgress?.totalApplicationCount ?? props.plan?.plans.length ?? 0;
+  return t('applicationUninstall.executionProgressValue', {
+    completed: FormatUtils.integer(Math.min(completed, total)),
+    total: FormatUtils.integer(total),
+  });
+});
+const executionItems = computed(() => {
+  const completed = new Map(
+    (props.executionProgress?.completedApplications ?? []).map(result => [result.applicationId, result])
+  );
+  return (props.plan?.plans ?? []).map(applicationPlan => {
+    const candidate = candidates.value.find(item => item.applicationId === applicationPlan.applicationId);
+    const previewResult = props.preview?.results.find(item => item.applicationId === applicationPlan.applicationId);
+    const result = completed.get(applicationPlan.applicationId);
+    const active =
+      !result &&
+      props.executionProgress?.stage === 'uninstalling' &&
+      props.executionProgress.currentApplicationId === applicationPlan.applicationId;
+    const state = result?.status ?? (active ? 'active' : 'pending');
+    const detail =
+      state === 'completed'
+        ? t('applicationUninstall.uninstallItemCompleted')
+        : state === 'cancelled'
+          ? t('applicationUninstall.uninstallItemCancelled')
+          : state === 'failed'
+            ? t('applicationUninstall.uninstallItemFailed')
+            : state === 'active'
+              ? t(
+                  candidate?.executionMode === 'interactive'
+                    ? 'applicationUninstall.uninstallItemInteractive'
+                    : 'applicationUninstall.uninstallItemActive'
+                )
+              : t('applicationUninstall.uninstallItemPending');
+    const statusLabel =
+      state === 'completed'
+        ? t('applicationUninstall.uninstallItemStatus.completed')
+        : state === 'cancelled'
+          ? t('applicationUninstall.uninstallItemStatus.cancelled')
+          : state === 'failed'
+            ? t('applicationUninstall.uninstallItemStatus.failed')
+            : state === 'active'
+              ? t('applicationUninstall.uninstallItemStatus.active')
+              : t('applicationUninstall.uninstallItemStatus.pending');
+    return {
+      applicationId: applicationPlan.applicationId,
+      detail,
+      name: candidate?.name ?? previewResult?.applicationName ?? t('applicationUninstall.unknownApplication'),
+      state,
+      statusLabel,
+    };
+  });
+});
+const activeExecutionItem = computed(() => executionItems.value.find(item => item.state === 'active') ?? null);
+const executionTitle = computed(() => {
+  if (props.cancellingExecution) return t('applicationUninstall.cancellingBatch');
+  if (props.synchronizing || props.executionProgress?.stage === 'finalizing') {
+    return t('applicationUninstall.finalizingBatch');
+  }
+  if (activeExecutionItem.value) {
+    return t('applicationUninstall.uninstallingApplicationTitle', { name: activeExecutionItem.value.name });
+  }
+  return t('applicationUninstall.validatingBatch');
+});
+const executionDescription = computed(() =>
+  props.cancellingExecution
+    ? t('applicationUninstall.cancellingBatchDescription')
+    : t('applicationUninstall.executionProgressDescription', {
+        completed: FormatUtils.integer(props.executionProgress?.completedApplicationCount ?? 0),
+        total: FormatUtils.integer(props.executionProgress?.totalApplicationCount ?? props.plan?.plans.length ?? 0),
+      })
+);
+const executionPercent = computed(() => {
+  const total = props.executionProgress?.totalApplicationCount ?? props.plan?.plans.length ?? 0;
+  if (!total) return 0;
+  return Math.min(100, ((props.executionProgress?.completedApplicationCount ?? 0) / total) * 100);
+});
+let iconRequestVersion = 0;
+const UNINSTALL_RESULT_TOAST_ID = 'application-uninstall-result';
+
+watch(
+  () => filteredCandidates.value.map(candidate => candidate.iconPath).filter((path): path is string => Boolean(path)),
+  paths => {
+    const requestVersion = ++iconRequestVersion;
+    if (!paths.length) {
+      if (!candidates.value.length) iconUrls.value = new Map();
+      return;
+    }
+
+    void ApplicationIconService.resolveIncrementally(paths, icons => {
+      if (requestVersion !== iconRequestVersion) return;
+      iconUrls.value = new Map([...iconUrls.value, ...icons]);
+    });
+  },
+  { immediate: true }
+);
+
+onBeforeUnmount(() => {
+  iconRequestVersion += 1;
+});
+
+function handleApplicationIconError(iconPath: string | null) {
+  if (!iconPath) return;
+  const icons = new Map(iconUrls.value);
+  icons.delete(iconPath);
+  iconUrls.value = icons;
+}
+
+watch([query, filter, sort], async () => {
+  // A filter or sort can shrink a long result. Reset the domain-owned scroll
+  // position after rendering so an old offset never leaves a blank list.
+  await nextTick();
+  applicationList.value?.scrollTo({ top: 0 });
+});
+
+watch(
+  () => actionableCandidates.value.map(candidate => candidate.applicationId),
+  readyIds => {
+    const readySet = new Set(readyIds);
+    selectedIds.value = selectedIds.value.filter(applicationId => readySet.has(applicationId));
+    selectedComponentIds.value = Object.fromEntries(
+      Object.entries(selectedComponentIds.value).filter(([applicationId]) => readySet.has(applicationId))
+    );
+  }
+);
+
+watch(
+  () => props.plan?.batchId,
+  batchId => {
+    confirmOpen.value = Boolean(batchId);
+  }
+);
+
+watch(
+  () => props.preparing,
+  (preparing, wasPreparing) => {
+    if (wasPreparing && !preparing && !props.plan) confirmOpen.value = false;
+  }
+);
+
+watch(
+  () => props.executionProgress?.currentApplicationId,
+  async applicationId => {
+    if (!applicationId) return;
+    await nextTick();
+    // Keep the current application visible in long batches without changing
+    // the fixed execution order or stealing focus from a native uninstaller.
+    executionList.value
+      ?.querySelector<HTMLElement>('.uninstall-execution-item.is-active')
+      ?.scrollIntoView({ block: 'nearest' });
+  }
+);
+
+watch(
+  () => props.cancellationRevision,
+  (revision, previousRevision) => {
+    if (!revision || revision === previousRevision) return;
+    toast.info(t('applicationUninstall.executionCancelledTitle'), {
+      description: t('applicationUninstall.cancelledDescription'),
+      id: UNINSTALL_RESULT_TOAST_ID,
+    });
+  }
+);
+
+watch(
+  () => props.lastResult,
+  result => {
+    if (!result) return;
+
+    // The completed batch invalidates the previous selection immediately.
+    // Clearing it here prevents the action bar from offering a stale second
+    // execution while Core refreshes the installed-application catalog.
+    selectedIds.value = [];
+    selectedComponentIds.value = {};
+    expandedId.value = null;
+
+    const cancelledApplications = result.results.filter(application =>
+      application.actions.some(action => action.status === 'cancelled')
+    ).length;
+    const title = cancelledApplications
+      ? t('applicationUninstall.executionCancelledTitle')
+      : result.failedItemCount
+        ? t('applicationUninstall.completedWithWarnings')
+        : t('applicationUninstall.completed');
+    if (cancelledApplications) {
+      toast.info(title, {
+        description: t('applicationUninstall.executionCancelledDescription', {
+          completed: FormatUtils.integer(result.affectedApplicationCount),
+          cancelled: FormatUtils.integer(cancelledApplications),
+        }),
+        id: UNINSTALL_RESULT_TOAST_ID,
+      });
+      return;
+    }
+    const summary = t(
+      result.releasedBytesIsEstimate
+        ? 'applicationUninstall.batchExecutionEstimateSummary'
+        : 'applicationUninstall.batchExecutionSummary',
+      {
+        count: FormatUtils.integer(result.affectedApplicationCount),
+        size: FormatUtils.bytes(result.releasedBytes),
+        failed: FormatUtils.integer(result.failedApplicationCount),
+      }
+    );
+    const description = result.restartRequired ? `${summary} ${t('applicationUninstall.restartRequired')}` : summary;
+    const options = { description, id: UNINSTALL_RESULT_TOAST_ID };
+    if (result.failedItemCount) toast.warning(title, options);
+    else toast.success(title, options);
+  }
+);
+
+function toggleSelection(candidate: ApplicationUninstallCandidate) {
+  if (busy.value) return;
+  const next = toggleApplicationSelection(selection.value, candidate);
+  selectedIds.value = next.applicationIds;
+  selectedComponentIds.value = next.componentIds;
+}
+
+function toggleComponent(candidate: ApplicationUninstallCandidate, component: ApplicationUninstallComponentSummary) {
+  if (busy.value) return;
+  const next = toggleApplicationComponent(selection.value, candidate, component);
+  selectedIds.value = next.applicationIds;
+  selectedComponentIds.value = next.componentIds;
+}
+
+function toggleFilteredSelection(checked: boolean) {
+  if (busy.value || !filteredReadyIds.value.length) return;
+  const next = setVisibleApplicationSelection(
+    selection.value,
+    filteredCandidates.value.filter(applicationSupportsUninstall),
+    checked
+  );
+  selectedIds.value = next.applicationIds;
+  selectedComponentIds.value = next.componentIds;
+}
+
+function prepareSelection() {
+  if (busy.value || !selectedIds.value.length) return;
+  confirmOpen.value = true;
+  emit(
+    'prepare',
+    selectedIds.value.map(applicationId => ({
+      applicationId,
+      componentIds: selectedComponentIds.value[applicationId] ?? [],
+    }))
+  );
+}
+
+function changeSort(key: ApplicationCatalogSortKey) {
+  sort.value = nextApplicationCatalogSort(sort.value, key);
+}
+
+function sortIcon(key: ApplicationCatalogSortKey) {
+  if (applicationCatalogSortKey(sort.value) !== key) return ICON_NAMES.arrowUpDown;
+  return applicationCatalogSortAscending(sort.value) ? ICON_NAMES.arrowUp : ICON_NAMES.arrowDown;
+}
+
+function updateConfirmation(open: boolean) {
+  if (props.executing) return;
+  const notifyCancellation = shouldNotifyUninstallCancellation(confirmOpen.value, open);
+  confirmOpen.value = open;
+  if (!open) {
+    emit('cancelPlan');
+    if (notifyCancellation) {
+      toast.info(t('applicationUninstall.cancelledTitle'), {
+        description: t('applicationUninstall.cancelledDescription'),
+        id: UNINSTALL_CANCELLATION_TOAST_ID,
+      });
+    }
+  }
+}
+
+function requestCancelExecution() {
+  if (!props.executing || props.cancellingExecution) return;
+  cancellationConfirmOpen.value = true;
+}
+
+function confirmCancelExecution() {
+  if (!props.executing || props.cancellingExecution) return;
+  cancellationConfirmOpen.value = false;
+  emit('cancelExecution');
+}
+</script>
+
+<template>
+  <MdPageShell
+    class="@container/application-uninstall"
+    content-mode="workspace"
+    :title="t('applicationUninstall.title')"
+  >
+    <template v-if="catalog" #actions>
+      <Button variant="outline" type="button" :disabled="busy" @click="emit('scan')">
+        <MdIcon :class="{ 'icon-spin': scanning }" :name="ICON_NAMES.refresh" :size="17" />
+        {{ scanning ? t('loading.currentStage') : t('applicationUninstall.rescan') }}
+      </Button>
+    </template>
+
+    <MdOperationWorkspace v-if="scanning">
+      <MdOperationProgress
+        :icon-name="ICON_NAMES.uninstall"
+        :title="cancelling ? t('loading.cancelling') : t('applicationUninstall.scanning')"
+        :progress="progress"
+        :path-label="scanPathLabel"
+        :preparing-text="scanStageText"
+        :hint="t('applicationUninstall.scanHint')"
+        :items-label="t('applicationUninstall.checkedApplications')"
+        :bytes-label="t('applicationUninstall.scannedApplicationData')"
+        :cancelable="true"
+        :cancel-disabled="cancelling"
+        @cancel="emit('cancelScan')"
+      />
+    </MdOperationWorkspace>
+
+    <MdResultWorkspace v-else>
+      <template v-if="catalog?.inventoryComplete" #summary>
+        <MdResultSummary
+          :title="
+            t('applicationUninstall.summary', { count: FormatUtils.integer(candidates.length) }, candidates.length)
+          "
+          :metric-label="t('applicationUninstall.summarySpace')"
+          :metric-value="FormatUtils.bytes(catalogBytes)"
+        />
+      </template>
+
+      <template v-if="catalog?.inventoryComplete" #header>
+        <MdResultFilterToolbar>
+          <label class="catalog-search">
+            <MdIcon :name="ICON_NAMES.search" :size="18" />
+            <input v-model="query" type="search" :placeholder="t('applicationUninstall.searchPlaceholder')" />
+          </label>
+          <template #aside>
+            <div class="catalog-filters scrollbar-hidden">
+              <button
+                v-for="option in [
+                  'all',
+                  'ready',
+                  'requiresElevation',
+                  'running',
+                  'unavailable',
+                ] as ApplicationCatalogFilter[]"
+                :key="option"
+                type="button"
+                :class="{ active: filter === option }"
+                @click="filter = option"
+              >
+                {{ t(`applicationUninstall.${option}`) }}
+                <span>{{ FormatUtils.integer(filterCounts[option]) }}</span>
+              </button>
+            </div>
+          </template>
+        </MdResultFilterToolbar>
+      </template>
+
+      <template v-if="catalog">
+        <div v-if="preview?.failedItemCount && !plan" class="preflight-notice">
+          <span><MdIcon :name="ICON_NAMES.info" :size="17" /></span>
+          <p>
+            <strong>{{ t('applicationUninstall.preflightFailed') }}</strong>
+            {{ t('applicationUninstall.batchPreflightFailedSummary') }}
+          </p>
+        </div>
+
+        <MdEmptyState
+          v-if="!catalog.inventoryComplete"
+          :icon-name="ICON_NAMES.info"
+          :title="t('applicationUninstall.incompleteTitle')"
+          :description="t('applicationUninstall.incompleteDescription')"
+        />
+        <template v-else>
+          <section v-if="!catalog.executionSupported" class="capability-notice">
+            <MdIcon :name="ICON_NAMES.info" :size="19" />
+            <div>
+              <strong>{{ t('applicationUninstall.viewOnlyTitle') }}</strong>
+              <p>{{ t('applicationUninstall.viewOnlyDescription') }}</p>
+            </div>
+          </section>
+
+          <section class="catalog">
+            <MdEmptyState
+              v-if="!filteredCandidates.length"
+              class="catalog-empty"
+              compact
+              :icon-name="ICON_NAMES.search"
+              :title="t('applicationUninstall.emptyTitle')"
+              :description="t('applicationUninstall.emptyDescription')"
+            />
+
+            <MdResultTable v-else ref="applicationList" class="application-list">
+              <template #header>
+                <div class="application-list-header">
+                  <label :title="t('applicationUninstall.selectVisible')">
+                    <MdResultCheckbox
+                      :checked="allFilteredSelected"
+                      :indeterminate="someFilteredSelected && !allFilteredSelected"
+                      :disabled="busy || !filteredReadyIds.length"
+                      :aria-label="t('applicationUninstall.selectVisible')"
+                      @update:checked="toggleFilteredSelection"
+                    />
+                  </label>
+                  <button
+                    class="name-header md-result-sort"
+                    type="button"
+                    :data-active="applicationCatalogSortKey(sort) === 'name'"
+                    :aria-label="t('applicationUninstall.sortByName')"
+                    @click="changeSort('name')"
+                  >
+                    {{ t('applicationUninstall.applicationName') }}
+                    <MdIcon :name="sortIcon('name')" :size="14" />
+                  </button>
+                  <button
+                    class="status-header md-result-sort"
+                    type="button"
+                    :data-active="applicationCatalogSortKey(sort) === 'status'"
+                    :aria-label="t('applicationUninstall.sortByStatus')"
+                    @click="changeSort('status')"
+                  >
+                    {{ t('applicationUninstall.status') }}
+                    <MdIcon :name="sortIcon('status')" :size="14" />
+                  </button>
+                  <button
+                    class="size-header md-result-sort"
+                    type="button"
+                    :data-active="applicationCatalogSortKey(sort) === 'size'"
+                    :aria-label="t('applicationUninstall.sortBySize')"
+                    @click="changeSort('size')"
+                  >
+                    {{ t('applicationUninstall.applicationSize') }}
+                    <MdIcon :name="sortIcon('size')" :size="14" />
+                  </button>
+                  <button
+                    class="application-date-header md-result-sort"
+                    type="button"
+                    :data-active="applicationCatalogSortKey(sort) === 'date'"
+                    :aria-label="t('applicationUninstall.sortByDate')"
+                    @click="changeSort('date')"
+                  >
+                    {{
+                      t(windowsCatalog ? 'applicationUninstall.installedOrUpdated' : 'applicationUninstall.lastUsed')
+                    }}
+                    <MdIcon :name="sortIcon('date')" :size="14" />
+                  </button>
+                  <span />
+                </div>
+              </template>
+
+              <MdApplicationUninstallRow
+                v-for="candidate in filteredCandidates"
+                :key="candidate.applicationId"
+                :candidate="candidate"
+                :icon-src="candidate.iconPath ? iconUrls.get(candidate.iconPath) : undefined"
+                :selected="selectedSet.has(candidate.applicationId)"
+                :selected-component-ids="selectedComponentIds[candidate.applicationId] ?? []"
+                :expanded="expandedId === candidate.applicationId"
+                :busy="busy"
+                @toggle-selection="toggleSelection(candidate)"
+                @toggle-component="toggleComponent(candidate, $event)"
+                @toggle-expanded="expandedId = expandedId === candidate.applicationId ? null : candidate.applicationId"
+                @open="emit('open', $event)"
+                @icon-error="handleApplicationIconError(candidate.iconPath)"
+              />
+            </MdResultTable>
+          </section>
+        </template>
+      </template>
+
+      <MdEmptyState
+        v-else
+        :icon-name="ICON_NAMES.uninstall"
+        :title="t('applicationUninstall.initialTitle')"
+        :description="t('applicationUninstall.initialDescription')"
+      >
+        <Button type="button" :disabled="busy" @click="emit('scan')">
+          <MdIcon :name="ICON_NAMES.scan" :size="17" />
+          {{ t('applicationUninstall.startScan') }}
+        </Button>
+      </MdEmptyState>
+    </MdResultWorkspace>
+
+    <template v-if="!scanning && catalog?.inventoryComplete && catalog.executionSupported" #footer>
+      <MdSelectionActionBar
+        :selected-label="t('applicationUninstall.selectedApplicationsLabel')"
+        :selected-value="FormatUtils.integer(selectedCandidates.length)"
+        :space-label="t('applicationUninstall.selectedSizeLabel')"
+        :space-value="FormatUtils.bytes(selectedBytes)"
+        :action-label="t('applicationUninstall.uninstallSelected')"
+        :disabled="!selectedCandidates.length"
+        :busy="busy"
+        @action="prepareSelection"
+      >
+        <template #action-icon>
+          <span v-if="preparing || executing" class="button-spinner" />
+          <MdIcon v-else :name="ICON_NAMES.uninstall" :size="17" />
+        </template>
+      </MdSelectionActionBar>
+    </template>
+
+    <MdDestructiveActionDialog
+      :open="confirmOpen"
+      :title="
+        executing
+          ? executionTitle
+          : t(nativeBatch ? 'applicationUninstall.confirmNativeBatchTitle' : 'applicationUninstall.confirmBatchTitle', {
+              count: FormatUtils.integer(preview?.selectedApplicationCount ?? selectedCandidates.length),
+            })
+      "
+      :description="
+        executing
+          ? executionDescription
+          : t(
+              nativeBatch
+                ? includesElevation
+                  ? 'applicationUninstall.confirmNativeElevationDescription'
+                  : 'applicationUninstall.confirmNativeBatchDescription'
+                : includesUserData
+                  ? 'applicationUninstall.confirmBatchWithDataDescription'
+                  : 'applicationUninstall.confirmBatchDescription'
+            )
+      "
+      :summary-label="
+        executing
+          ? ''
+          : preparing
+            ? t('applicationUninstall.preparingBatchSummary')
+            : t('applicationUninstall.confirmBatchSummary', {
+                count: FormatUtils.integer(preview?.previewedApplicationCount ?? 0),
+              })
+      "
+      :summary-value="
+        executing ? '' : FormatUtils.bytes(preview?.previewedBytes ?? plan?.expectedBytes ?? selectedBytes)
+      "
+      :cancel-label="t('common.cancel')"
+      :confirm-label="t('applicationUninstall.confirmBatchAction')"
+      :busy="executing"
+      :loading="confirmationLoading"
+      :loading-label="t('applicationUninstall.preparingBatchSummary')"
+      :show-details="executing"
+      @update:open="updateConfirmation"
+      @confirm="emit('execute')"
+    >
+      <div
+        ref="executionList"
+        class="uninstall-execution-list"
+        :aria-label="t('applicationUninstall.uninstallItemList')"
+      >
+        <div
+          v-for="item in executionItems"
+          :key="item.applicationId"
+          class="uninstall-execution-item"
+          :class="`is-${item.state}`"
+        >
+          <span class="uninstall-execution-status" aria-hidden="true">
+            <MdIcon v-if="item.state === 'completed'" :name="ICON_NAMES.check" :size="14" />
+            <MdIcon v-else-if="item.state === 'cancelled'" :name="ICON_NAMES.minus" :size="13" />
+            <b v-else-if="item.state === 'failed'">!</b>
+            <i v-else-if="item.state === 'active'" class="md-operational-motion" />
+            <i v-else />
+          </span>
+          <span class="uninstall-execution-copy">
+            <strong :title="item.name">{{ item.name }}</strong>
+            <small>{{ item.detail }}</small>
+          </span>
+          <small class="uninstall-execution-item-label">{{ item.statusLabel }}</small>
+        </div>
+      </div>
+      <div
+        class="uninstall-execution-progress"
+        role="progressbar"
+        :aria-label="executionProgressValue"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        :aria-valuenow="Math.round(executionPercent)"
+      >
+        <span :style="{ width: `${executionPercent}%` }" />
+      </div>
+      <div class="uninstall-execution-actions">
+        <Button
+          class="uninstall-execution-cancel"
+          variant="ghost"
+          size="sm"
+          type="button"
+          :disabled="cancellingExecution || synchronizing"
+          @click="requestCancelExecution"
+        >
+          {{
+            cancellingExecution
+              ? t('applicationUninstall.cancellingAction')
+              : t('applicationUninstall.cancelExecutionAction')
+          }}
+        </Button>
+      </div>
+    </MdDestructiveActionDialog>
+
+    <Dialog :open="cancellationConfirmOpen" @update:open="cancellationConfirmOpen = $event">
+      <MdDialogContent class="w-[calc(100%-3rem)] max-w-[440px] gap-0 p-0">
+        <DialogHeader class="px-6 pt-6 pr-14 pb-4">
+          <DialogTitle>{{ t('applicationUninstall.cancelExecutionConfirmTitle') }}</DialogTitle>
+          <DialogDescription class="mt-2 leading-6">
+            {{ t('applicationUninstall.cancelExecutionConfirmDescription') }}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter class="border-t border-border/70 px-6 py-3.5">
+          <Button variant="outline" type="button" @click="cancellationConfirmOpen = false">
+            {{ t('common.cancel') }}
+          </Button>
+          <Button variant="destructive" type="button" @click="confirmCancelExecution">
+            {{ t('applicationUninstall.stopExecutionAction') }}
+          </Button>
+        </DialogFooter>
+      </MdDialogContent>
+    </Dialog>
+  </MdPageShell>
+</template>
+
+<style scoped src="./application-uninstall.css"></style>

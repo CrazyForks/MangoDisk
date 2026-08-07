@@ -1,0 +1,34 @@
+# QQ conversations, downloaded files, and account state are stored in the
+# application container. This rule is deliberately limited to Library/Caches.
+id = "app.qq-cache"
+schema_version = 3
+rule_version = 1
+platform = "macos"
+category = "application"
+risk = "safe"
+default_selected = true
+required_stopped_processes = ["QQ"]
+
+[[applicability]]
+kind = "anyOf"
+items = [
+  { kind = "applicationInstalled", identifiers = ["com.tencent.qq", "QQ"] },
+  { kind = "anyRootExists" },
+]
+
+[[roots]]
+template = "${user_library}/Caches/com.tencent.qq"
+
+[matcher]
+kind = "all"
+
+[execution]
+kind = "deleteMatchingContents"
+requires_app_close = true
+
+[verification]
+lifecycle = "verified"
+evidence = "The rule selects only QQ's bundle directory under Library/Caches, which Apple designates for discardable files; sandbox container data, messages, accounts, and downloaded files remain outside the root"
+verified_at = "2026-07-18"
+verified_platform = "macos"
+references = ["https://developer.apple.com/documentation/foundation/url/cachesdirectory"]

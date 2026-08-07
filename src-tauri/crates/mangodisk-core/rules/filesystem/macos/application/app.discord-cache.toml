@@ -1,0 +1,43 @@
+# Discord uses Electron cache directories. User sessions, Local Storage,
+# IndexedDB, and downloads are excluded, and Discord must be closed first.
+id = "app.discord-cache"
+schema_version = 3
+rule_version = 1
+platform = "macos"
+category = "application"
+risk = "safe"
+default_selected = true
+required_stopped_processes = ["Discord"]
+
+[[applicability]]
+kind = "anyOf"
+items = [
+  { kind = "applicationInstalled", identifiers = ["com.hnc.Discord", "Discord"] },
+  { kind = "anyRootExists" },
+]
+
+[[roots]]
+template = "${user_library}/Caches/com.hnc.Discord"
+
+[[roots]]
+template = "${application_support}/discord/Cache"
+
+[[roots]]
+template = "${application_support}/discord/Code Cache"
+
+[[roots]]
+template = "${application_support}/discord/GPUCache"
+
+[matcher]
+kind = "all"
+
+[execution]
+kind = "deleteMatchingContents"
+requires_app_close = true
+
+[verification]
+lifecycle = "verified"
+evidence = "The rule selects only Discord's Library/Caches bundle directory and Electron Cache, Code Cache, and GPUCache paths; account, session, workspace, Local Storage, IndexedDB, and downloaded files are excluded"
+verified_at = "2026-07-17"
+verified_platform = "macos"
+references = ["https://www.electronjs.org/docs/latest/api/app#appgetpathname"]

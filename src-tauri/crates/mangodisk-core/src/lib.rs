@@ -1,0 +1,70 @@
+mod applications;
+mod cleanup;
+mod filesystem;
+mod history;
+mod reporting;
+mod shared;
+mod storage;
+
+pub const APPLICATION_IDENTIFIER: &str = "app.mangodisk.desktop";
+
+pub use applications::leftovers::{
+    ApplicationLeftoverActionReason, ApplicationLeftoverActionResult,
+    ApplicationLeftoverActionStatus, ApplicationLeftoverCandidate, ApplicationLeftoverConfidence,
+    ApplicationLeftoverEvidence, ApplicationLeftoverPlan, ApplicationLeftoverPlanItem,
+    ApplicationLeftoverResult, ApplicationLeftoverScanResult, ApplicationLeftoverService,
+    ApplicationLeftoverSource,
+};
+pub use applications::uninstall::{
+    ApplicationUninstallActionReason, ApplicationUninstallActionResult,
+    ApplicationUninstallActionStatus, ApplicationUninstallBatchPlan,
+    ApplicationUninstallBatchPreparation, ApplicationUninstallBatchResult,
+    ApplicationUninstallBatchSelection, ApplicationUninstallCandidate,
+    ApplicationUninstallCapability, ApplicationUninstallComponent,
+    ApplicationUninstallComponentKind, ApplicationUninstallComponentSummary,
+    ApplicationUninstallExecutionItemResult, ApplicationUninstallExecutionItemStatus,
+    ApplicationUninstallExecutionProgress, ApplicationUninstallExecutionStage,
+    ApplicationUninstallInspection, ApplicationUninstallInstallerKind, ApplicationUninstallPlan,
+    ApplicationUninstallPlanItem, ApplicationUninstallPlatform, ApplicationUninstallRecordState,
+    ApplicationUninstallResult, ApplicationUninstallRisk, ApplicationUninstallScanResult,
+    ApplicationUninstallService,
+};
+pub use cleanup::{
+    CleanupActionKind, CleanupActionReason, CleanupActionResult, CleanupActionStatus,
+    CleanupAutomationProfile, CleanupCategory, CleanupExecutionProgress, CleanupExecutionStage,
+    CleanupGroup, CleanupPlan, CleanupRequest, CleanupResult, CleanupScanEngineInfo,
+    CleanupScanResult, CleanupSourceBlockReason, CleanupSourceDetail, CleanupSourceSelection,
+    CleanupSourceSelectionMode, RiskLevel, ScanItemStatus, ScanRuleResult,
+    CLEANUP_AUTOMATION_PROFILE_SCHEMA_VERSION, CLEANUP_PLAN_SCHEMA_VERSION,
+};
+pub use cleanup::{CleanupPlanService, CleanupScanService, CleanupService};
+pub use filesystem::{
+    metadata::diagnostic_path, DiskInfo, PermanentDeleteBatchResult, PermanentDeleteCandidate,
+    PermanentDeleteFailure,
+};
+pub use history::{
+    ApplicationLeftoverOperationDetails, ApplicationUninstallOperationDetails,
+    CleanupOperationDetails, DeepCleanupOperationDetails, FileCleanupHistoryItem,
+    FileCleanupHistoryItemStatus, FileCleanupOperationDetails, HistoryService, OperationCategory,
+    OperationDetails, OperationOutcome, OperationRecord, OPERATION_RECORD_SCHEMA_VERSION,
+};
+pub use reporting::{
+    BaselineArtifacts, BaselineComparisonArtifacts, BaselineComparisonOptions,
+    BenchmarkDatasetArtifacts, BenchmarkDatasetOptions, BenchmarkDatasetService,
+    BenchmarkSourceInfo, CleanupBaselineComparisonService, CleanupBaselineOptions,
+    CleanupBaselineService, EngineBenchmarkArtifacts, EngineBenchmarkComparisonArtifacts,
+    EngineBenchmarkComparisonOptions, EngineBenchmarkComparisonService, EngineBenchmarkOptions,
+    EngineBenchmarkService,
+};
+pub use shared::{
+    configure_application_paths, ApplicationPaths, CoreError, CoreErrorCode, CoreErrorReason,
+    CoreResult, OperationCancellationToken, ProgressSink, TraversalProgress, TraversalStage,
+};
+pub use storage::analysis::{
+    AnalysisDeleteResult, AnalysisResult, AnalysisService, DirectoryEntryInfo,
+};
+pub use storage::duplicates::{
+    DuplicateFileEntry, DuplicateFileService, DuplicateFilesResult, DuplicateGroup,
+    DuplicateGroupBatch, DuplicateGroupPage,
+};
+pub use storage::large_files::{LargeFileEntry, LargeFileService, LargeFilesResult};

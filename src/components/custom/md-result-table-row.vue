@@ -30,17 +30,24 @@
   background: transparent;
 }
 
-.result-table-row:hover::before,
-.result-table-row:focus-within::before {
+.result-table-row:hover::before {
   @apply bg-muted/60;
 }
 
-.result-table-row:is([data-selected='true'], [data-expanded='true'])::before {
-  @apply bg-primary/5;
+.result-table-row[data-selected='true']::before {
+  @apply bg-primary/7;
 }
 
-.result-table-row:is([data-selected='true'], [data-expanded='true']):is(:hover, :focus-within)::before {
-  @apply bg-muted/60;
+.result-table-row[data-expanded='true']:not([data-selected='true'])::before {
+  @apply bg-muted/35;
+}
+
+.result-table-row[data-selected='true']:hover::before {
+  background-color: color-mix(in oklab, var(--primary) 10%, var(--muted));
+}
+
+.result-table-row:has(:focus-visible)::before {
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--ring) 52%, transparent);
 }
 
 .result-table-row > :deep(*) {

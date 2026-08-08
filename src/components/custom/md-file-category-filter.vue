@@ -23,7 +23,7 @@ const emit = defineEmits<{
       v-for="option in options"
       :key="option.value"
       type="button"
-      class="inline-flex h-7.5 flex-none cursor-pointer items-center gap-1.5 rounded-md border border-transparent px-2.5 text-content-body text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+      class="inline-flex h-7.5 flex-none cursor-pointer items-center gap-1.5 rounded-md border border-transparent px-2.5 text-content-body text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/35"
       :class="{
         'border-primary/20 bg-primary/10 font-semibold text-primary': modelValue === option.value,
       }"

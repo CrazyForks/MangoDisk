@@ -76,4 +76,8 @@ defineEmits<{
   opacity: 0.45;
   cursor: not-allowed;
 }
+
+.result-row-action:focus-visible {
+  @apply border-ring outline-none ring-2 ring-ring/35;
+}
 </style>

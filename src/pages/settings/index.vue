@@ -410,7 +410,7 @@ function updateDuplicateKeeperRule(value: unknown) {
   padding: 7px 14px;
   background: transparent;
   text-align: left;
-  @apply border-border/60 text-card-foreground transition-colors duration-200 hover:bg-muted/50 focus-within:bg-muted/40;
+  @apply border-border/60 text-card-foreground transition-colors duration-200 hover:bg-muted/50;
 }
 
 .setting-row:first-child {
@@ -455,6 +455,12 @@ function updateDuplicateKeeperRule(value: unknown) {
 .action-row {
   font: inherit;
   cursor: pointer;
+}
+
+.action-row:focus-visible {
+  position: relative;
+  z-index: 1;
+  @apply outline-none ring-2 ring-inset ring-ring/50;
 }
 
 .action-row:disabled {

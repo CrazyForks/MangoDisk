@@ -97,6 +97,9 @@
 .catalog-filters button.active {
   @apply bg-primary/10 text-primary;
 }
+.catalog-filters button:focus-visible {
+  @apply outline-none ring-2 ring-inset ring-ring/40;
+}
 .catalog-filters span {
   min-width: 16px;
   padding: 2px;

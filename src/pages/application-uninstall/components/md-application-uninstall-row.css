@@ -9,14 +9,6 @@
   transition: background-color 0.16s ease;
 }
 
-.application-row > .application-row-line:is([data-selected='true'], [data-expanded='true'])::before {
-  background: transparent;
-}
-
-.application-row > .application-row-line:is(:hover, :focus-within)::before {
-  @apply bg-muted/60;
-}
-
 .application-main {
   display: grid;
   width: 100%;
@@ -54,12 +46,12 @@
   transition: opacity 0.14s ease;
 }
 
-.application-row-line:is(:hover, :focus-within) .application-actions {
+.application-row-line:is(:hover, :has(:focus-visible)) .application-actions {
   opacity: 1;
   pointer-events: auto;
 }
 
-.application-row-line:is(:hover, :focus-within) .application-identity {
+.application-row-line:is(:hover, :has(:focus-visible)) .application-identity {
   padding-right: 32px;
 }
 
@@ -212,12 +204,12 @@
   transition: opacity 0.14s ease;
 }
 
-.possible-related-location:is(:hover, :focus-within) > :deep(.result-row-action) {
+.possible-related-location:is(:hover, :has(:focus-visible)) > :deep(.result-row-action) {
   opacity: 1;
   pointer-events: auto;
 }
 
-.possible-related-location:is(:hover, :focus-within) small {
+.possible-related-location:is(:hover, :has(:focus-visible)) small {
   padding-right: 32px;
 }
 
@@ -231,14 +223,6 @@
   border-radius: calc(var(--radius) - 5px);
   padding-block: 2px;
   transition: background-color 0.16s ease;
-}
-
-.application-details .component-row[data-selected='true']::before {
-  background: transparent;
-}
-
-.application-details .component-row:is(:hover, :focus-within)::before {
-  @apply bg-muted/60;
 }
 
 .component-icon {
@@ -278,12 +262,12 @@
   transition: opacity 0.14s ease;
 }
 
-.component-row:is(:hover, :focus-within) .component-actions {
+.component-row:is(:hover, :has(:focus-visible)) .component-actions {
   opacity: 1;
   pointer-events: auto;
 }
 
-.component-row:is(:hover, :focus-within) .component-main {
+.component-row:is(:hover, :has(:focus-visible)) .component-main {
   padding-right: 32px;
 }
 

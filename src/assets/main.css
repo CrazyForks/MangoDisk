@@ -225,6 +225,12 @@ body,
     font-weight: 600;
   }
 
+  .md-result-sort:focus-visible {
+    border-radius: 4px;
+    outline: 2px solid color-mix(in oklab, var(--ring) 45%, transparent);
+    outline-offset: 2px;
+  }
+
   /*
    * Native Segoe UI and the macOS system font rasterize bold text
    * differently. Result rows therefore use an explicit semibold weight

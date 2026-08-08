@@ -6,7 +6,7 @@
   min-width: 0;
   min-height: 0;
   flex: 1;
-  grid-template-columns: minmax(260px, 33%) minmax(0, 1fr);
+  grid-template-columns: clamp(230px, 30%, 300px) minmax(0, 1fr);
   overflow: hidden;
   border-width: 1px;
   border-radius: var(--radius);
@@ -55,6 +55,10 @@
 
 .category-row:hover {
   @apply bg-muted/55;
+}
+
+.category-row:focus-visible {
+  @apply outline-none ring-2 ring-inset ring-ring/45;
 }
 
 .category-row.active {
@@ -193,15 +197,6 @@
   transition: background-color 0.16s ease;
 }
 
-.detail-list-content .rule-summary[data-selected='true']::before {
-  background: transparent;
-}
-
-.detail-list-content .rule-summary:is(:hover, :focus-within)::before,
-.detail-list-content .rule-summary[data-selected='true']:is(:hover, :focus-within)::before {
-  @apply bg-muted/55;
-}
-
 .rule-disclosure {
   display: grid;
   min-width: 0;
@@ -251,6 +246,26 @@
   align-items: center;
   gap: 4px;
   @apply text-warning-foreground;
+}
+
+.rule-main .rule-inspection-hint {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+  @apply text-muted-foreground;
+  font-size: 10px;
+  font-weight: 400;
+}
+
+.rule-inspection-hint svg {
+  flex: none;
+}
+
+.rule-inspection-hint span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .rule-close-hint svg {
@@ -337,6 +352,22 @@
   padding: 4px 10px;
 }
 
+.rule-impact {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 10px;
+  @apply text-muted-foreground;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.rule-impact svg {
+  flex: none;
+  @apply text-warning-foreground;
+}
+
 .source-row {
   display: grid;
   min-width: 0;
@@ -362,16 +393,6 @@
   border-radius: calc(var(--radius) - 5px);
   padding-block: 3px;
   transition: background-color 0.16s ease;
-}
-
-.detail-list-content .source-row[data-selected='true']::before,
-.detail-list-content .application-row[data-selected='true']::before {
-  background: transparent;
-}
-
-.detail-list-content .source-row:is(:hover, :focus-within)::before,
-.detail-list-content .application-row:is(:hover, :focus-within)::before {
-  @apply bg-muted/60;
 }
 
 .rule-card :deep(.hierarchy-items::before) {
@@ -418,14 +439,14 @@
   transition: opacity 0.14s ease;
 }
 
-.source-row:is(:hover, :focus-within) .source-actions,
-.application-row:is(:hover, :focus-within) .source-actions {
+.source-row:is(:hover, :has(:focus-visible)) .source-actions,
+.application-row:is(:hover, :has(:focus-visible)) .source-actions {
   opacity: 1;
   pointer-events: auto;
 }
 
-.source-row:is(:hover, :focus-within) .source-main,
-.application-row:is(:hover, :focus-within) .application-main {
+.source-row:is(:hover, :has(:focus-visible)) .source-main,
+.application-row:is(:hover, :has(:focus-visible)) .application-main {
   padding-right: 32px;
 }
 
@@ -515,7 +536,16 @@
   }
 
   .rule-title em,
-  .rule-main small {
+  .rule-main > small {
     display: none;
+  }
+
+  /*
+   * Aggregate cleaners cannot expose individual paths, so their localized
+   * scope description is the only concrete location information available.
+   * Keep that single-line description visible in compact layouts.
+   */
+  .rule-main.aggregate-only > small {
+    display: block;
   }
 }

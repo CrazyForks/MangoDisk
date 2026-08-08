@@ -15,7 +15,7 @@
     "maximize": "最大化",
     "restore": "还原",
     "safe": "低风险",
-    "recoverable": "需确认",
+    "recoverable": "检查影响",
     "operationFailed": "操作失败",
     "filterFileCategory": "按文件类型筛选",
     "estimatedRelease": "可释放空间",
@@ -156,6 +156,7 @@
     "sourceAccessLimited": "无法完整读取，未加入清理",
     "sourceFiles": "{count} 个文件",
     "sourceModified": "最近修改 {time}",
+    "aggregateOnlyDetails": "当前仅提供清理范围、项目数和总大小，无法逐项列出文件",
     "scanMode": {
       "label": "选择扫描方式",
       "standard": "标准扫描",
@@ -1285,7 +1286,7 @@
       },
       "special.windows-system-logs": {
         "name": "Windows 日志文件",
-        "description": "Windows 中超过 3 天的安装、升级和诊断日志",
+        "description": "Windows 目录下 Panther、Logs 和 System32\\LogFiles 中超过 3 天的安装、升级和诊断日志",
         "impact": "只处理固定系统日志目录和日志类型；占用中或当前账户无权访问的文件会被跳过。"
       },
       "special.windows-internet-cache": {

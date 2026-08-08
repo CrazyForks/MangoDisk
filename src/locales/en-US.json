@@ -15,7 +15,7 @@
     "maximize": "Maximize",
     "restore": "Restore",
     "safe": "Low risk",
-    "recoverable": "Needs review",
+    "recoverable": "Review impact",
     "operationFailed": "Operation failed",
     "loadMore": "Show more",
     "filterFileCategory": "Filter by file type",
@@ -156,6 +156,7 @@
     "sourceAccessLimited": "Could not be fully read and is excluded",
     "sourceFiles": "{count} files",
     "sourceModified": "Last modified {time}",
+    "aggregateOnlyDetails": "Only the cleanup scope, item count, and total size are available; individual files cannot be listed",
     "scanMode": {
       "label": "Choose scan type",
       "standard": "Standard Scan",
@@ -1285,7 +1286,7 @@
       },
       "special.windows-system-logs": {
         "name": "Windows log files",
-        "description": "Setup, upgrade, and diagnostic logs older than three days.",
+        "description": "Setup, upgrade, and diagnostic logs older than three days under Panther, Logs, and System32\\LogFiles in the Windows directory.",
         "impact": "Only fixed Windows log locations and log types are included. Files in use or unavailable to your account are skipped."
       },
       "special.windows-internet-cache": {

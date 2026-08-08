@@ -199,8 +199,24 @@ function loadMoreLeftoverCandidates(group: ApplicationLeftoverGroup) {
   };
 }
 
+function onlyHasAggregateDetails(rule: PresentedScanRuleResult): boolean {
+  /*
+   * A specialized cleaner may report aggregate counts through an OS API
+   * without exposing paths that are safe to display or select individually.
+   * Derive this state only from protocol sources, never from rule IDs, so a
+   * newly added cleaner cannot silently inherit incorrect interaction rules.
+   */
+  return rule.selectable && !rule.sources.length;
+}
+
 function hasRuleDetails(rule: PresentedScanRuleResult): boolean {
-  return rule.sources.length > 0;
+  /*
+   * File-backed rules expose selectable sources, while native OS cleaners may
+   * expose only aggregate totals. Treat localized impact text as inspectable
+   * details for those aggregate cleaners so users can review the consequence
+   * before selecting the rule, even though no individual paths are available.
+   */
+  return rule.sources.length > 0 || (onlyHasAggregateDetails(rule) && Boolean(rule.impact));
 }
 
 function runningProcessWarning(rule: PresentedScanRuleResult): string {
@@ -583,7 +599,7 @@ watch(
                 <span class="rule-icon" :class="{ recoverable: row.rule.risk === 'recoverable' }">
                   <MdIcon :name="cleanupRuleIcon(row.rule.ruleId, row.rule.group)" :size="20" />
                 </span>
-                <span class="rule-main">
+                <span class="rule-main" :class="{ 'aggregate-only': onlyHasAggregateDetails(row.rule) }">
                   <span class="rule-title">
                     <strong class="md-result-primary">{{ row.rule.name }}</strong>
                     <em v-if="activeCategory.id !== 'userCache'" :class="row.rule.risk">
@@ -601,6 +617,10 @@ watch(
                   <small v-else-if="activeCategory.id !== 'userCache' && row.rule.description">
                     {{ row.rule.description }}
                   </small>
+                  <span v-if="onlyHasAggregateDetails(row.rule)" class="rule-inspection-hint">
+                    <MdIcon :name="ICON_NAMES.info" :size="12" />
+                    <span>{{ t('cleanup.aggregateOnlyDetails') }}</span>
+                  </span>
                 </span>
                 <span class="rule-size" :class="row.selection">
                   <strong class="md-result-primary">{{
@@ -622,7 +642,11 @@ watch(
               </button>
             </MdResultTableRow>
 
-            <MdResultTableHierarchy v-if="expandedRuleIds.has(row.rule.ruleId) && row.rule.sources.length">
+            <MdResultTableHierarchy v-if="expandedRuleIds.has(row.rule.ruleId) && hasRuleDetails(row.rule)">
+              <div v-if="row.rule.impact" class="rule-impact">
+                <MdIcon :name="ICON_NAMES.info" :size="14" />
+                <span>{{ row.rule.impact }}</span>
+              </div>
               <MdResultTableRow
                 v-for="source in visibleRuleSources(row.rule)"
                 :key="source.path"

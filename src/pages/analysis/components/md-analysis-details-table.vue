@@ -247,12 +247,12 @@ function sortTitle(key: AnalysisSortKey) {
   transition: opacity 0.14s ease;
 }
 
-.details-row:is(:hover, :focus-within) .details-actions {
+.details-row:is(:hover, :has(:focus-visible)) .details-actions {
   opacity: 1;
   pointer-events: auto;
 }
 
-.details-row:is(:hover, :focus-within) .details-name strong {
+.details-row:is(:hover, :has(:focus-visible)) .details-name strong {
   padding-right: 32px;
 }
 </style>

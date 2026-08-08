@@ -101,7 +101,7 @@ onMounted(scrollBreadcrumbsToEnd);
   align-items: center;
   gap: 10px;
   border-bottom-width: 1px;
-  padding: 4px 10px;
+  padding: 3px 10px;
   @apply border-border;
 }
 
@@ -123,6 +123,10 @@ onMounted(scrollBreadcrumbsToEnd);
 
 .history-actions button:hover:not(:disabled) {
   @apply border-primary/40 bg-accent/65 text-accent-foreground;
+}
+
+.history-actions button:focus-visible {
+  @apply border-ring outline-none ring-2 ring-ring/35;
 }
 
 button:disabled {
@@ -171,6 +175,10 @@ button:disabled {
 
 .breadcrumbs button:hover:not(:disabled) {
   @apply bg-accent/65 text-accent-foreground;
+}
+
+.breadcrumbs button:focus-visible {
+  @apply outline-none ring-2 ring-ring/35;
 }
 
 .breadcrumbs button:disabled {

@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n';
-import { ref } from 'vue';
 
 import MdIcon from '@/components/icons/md-icon.vue';
 import { ANALYSIS_VIEW_IDS } from '@/lib/models/analysis';
 import { ICON_NAMES } from '@/lib/models/ui';
-import type { AnalysisResult, DirectoryEntryInfo } from '@/lib/models/analysis';
+import type { AnalysisResult, AnalysisViewId, DirectoryEntryInfo } from '@/lib/models/analysis';
 import { FormatUtils } from '@/lib/utils/format';
 
 import MdAnalysisDetailsTable from './md-analysis-details-table.vue';
@@ -13,19 +12,19 @@ import MdAnalysisTreemap from './md-analysis-treemap.vue';
 
 const { t } = useI18n({ useScope: 'global' });
 
-defineProps<{
+const props = defineProps<{
   result: AnalysisResult;
   entries: DirectoryEntryInfo[];
   folderCount: number;
+  viewMode: AnalysisViewId;
 }>();
 
 const emit = defineEmits<{
   activate: [entry: DirectoryEntryInfo];
   open: [path: string];
   delete: [entry: DirectoryEntryInfo];
+  'update:viewMode': [viewMode: AnalysisViewId];
 }>();
-
-const viewMode = ref<(typeof ANALYSIS_VIEW_IDS)[keyof typeof ANALYSIS_VIEW_IDS]>(ANALYSIS_VIEW_IDS.treemap);
 </script>
 
 <template>
@@ -43,18 +42,18 @@ const viewMode = ref<(typeof ANALYSIS_VIEW_IDS)[keyof typeof ANALYSIS_VIEW_IDS]>
       <div class="view-switcher" role="group" :aria-label="t('analysis.result')">
         <button
           type="button"
-          :class="{ active: viewMode === ANALYSIS_VIEW_IDS.treemap }"
-          :aria-pressed="viewMode === ANALYSIS_VIEW_IDS.treemap"
-          @click="viewMode = ANALYSIS_VIEW_IDS.treemap"
+          :class="{ active: props.viewMode === ANALYSIS_VIEW_IDS.treemap }"
+          :aria-pressed="props.viewMode === ANALYSIS_VIEW_IDS.treemap"
+          @click="emit('update:viewMode', ANALYSIS_VIEW_IDS.treemap)"
         >
           <MdIcon :name="ICON_NAMES.grid" :size="15" />
           {{ t('analysis.treemap') }}
         </button>
         <button
           type="button"
-          :class="{ active: viewMode === ANALYSIS_VIEW_IDS.details }"
-          :aria-pressed="viewMode === ANALYSIS_VIEW_IDS.details"
-          @click="viewMode = ANALYSIS_VIEW_IDS.details"
+          :class="{ active: props.viewMode === ANALYSIS_VIEW_IDS.details }"
+          :aria-pressed="props.viewMode === ANALYSIS_VIEW_IDS.details"
+          @click="emit('update:viewMode', ANALYSIS_VIEW_IDS.details)"
         >
           <MdIcon :name="ICON_NAMES.list" :size="15" />
           {{ t('analysis.details') }}
@@ -63,7 +62,7 @@ const viewMode = ref<(typeof ANALYSIS_VIEW_IDS)[keyof typeof ANALYSIS_VIEW_IDS]>
     </header>
 
     <MdAnalysisTreemap
-      v-if="viewMode === ANALYSIS_VIEW_IDS.treemap"
+      v-if="props.viewMode === ANALYSIS_VIEW_IDS.treemap"
       :entries="entries"
       :total-bytes="result.totalBytes"
       @activate="emit('activate', $event)"
@@ -95,7 +94,7 @@ const viewMode = ref<(typeof ANALYSIS_VIEW_IDS)[keyof typeof ANALYSIS_VIEW_IDS]>
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 4px 12px;
+  padding: 2px 12px;
 }
 
 .visual-pane header p {
@@ -142,5 +141,11 @@ const viewMode = ref<(typeof ANALYSIS_VIEW_IDS)[keyof typeof ANALYSIS_VIEW_IDS]>
 
 .view-switcher button.active {
   @apply bg-accent text-accent-foreground;
+}
+
+.view-switcher button:focus-visible {
+  position: relative;
+  z-index: 1;
+  @apply outline-none ring-2 ring-inset ring-ring/45;
 }
 </style>

@@ -10,10 +10,10 @@ import MdPageShell from '@/components/custom/md-page-shell.vue';
 import MdDestructiveActionDialog from '@/components/custom/md-destructive-action-dialog.vue';
 import MdIcon from '@/components/icons/md-icon.vue';
 import { Button } from '@/components/ui/button';
-import { ANALYSIS_PROGRESS_DELAY_MS } from '@/lib/models/analysis';
+import { ANALYSIS_PROGRESS_DELAY_MS, ANALYSIS_VIEW_IDS } from '@/lib/models/analysis';
 import { STORAGE_SCOPE_IDS } from '@/lib/models/storage-scope';
 import { ICON_NAMES } from '@/lib/models/ui';
-import type { AnalysisResult, DirectoryEntryInfo } from '@/lib/models/analysis';
+import type { AnalysisResult, AnalysisViewId, DirectoryEntryInfo } from '@/lib/models/analysis';
 import type { DiskInfo } from '@/lib/models/disk';
 import type { TraversalProgress } from '@/lib/models/progress';
 import { AnalysisBreadcrumbUtils } from '@/lib/utils/analysis-breadcrumb';
@@ -64,6 +64,7 @@ const showAnalysisProgress = ref(false);
 const primaryAnalysisPending = ref(false);
 const confirmOpen = ref(false);
 const pendingDelete = ref<DirectoryEntryInfo | null>(null);
+const viewMode = ref<AnalysisViewId>(ANALYSIS_VIEW_IDS.treemap);
 let progressTimer: ReturnType<typeof setTimeout> | null = null;
 
 const entries = computed(() => [...(props.result?.entries ?? [])].sort((left, right) => right.bytes - left.bytes));
@@ -330,9 +331,11 @@ function navigateHistory(index: number) {
 
       <div
         v-else
-        class="browser-content grid-cols-1 @2xl/analysis:grid-cols-[minmax(300px,42%)_minmax(0,58%)] @5xl/analysis:grid-cols-[minmax(330px,36%)_minmax(0,64%)]"
+        class="browser-content"
+        :class="{ 'browser-content--details': viewMode === ANALYSIS_VIEW_IDS.details }"
       >
         <MdAnalysisFolderPane
+          v-if="viewMode === ANALYSIS_VIEW_IDS.treemap"
           :entries="entries"
           :total-bytes="result.totalBytes"
           :folder-count="folderCount"
@@ -345,6 +348,8 @@ function navigateHistory(index: number) {
           :result="result"
           :entries="entries"
           :folder-count="folderCount"
+          :view-mode="viewMode"
+          @update:view-mode="viewMode = $event"
           @activate="activateEntry"
           @open="emit('open', $event)"
           @delete="requestDelete"
@@ -412,7 +417,7 @@ function navigateHistory(index: number) {
   overflow: hidden;
   overflow-anchor: none;
   border-width: 1px;
-  border-radius: 14px;
+  border-radius: var(--radius);
   @apply border-border/70 bg-workspace text-foreground;
 }
 
@@ -431,5 +436,29 @@ function navigateHistory(index: number) {
   overflow: hidden;
   overflow-anchor: none;
   contain: layout paint;
+}
+
+/*
+ * Treemap mode keeps the rank pane for quick directory lookup. Details mode
+ * already exposes the same entries with sorting and actions, so it owns the
+ * full workspace instead of repeating that data beside another list.
+ */
+@container analysis (min-width: 672px) {
+  .browser-content:not(.browser-content--details) {
+    grid-template-columns: minmax(300px, 42%) minmax(0, 58%);
+  }
+}
+
+@container analysis (max-width: 671px) {
+  /* Keep one primary view on small windows instead of splitting scarce height. */
+  .browser-content:not(.browser-content--details) :deep(.folder-pane) {
+    display: none;
+  }
+}
+
+@container analysis (min-width: 1024px) {
+  .browser-content:not(.browser-content--details) {
+    grid-template-columns: minmax(330px, 36%) minmax(0, 64%);
+  }
 }
 </style>

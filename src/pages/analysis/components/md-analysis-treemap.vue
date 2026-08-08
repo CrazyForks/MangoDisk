@@ -35,12 +35,20 @@ const tooltipPosition = ref({
   opensUp: false,
 });
 
-function tileStyle(tile: TreemapTile) {
+function tileStyle(tile: TreemapTile, tileIndex: number) {
+  /*
+   * Color only separates adjacent regions; it does not encode file type or
+   * risk. Cycling theme chart colors in stable layout order keeps every skin
+   * legible without deriving style data from private paths. Aggregate tiles
+   * stay neutral so they cannot be mistaken for real directories.
+   */
+  const paletteColor = tile.kind === TREEMAP_TILE_KINDS.entry ? `var(--chart-${(tileIndex % 5) + 1})` : 'var(--muted)';
   return {
     left: `${tile.left}%`,
     top: `${tile.top}%`,
     width: `${tile.width}%`,
     height: `${tile.height}%`,
+    '--treemap-tile-color': paletteColor,
   };
 }
 
@@ -105,7 +113,10 @@ function tooltipStyle() {
 
 <template>
   <div class="treemap">
-    <template v-for="tile in tiles" :key="tile.kind === TREEMAP_TILE_KINDS.entry ? tile.entry.path : tile.kind">
+    <template
+      v-for="(tile, tileIndex) in tiles"
+      :key="tile.kind === TREEMAP_TILE_KINDS.entry ? tile.entry.path : tile.kind"
+    >
       <MdAnalysisEntryContextMenu
         v-if="tile.kind === TREEMAP_TILE_KINDS.entry"
         :entry="tile.entry"
@@ -117,7 +128,7 @@ function tooltipStyle() {
           type="button"
           class="treemap-tile"
           :class="tileClass(tile)"
-          :style="tileStyle(tile)"
+          :style="tileStyle(tile, tileIndex)"
           :aria-label="`${tile.entry.name} · ${FormatUtils.bytes(tile.bytes)}`"
           @pointerenter="showTooltip(tile, $event)"
           @pointermove="updateTooltipPosition"
@@ -144,7 +155,7 @@ function tooltipStyle() {
         v-else
         class="treemap-tile"
         :class="tileClass(tile)"
-        :style="tileStyle(tile)"
+        :style="tileStyle(tile, tileIndex)"
         role="group"
         :aria-label="
           t(
@@ -233,7 +244,7 @@ function tooltipStyle() {
   flex: 1;
   overflow: hidden;
   margin: 0 12px 12px;
-  border-radius: 10px;
+  border-radius: var(--radius);
   @apply bg-card;
   contain: layout paint;
   isolation: isolate;
@@ -246,10 +257,13 @@ function tooltipStyle() {
   justify-content: center;
   gap: 12px;
   overflow: hidden;
-  border-width: 4px;
+  border-width: 2px;
   border-radius: 9px;
   padding: 12px;
-  @apply border-card bg-secondary/45 text-card-foreground transition-[color,background-color,border-color,box-shadow] duration-200;
+  border-color: var(--card);
+  background: color-mix(in oklab, var(--treemap-tile-color, var(--secondary)) 22%, var(--card));
+  @apply text-card-foreground transition-[color,background-color,border-color,box-shadow] duration-200;
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--treemap-tile-color, var(--secondary)) 42%, var(--border));
   font: inherit;
   text-align: left;
   cursor: pointer;
@@ -266,7 +280,13 @@ function tooltipStyle() {
 
 .treemap-tile:not(.remainder):is(:hover, [data-state='open']) {
   z-index: 2;
-  @apply border-primary/30 bg-accent/65 ring-1 ring-inset ring-primary/50 shadow-lg;
+  background: color-mix(in oklab, var(--treemap-tile-color, var(--accent)) 34%, var(--card));
+  @apply border-primary/30 ring-1 ring-inset ring-primary/50 shadow-lg;
+}
+
+.treemap-tile:focus-visible {
+  z-index: 2;
+  @apply border-ring outline-none ring-2 ring-inset ring-ring/55;
 }
 
 .treemap-tile.file {
@@ -274,11 +294,12 @@ function tooltipStyle() {
 }
 
 .treemap-tile.prominent {
-  @apply bg-accent/50;
+  background: color-mix(in oklab, var(--treemap-tile-color, var(--accent)) 28%, var(--card));
 }
 
 .treemap-tile.remainder {
-  @apply bg-muted/55 text-muted-foreground;
+  background: color-mix(in oklab, var(--muted) 70%, var(--card));
+  @apply text-muted-foreground;
   cursor: default;
 }
 
@@ -327,7 +348,7 @@ function tooltipStyle() {
 .treemap-tile.compact {
   gap: 7px;
   padding: 8px;
-  @apply bg-secondary/35;
+  background: color-mix(in oklab, var(--treemap-tile-color, var(--secondary)) 18%, var(--card));
 }
 
 .treemap-tile.compact .tile-icon {
@@ -360,11 +381,11 @@ function tooltipStyle() {
 }
 
 .treemap-tile.tiny {
-  @apply bg-secondary/25;
+  background: color-mix(in oklab, var(--treemap-tile-color, var(--secondary)) 14%, var(--card));
 }
 
 .treemap-tile.remainder:is(.compact, .tiny) {
-  @apply bg-muted/55;
+  background: color-mix(in oklab, var(--muted) 70%, var(--card));
 }
 
 .treemap-pointer-tooltip {

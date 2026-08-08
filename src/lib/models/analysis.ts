@@ -6,6 +6,8 @@ export const ANALYSIS_VIEW_IDS = {
   details: 'details',
 } as const;
 
+export type AnalysisViewId = (typeof ANALYSIS_VIEW_IDS)[keyof typeof ANALYSIS_VIEW_IDS];
+
 export const ANALYSIS_SORT_KEYS = {
   name: 'name',
   bytes: 'bytes',

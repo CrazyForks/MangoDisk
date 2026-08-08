@@ -95,7 +95,7 @@ const emit = defineEmits<{
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 4px 12px;
+  padding: 2px 12px;
 }
 
 .folder-pane header p {
@@ -123,7 +123,8 @@ const emit = defineEmits<{
   padding: 4px 6px;
 }
 
-.folder-row:hover {
+.folder-row:hover,
+.folder-row:has(.folder-entry:focus-visible) {
   @apply bg-accent/65 text-accent-foreground;
 }
 
@@ -145,6 +146,10 @@ const emit = defineEmits<{
 
 .folder-row.file .folder-entry {
   cursor: default;
+}
+
+.folder-entry:focus-visible {
+  outline: none;
 }
 
 .item-copy,

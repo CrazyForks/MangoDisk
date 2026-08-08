@@ -205,6 +205,19 @@ function confirmDelete() {
   <MdPageShell class="@container/large-files" content-mode="workspace" :title="t('largeFiles.title')">
     <template #actions>
       <div class="header-actions">
+        <label v-if="!result" class="size-filter header-size-filter">
+          <span>{{ t('largeFiles.minimumSize') }}</span>
+          <Select :model-value="String(minimumBytes)" :disabled="busy || deleting" @update:model-value="updateMinimum">
+            <SelectTrigger class="w-28" size="sm" :aria-label="t('largeFiles.minimumSize')">
+              <SelectValue>≥ {{ FormatUtils.storageThreshold(minimumBytes) }}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem v-for="minimum in LARGE_FILE_MINIMUM_OPTIONS" :key="minimum" :value="String(minimum)">
+                ≥ {{ FormatUtils.storageThreshold(minimum) }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </label>
         <MdStorageScopeSelect
           :model-value="selectedScopePath || activeDisk?.mountPoint || ''"
           :disks="disks"
@@ -266,18 +279,22 @@ function confirmDelete() {
     <MdResultWorkspace v-else>
       <template v-if="result" #summary>
         <MdResultSummary
-          :title="t('largeFiles.summaryCount', { count: FormatUtils.integer(resultSummaryCount) }, resultSummaryCount)"
+          :title="
+            t(
+              'largeFiles.summaryCount',
+              {
+                count: FormatUtils.integer(resultSummaryCount),
+                size: FormatUtils.storageThreshold(minimumBytes),
+              },
+              resultSummaryCount
+            )
+          "
           :metric-label="t('largeFiles.summarySpace')"
           :metric-value="FormatUtils.bytes(resultSummaryBytes)"
-        />
-      </template>
-
-      <template v-if="result" #header>
-        <MdResultFilterToolbar>
-          <MdFileCategoryFilter v-model="activeCategory" :options="categoryOptions" />
-          <template #aside>
-            <label class="size-filter">
-              <span>{{ t('largeFiles.size') }}</span>
+        >
+          <template #actions>
+            <label class="size-filter summary-size-filter">
+              <span>{{ t('largeFiles.minimumSize') }}</span>
               <Select
                 :model-value="String(minimumBytes)"
                 :disabled="busy || deleting"
@@ -294,6 +311,12 @@ function confirmDelete() {
               </Select>
             </label>
           </template>
+        </MdResultSummary>
+      </template>
+
+      <template v-if="result" #header>
+        <MdResultFilterToolbar>
+          <MdFileCategoryFilter v-model="activeCategory" :options="categoryOptions" />
         </MdResultFilterToolbar>
       </template>
 
@@ -322,7 +345,7 @@ function confirmDelete() {
         v-else
         :icon-name="ICON_NAMES.largeFiles"
         :title="t('largeFiles.emptyTitle')"
-        :description="t('largeFiles.emptyDescription')"
+        :description="t('largeFiles.emptyDescription', { size: FormatUtils.storageThreshold(minimumBytes) })"
       >
         <Button type="button" :disabled="busy || deleting || !selectedScopePath" @click="start(false)">
           <MdIcon :name="ICON_NAMES.largeFiles" :size="17" />
@@ -352,7 +375,10 @@ function confirmDelete() {
 @reference "@assets/main.css";
 .header-actions {
   display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: 10px;
 }
 .size-filter {
@@ -364,5 +390,31 @@ function confirmDelete() {
 .size-filter > span {
   @apply text-muted-foreground;
   font-size: var(--font-content-meta);
+}
+.header-size-filter {
+  height: 40px;
+  border-radius: var(--radius-sm);
+  padding-inline-start: 9px;
+  @apply bg-transparent transition-colors hover:bg-muted/55;
+}
+
+.header-size-filter :deep([data-slot='select-trigger']) {
+  height: 100%;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.summary-size-filter {
+  height: 34px;
+  border-radius: var(--radius-sm);
+  padding-inline-start: 10px;
+  @apply bg-muted/55 text-foreground;
+}
+
+.summary-size-filter :deep([data-slot='select-trigger']) {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 </style>

@@ -247,12 +247,12 @@ function loadMore() {
   transition: opacity 0.14s ease;
 }
 
-.file-row:is(:hover, :focus-within) .file-name-actions {
+.file-row:is(:hover, :has(:focus-visible)) .file-name-actions {
   opacity: 1;
   pointer-events: auto;
 }
 
-.file-row:is(:hover, :focus-within) .file-name strong {
+.file-row:is(:hover, :has(:focus-visible)) .file-name strong {
   padding-right: 64px;
 }
 
@@ -274,12 +274,60 @@ function loadMore() {
   cursor: pointer;
 }
 
+.location-button:focus-visible {
+  border-radius: 4px;
+  @apply outline-none ring-2 ring-ring/35;
+}
+
 .modified {
   @apply text-muted-foreground;
   font-size: var(--font-content-meta);
 }
 
-.large-file-list .file-row[data-selected='true']::before {
-  background: transparent;
+@container large-files (max-width: 760px) {
+  .table-head,
+  .file-row {
+    grid-template-columns: 18px minmax(0, 1fr) 84px;
+    column-gap: 10px;
+  }
+
+  .table-head > :nth-child(3),
+  .table-head > :nth-child(5),
+  .modified {
+    display: none;
+  }
+
+  .table-head > :nth-child(4) {
+    grid-column: 3;
+  }
+
+  .file-row {
+    min-height: 50px;
+    grid-template-rows: minmax(22px, auto) minmax(16px, auto);
+    row-gap: 0;
+    padding-block: 3px;
+  }
+
+  .file-row > :first-child {
+    grid-row: 1 / 3;
+  }
+
+  .file-name {
+    grid-row: 1;
+    grid-column: 2;
+  }
+
+  .location-button {
+    grid-row: 2;
+    grid-column: 2;
+    padding: 0;
+    font-size: var(--font-content-meta);
+  }
+
+  .file-size {
+    grid-row: 1 / 3;
+    grid-column: 3;
+    justify-self: end;
+  }
 }
 </style>

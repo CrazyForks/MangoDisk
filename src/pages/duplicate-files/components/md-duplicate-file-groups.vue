@@ -258,13 +258,15 @@ function loadMoreGroups() {
           @click.stop="toggleGroupSelection(group)"
         >
           <MdIcon :name="isGroupSelectionApplied(group) ? ICON_NAMES.check : ICON_NAMES.duplicateFiles" :size="14" />
-          {{
-            t(
-              isGroupSelectionApplied(group) ? 'duplicateFiles.groupSelectionApplied' : 'duplicateFiles.selectGroup',
-              { count: FormatUtils.integer(Math.max(0, group.entries.length - 1)) },
-              Math.max(0, group.entries.length - 1)
-            )
-          }}
+          <span class="group-select-label">
+            {{
+              t(
+                isGroupSelectionApplied(group) ? 'duplicateFiles.groupSelectionApplied' : 'duplicateFiles.selectGroup',
+                { count: FormatUtils.integer(Math.max(0, group.entries.length - 1)) },
+                Math.max(0, group.entries.length - 1)
+              )
+            }}
+          </span>
         </Button>
         <MdIcon
           class="group-chevron"
@@ -406,6 +408,14 @@ function loadMoreGroups() {
   cursor: pointer;
 }
 
+.group-header:has(.group-disclosure:focus-visible)::before {
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--ring) 52%, transparent);
+}
+
+.group-disclosure:focus-visible {
+  outline: none;
+}
+
 .group-copy {
   display: flex;
   min-width: 0;
@@ -470,10 +480,6 @@ function loadMoreGroups() {
   padding-block: 1px;
 }
 
-.duplicate-groups .member-row[data-selected='true']::before {
-  background: transparent;
-}
-
 .duplicate-group :deep(.hierarchy-items::before) {
   width: 1px;
   @apply bg-border/65;
@@ -505,12 +511,12 @@ function loadMoreGroups() {
   transition: opacity 0.14s ease;
 }
 
-.member-row:is(:hover, :focus-within) .member-actions {
+.member-row:is(:hover, :has(:focus-visible)) .member-actions {
   opacity: 1;
   pointer-events: auto;
 }
 
-.member-row:is(:hover, :focus-within) .member-path {
+.member-row:is(:hover, :has(:focus-visible)) .member-path {
   padding-right: 64px;
 }
 
@@ -521,5 +527,31 @@ function loadMoreGroups() {
   font-variant-numeric: tabular-nums;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+@container duplicates (max-width: 700px) {
+  .member-row {
+    grid-template-columns: 18px minmax(0, 1fr);
+  }
+
+  .member-date {
+    display: none;
+  }
+}
+
+@container duplicates (max-width: 560px) {
+  .group-header {
+    grid-template-columns: 32px minmax(0, 1fr) 30px 20px;
+    gap: 8px;
+  }
+
+  .group-select-action {
+    width: 30px;
+    padding: 0;
+  }
+
+  .group-select-label {
+    display: none;
+  }
 }
 </style>

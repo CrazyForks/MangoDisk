@@ -54,6 +54,23 @@
 
 分析磁盘或指定文件夹，通过矩形图和列表查看目录、文件数量与空间占用。你可以逐层浏览文件夹，快速定位占用最多的目录和文件，并直接在系统文件管理器中打开对应位置。
 
+## 清理规则与安全性
+
+MangoDisk 维护自己的跨平台清理规则库，不会直接照搬第三方项目的规则。Windows 规则会参考 Winapp2.ini 发现候选路径，macOS 规则也会参考相关开源项目，但这些信息只作为研究线索，不能直接成为清理依据。
+
+候选规则进入正式版本前，必须完成以下检查：
+
+- **核对可靠来源**：通过 Microsoft、Apple 或软件厂商的官方资料确认路径用途和数据归属。
+- **确认清理边界**：判断内容是否可以安全重建，排除个人文件、应用私有数据和系统保护路径。
+- **完成实机验证**：在规则对应的 Windows 或 macOS 环境中验证路径、清理结果和异常场景。
+
+只有通过来源核对、安全审查和实机验证的规则，才会加入正式规则库。
+简单来说：**会参考第三方项目提供线索，但必须经过官方证据和实测结果决定是否采用。**
+
+完整规则库已公开，规则内容和修改记录均可审计、追溯：[查看 MangoDisk 清理规则库](https://github.com/harry0703/MangoDisk/tree/main/src-tauri/crates/mangodisk-core/rules)。
+
+MangoDisk 始终把数据安全放在清理效果之前：无法明确确认安全边界的内容不会纳入正式规则，清理内容也会在执行前展示并由用户确认。
+
 ## 界面预览
 
 <p align="center">
@@ -114,7 +131,13 @@
 
 ## 安装与使用
 
-前往 [MangoDisk 官网](https://mangodisk.app/zh) 或 [GitHub Releases](https://github.com/harry0703/MangoDisk/releases/latest) 下载最新版：
+macOS 用户可以通过 Homebrew 快速安装：
+
+```sh
+brew install --cask harry0703/tap/mangodisk
+```
+
+也可以前往 [MangoDisk 官网](https://mangodisk.app/zh) 或 [GitHub Releases](https://github.com/harry0703/MangoDisk/releases/latest) 下载最新版：
 
 - **macOS**：打开 DMG，将 MangoDisk 拖入“应用程序”文件夹。
 - **Windows**：运行 Windows 安装程序并按提示完成安装。

@@ -358,7 +358,7 @@ function loadMoreGroups() {
 
 .duplicate-group {
   overflow: hidden;
-  @apply bg-card;
+  background: transparent;
 }
 
 .group-load-more {

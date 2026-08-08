@@ -54,6 +54,22 @@ Review installed applications, their sizes, status, and associated files. When u
 
 Analyze a disk or selected folder with a treemap and list view showing folders, file counts, and storage use. Browse the folder hierarchy to locate the largest directories and files, then open their locations directly in the system file manager.
 
+## Cleanup Rules and Safety
+
+MangoDisk maintains its own cross-platform cleanup rule library instead of copying rules directly from third-party projects. Windows rules may use Winapp2.ini to identify candidate paths, while macOS rules may draw on relevant open source projects. These sources provide research leads only and are never sufficient on their own to justify cleaning a path.
+
+Before a candidate rule can ship in a release, it must pass the following checks:
+
+- **Verify authoritative sources**: Confirm the path's purpose and data ownership using documentation from Microsoft, Apple, or the software vendor.
+- **Define safe cleanup boundaries**: Ensure the content can be safely recreated, and exclude personal files, private application data, and protected system paths.
+- **Validate on real systems**: Test the paths, cleanup results, and failure scenarios in the appropriate Windows or macOS environment.
+
+Only rules that pass source verification, safety review, and hands-on testing are added to the production rule library. In short: **third-party projects provide leads, but official evidence and real-world testing determine whether a rule is accepted.**
+
+The complete rule library is public, so every rule and revision can be inspected and traced: [view the MangoDisk cleanup rule library](https://github.com/harry0703/MangoDisk/tree/main/src-tauri/crates/mangodisk-core/rules).
+
+MangoDisk always puts data safety ahead of reclaiming more space. Content without clearly verified safety boundaries is excluded from production rules, and users can review and confirm selected items before anything is removed.
+
 ## Screenshots
 
 <p align="center">
@@ -114,7 +130,13 @@ Analyze a disk or selected folder with a treemap and list view showing folders, 
 
 ## Install and Run
 
-Download the latest version from the [MangoDisk website](https://mangodisk.app/) or [GitHub Releases](https://github.com/harry0703/MangoDisk/releases/latest):
+Install MangoDisk on macOS with Homebrew:
+
+```sh
+brew install --cask harry0703/tap/mangodisk
+```
+
+Alternatively, download the latest version from the [MangoDisk website](https://mangodisk.app/) or [GitHub Releases](https://github.com/harry0703/MangoDisk/releases/latest):
 
 - **macOS**: Open the DMG and drag MangoDisk into the Applications folder.
 - **Windows**: Run the Windows installer and follow the prompts.

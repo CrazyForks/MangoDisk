@@ -29,17 +29,20 @@ const emit = defineEmits<{
 
 <template>
   <div
-    class="@container/selection-bar flex min-h-[var(--layout-action-bar-height)] w-full flex-wrap items-center justify-start gap-x-4 gap-y-2 rounded-lg border border-border bg-card/95 py-2 pr-3 pl-4 text-card-foreground shadow-sm shadow-foreground/5 backdrop-blur-md"
+    class="@container/selection-bar flex min-h-[var(--layout-action-bar-height)] w-full flex-wrap items-center justify-start gap-x-3 gap-y-1.5 rounded-lg border border-border bg-card/95 py-0.5 pr-2.5 pl-3.5 text-card-foreground shadow-sm shadow-foreground/5 backdrop-blur-md"
   >
-    <div class="flex min-w-0 flex-none items-center gap-3">
-      <span class="flex flex-col items-start gap-0.5">
+    <div class="flex min-w-0 flex-none flex-wrap items-baseline gap-x-2 gap-y-0.5">
+      <span class="flex items-baseline gap-1.5">
         <small class="text-content-meta text-muted-foreground">{{ selectedLabel }}</small>
-        <strong class="text-content-primary">{{ selectedValue }}</strong>
+        <strong class="text-content-primary whitespace-nowrap">{{ selectedValue }}</strong>
       </span>
-      <i class="h-7.5 w-px flex-none bg-border" />
-      <span class="flex flex-col items-start gap-0.5">
+      <i class="h-4 w-px flex-none self-center bg-border" />
+      <span class="flex items-baseline gap-1.5">
         <small class="text-content-meta text-muted-foreground">{{ spaceLabel }}</small>
-        <strong class="text-content-section-title" :class="disabled ? 'text-muted-foreground' : 'text-primary'">
+        <strong
+          class="text-content-section-title whitespace-nowrap"
+          :class="disabled ? 'text-muted-foreground' : 'text-primary'"
+        >
           {{ spaceValue }}
         </strong>
       </span>
@@ -61,7 +64,6 @@ const emit = defineEmits<{
       </Button>
       <Button
         class="min-w-31 disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
-        size="lg"
         type="button"
         :disabled="disabled || busy"
         @click="emit('action')"

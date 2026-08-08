@@ -1023,7 +1023,7 @@ function requestCancelDeepCleanup() {
   min-width: 0;
   height: 100vh;
   overflow: hidden;
-  border-radius: 18px 0 0;
+  border-radius: 12px 0 0;
   @apply bg-background;
 }
 .loading-overlay {

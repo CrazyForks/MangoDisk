@@ -13,7 +13,12 @@ html[data-skin='mangodisk'] {
   --brand-primary: oklch(0.58 0.165 52);
   --brand-primary-foreground: oklch(0.985 0.014 78);
 
-  --radius: 0.75rem;
+  /*
+   * Desktop utilities need to fit dense scan results into constrained windows.
+   * An 8px base radius preserves the soft brand character without making
+   * nested shells, cards, and result rows feel bulky.
+   */
+  --radius: 0.5rem;
   --background: oklch(0.984 0.014 78);
   --workspace: oklch(0.997 0.004 78);
   --foreground: oklch(0.245 0.025 58);

@@ -80,7 +80,7 @@ const macOsDragRegion = OperatingSystemService.isMacOs() ? '' : undefined;
   min-height: var(--layout-page-header-height);
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
-  gap: 18px;
+  gap: 14px;
   flex: none;
 }
 
@@ -98,18 +98,18 @@ const macOsDragRegion = OperatingSystemService.isMacOs() ? '' : undefined;
 }
 
 .md-page-heading h1 {
-  font-size: 26px;
+  font-size: 24px;
 }
 
 .md-page-actions {
   display: flex;
   width: auto;
   min-width: 0;
-  min-height: 40px;
+  min-height: 36px;
   flex: none;
   align-items: center;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 8px;
 }
 
 /*
@@ -122,7 +122,7 @@ const macOsDragRegion = OperatingSystemService.isMacOs() ? '' : undefined;
   min-height: 0;
   flex: 1;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   overflow-x: hidden;
   overscroll-behavior: contain;
 }
@@ -135,13 +135,13 @@ const macOsDragRegion = OperatingSystemService.isMacOs() ? '' : undefined;
    */
   margin-inline-end: calc(-1 * var(--layout-page-padding-inline));
   padding-inline-end: var(--layout-page-padding-inline);
-  padding-bottom: 24px;
+  padding-bottom: 20px;
 }
 
 .md-page-content--workspace {
   /* Reserve bottom spacing unless a page footer provides it. */
   overflow-y: hidden;
-  padding-bottom: 14px;
+  padding-bottom: 12px;
 }
 
 .md-page-content--workspace.md-page-content--with-footer {
@@ -154,8 +154,8 @@ const macOsDragRegion = OperatingSystemService.isMacOs() ? '' : undefined;
   align-items: center;
   justify-content: flex-end;
   gap: 12px;
-  margin-top: 8px;
-  padding-bottom: 14px;
+  margin-top: 6px;
+  padding-bottom: 12px;
 }
 
 /* Respond to the content pane rather than the viewport including the sidebar. */

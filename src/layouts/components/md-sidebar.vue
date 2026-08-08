@@ -158,7 +158,7 @@ watch(
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  gap: 6px;
   @apply text-foreground;
 }
 .brand-icon {
@@ -172,8 +172,8 @@ watch(
 .sidebar.expanded .brand {
   flex-direction: row;
   justify-content: flex-start;
-  gap: 10px;
-  padding-inline: 24px;
+  gap: 9px;
+  padding-inline: 20px;
 }
 .sidebar.expanded .brand-icon {
   width: 40px;
@@ -189,7 +189,7 @@ watch(
 .nav-list {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
   padding-inline: 8px;
   padding-block: 4px;
 }
@@ -202,7 +202,7 @@ watch(
   justify-content: center;
   gap: 12px;
   border: 0;
-  border-radius: 12px;
+  border-radius: 8px;
   padding: 0;
   background: transparent;
   color: inherit;
@@ -216,11 +216,11 @@ watch(
 }
 .sidebar.expanded .nav-list,
 .sidebar.expanded .sidebar-footer {
-  padding-inline: 12px;
+  padding-inline: 10px;
 }
 .sidebar.expanded .nav-item {
   justify-content: flex-start;
-  padding-inline: 14px;
+  padding-inline: 12px;
 }
 .nav-item:hover:not(.active) {
   background: color-mix(in oklab, var(--sidebar-accent) 52%, transparent);

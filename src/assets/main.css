@@ -110,20 +110,20 @@
    * drifting back to different header, toolbar, and row rhythms.
    */
   --layout-sidebar-collapsed-width: 68px;
-  --layout-sidebar-expanded-width: 248px;
-  --layout-sidebar-brand-height: 96px;
-  --layout-sidebar-item-height: 44px;
-  --layout-page-padding-inline: 24px;
-  --layout-page-padding-top: 18px;
+  --layout-sidebar-expanded-width: 228px;
+  --layout-sidebar-brand-height: 84px;
+  --layout-sidebar-item-height: 40px;
+  --layout-page-padding-inline: 20px;
+  --layout-page-padding-top: 14px;
   --layout-scrollbar-width: 10px;
-  --layout-page-header-height: 48px;
-  --layout-workspace-toolbar-height: 44px;
+  --layout-page-header-height: 44px;
+  --layout-workspace-toolbar-height: 36px;
   --layout-workspace-control-height: 32px;
   --layout-result-header-height: 36px;
-  --layout-result-row-height: 46px;
-  --layout-result-group-height: 52px;
+  --layout-result-row-height: 44px;
+  --layout-result-group-height: 48px;
   --layout-result-child-row-height: 40px;
-  --layout-action-bar-height: 56px;
+  --layout-action-bar-height: 48px;
 
   /*
    * Result rows use transparent wrappers and inset their visual background.

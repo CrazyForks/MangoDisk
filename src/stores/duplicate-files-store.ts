@@ -14,6 +14,7 @@ import { DuplicateFileService } from '@/lib/services/duplicate-file-service';
 import { LoggerService } from '@/lib/services/logger-service';
 import { DuplicateFileResultUtils } from '@/lib/utils/duplicate-file-result';
 import { DuplicateFileGroupUtils } from '@/lib/utils/duplicate-file-group';
+import { PathUtils } from '@/lib/utils/path';
 
 import { useAppStore } from './app-store';
 import { useHistoryStore } from './history-store';
@@ -36,6 +37,13 @@ function countGroupsInCategory(groups: readonly DuplicateGroup[], category: File
   return groups.reduce((count, group) => count + Number(DuplicateFileGroupUtils.category(group) === category), 0);
 }
 
+function resultMatchesRoots(result: DuplicateFilesResult | null, roots: readonly string[]): boolean {
+  if (!result || result.roots.length !== roots.length) return false;
+  return result.roots.every(
+    (root, index) => PathUtils.comparisonKey(root) === PathUtils.comparisonKey(roots[index] ?? '')
+  );
+}
+
 export const useDuplicateFilesStore = defineStore('duplicate-files', {
   state: (): DuplicateFilesState => ({
     result: null,
@@ -56,15 +64,18 @@ export const useDuplicateFilesStore = defineStore('duplicate-files', {
     async find(roots: string[], minimumBytes: number) {
       if (this.loading || this.deleting || !roots.length) return;
       const appStore = useAppStore();
+      const retainCurrentResult = resultMatchesRoots(this.result, roots);
       this.loading = true;
       this.cancelling = false;
       this.progress = null;
-      this.result = null;
-      this.resultComplete = false;
       this.loadingMore = false;
-      this.nextPageOffset = null;
       this.activeOperationId = null;
       this.lastGroupSequence = 0;
+      if (!retainCurrentResult) {
+        this.result = null;
+        this.resultComplete = false;
+        this.nextPageOffset = null;
+      }
       appStore.clearError();
       let unlistenProgress: (() => void) | undefined;
       let unlistenGroups: (() => void) | undefined;
@@ -77,7 +88,7 @@ export const useDuplicateFilesStore = defineStore('duplicate-files', {
             if (this.activeOperationId === null) this.activeOperationId = progress.operationId;
             if (progress.operationId !== this.activeOperationId) return;
             this.progress = progress;
-            if (this.result && !this.resultComplete) {
+            if (!retainCurrentResult && this.result && !this.resultComplete) {
               this.result = {
                 ...this.result,
                 scannedFileCount: progress.itemsScanned,
@@ -86,6 +97,9 @@ export const useDuplicateFilesStore = defineStore('duplicate-files', {
           }),
           DuplicateFileService.listenGroups(batch => {
             if (appStore.settings.duplicateFileMinimumBytes !== minimumBytes) return;
+            // A same-scope refresh keeps the published result stable until the
+            // replacement is complete. Initial scans still stream groups.
+            if (retainCurrentResult) return;
             this.applyGroupBatch(batch, roots);
           }),
         ]);
@@ -216,7 +230,7 @@ export const useDuplicateFilesStore = defineStore('duplicate-files', {
       this.lastGroupSequence = 0;
     },
     async deletePermanently(entries: DuplicateFileEntry[]) {
-      if (!this.result || !this.resultComplete || this.deleting || !entries.length) return;
+      if (!this.result || !this.resultComplete || this.loading || this.deleting || !entries.length) return;
       const appStore = useAppStore();
       const sourceResult = this.result;
       this.deleting = true;

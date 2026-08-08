@@ -110,7 +110,7 @@
    * drifting back to different header, toolbar, and row rhythms.
    */
   --layout-sidebar-collapsed-width: 68px;
-  --layout-sidebar-expanded-width: 228px;
+  --layout-sidebar-expanded-width: 240px;
   --layout-sidebar-brand-height: 84px;
   --layout-sidebar-item-height: 40px;
   --layout-page-padding-inline: 20px;
@@ -154,7 +154,7 @@ body,
 
   body {
     @apply bg-background text-foreground;
-    font-family: 'Segoe UI', system-ui, sans-serif;
+    font-family: system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     cursor: default;
   }
@@ -232,12 +232,12 @@ body,
   }
 
   /*
-   * Native Segoe UI and the macOS system font rasterize bold text
-   * differently. Result rows therefore use an explicit semibold weight
-   * instead of inheriting the browser's platform-dependent strong default.
+   * System fonts rasterize medium text differently across platforms.
+   * Use an explicit medium weight for dense result rows while reserving
+   * semibold emphasis for page headings and summary metrics.
    */
   .md-result-primary {
-    font-weight: 600;
+    font-weight: 500;
   }
 
   /*

@@ -230,8 +230,7 @@
   width: 34px;
   height: 34px;
   place-items: center;
-  border-radius: 10px;
-  @apply bg-primary/10 text-primary;
+  @apply text-primary;
 }
 
 .component-main {

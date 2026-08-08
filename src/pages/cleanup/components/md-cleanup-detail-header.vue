@@ -2,15 +2,11 @@
 import { useI18n } from 'vue-i18n';
 
 import MdResultCheckbox from '@/components/custom/md-result-checkbox.vue';
-import MdIcon from '@/components/icons/md-icon.vue';
-import type { IconName } from '@/lib/models/ui';
 import { FormatUtils } from '@/lib/utils/format';
 
 withDefaults(
   defineProps<{
-    icon: IconName;
     title: string;
-    description: string;
     selectedBytes: number;
     totalBytes: number;
     selection: 'all' | 'partial' | 'none';
@@ -26,19 +22,11 @@ const { t } = useI18n({ useScope: 'global' });
 
 <template>
   <header class="detail-header">
-    <span class="detail-icon">
-      <MdIcon :name="icon" :size="23" />
-    </span>
-    <span class="detail-heading">
-      <strong>{{ title }}</strong>
-      <small>{{ description }}</small>
-    </span>
+    <strong class="detail-title">{{ title }}</strong>
     <span class="detail-size">
       <small>{{ t('cleanup.selected') }} / {{ t('cleanup.cleanableFound') }}</small>
-      <span>
-        <strong>{{ FormatUtils.bytes(selectedBytes) }}</strong>
-        <i>/ {{ FormatUtils.bytes(totalBytes) }}</i>
-      </span>
+      <strong>{{ FormatUtils.bytes(selectedBytes) }}</strong>
+      <i>/ {{ FormatUtils.bytes(totalBytes) }}</i>
     </span>
     <label class="category-selection">
       <MdResultCheckbox
@@ -58,48 +46,29 @@ const { t } = useI18n({ useScope: 'global' });
 .detail-header {
   @apply border-border;
   display: grid;
+  min-height: 46px;
   flex: none;
-  grid-template-columns: 32px minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   border-bottom-width: 1px;
-  padding: 11px 18px;
+  padding: 5px 12px;
 }
 
-.detail-icon {
-  @apply text-primary;
-  display: grid;
-  width: 32px;
-  height: 38px;
-  flex: none;
-  place-items: center;
-}
-
-.detail-heading {
-  display: flex;
+.detail-title {
   min-width: 0;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.detail-heading strong {
-  font-size: var(--font-content-section-title);
-  font-weight: 600;
-}
-
-.detail-heading small {
-  @apply text-muted-foreground;
   overflow: hidden;
-  font-size: 12px;
+  font-size: var(--font-content-primary);
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .detail-size {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 1px;
+  align-items: baseline;
+  gap: 6px;
+  white-space: nowrap;
 }
 
 .detail-size small {
@@ -110,13 +79,6 @@ const { t } = useI18n({ useScope: 'global' });
 .detail-size strong {
   @apply text-primary;
   font-size: 15px;
-}
-
-.detail-size > span {
-  display: flex;
-  align-items: baseline;
-  gap: 5px;
-  white-space: nowrap;
 }
 
 .detail-size i {
@@ -135,18 +97,13 @@ const { t } = useI18n({ useScope: 'global' });
 
 @container cleanup (max-width: 760px) {
   .detail-header {
-    grid-template-columns: 30px minmax(0, 1fr) auto;
-    padding-inline: 12px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding-inline: 10px;
   }
 
   .detail-size,
   .category-selection span {
     display: none;
-  }
-
-  .detail-icon {
-    width: 30px;
-    height: 36px;
   }
 }
 </style>

@@ -19,7 +19,7 @@
   right: 0;
   bottom: var(--result-item-background-inset, 3px);
   left: 0;
-  border-radius: 8px;
+  border-radius: var(--radius);
   content: '';
   pointer-events: none;
   @apply transition-colors duration-200;
@@ -35,7 +35,7 @@
 }
 
 .result-table-row[data-selected='true']::before {
-  @apply bg-primary/7;
+  background: transparent;
 }
 
 .result-table-row[data-expanded='true']:not([data-selected='true'])::before {
@@ -43,7 +43,7 @@
 }
 
 .result-table-row[data-selected='true']:hover::before {
-  background-color: color-mix(in oklab, var(--primary) 10%, var(--muted));
+  @apply bg-muted/60;
 }
 
 .result-table-row:has(:focus-visible)::before {

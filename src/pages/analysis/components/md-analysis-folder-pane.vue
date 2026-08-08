@@ -119,13 +119,13 @@ const emit = defineEmits<{
   display: grid;
   width: 100%;
   grid-template-columns: minmax(0, 1fr);
-  border-radius: 8px;
+  border-radius: var(--radius);
   padding: 4px 6px;
 }
 
 .folder-row:hover,
 .folder-row:has(.folder-entry:focus-visible) {
-  @apply bg-accent/65 text-accent-foreground;
+  @apply bg-muted/60;
 }
 
 .folder-entry {

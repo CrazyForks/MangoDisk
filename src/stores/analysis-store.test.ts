@@ -2,7 +2,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PAGE_IDS } from '@/lib/models/application-shell';
-import type { AnalysisResult } from '@/lib/models/analysis';
+import type { AnalysisResult, DirectoryEntryInfo } from '@/lib/models/analysis';
 import { AnalysisService } from '@/lib/services/analysis-service';
 import { AnalysisCacheUtils } from '@/lib/utils/analysis-cache';
 
@@ -16,6 +16,16 @@ const result: AnalysisResult = {
   totalBytes: 64,
   skippedCount: 0,
   entries: [],
+};
+
+const entry: DirectoryEntryInfo = {
+  name: 'fixture.bin',
+  path: '/fixture/fixture.bin',
+  bytes: 64,
+  isDirectory: false,
+  fileCount: 1,
+  directoryCount: 0,
+  children: [],
 };
 
 describe('analysis store', () => {
@@ -60,5 +70,17 @@ describe('analysis store', () => {
     expect(analyze).not.toHaveBeenCalled();
     expect(appStore.currentPage).toBe(PAGE_IDS.settings);
     expect(analysisStore.result).toEqual(result);
+  });
+
+  it('rejects deletion while an analysis is active', async () => {
+    const remove = vi.spyOn(AnalysisService, 'deletePermanently');
+    const analysisStore = useAnalysisStore();
+    analysisStore.result = { ...result, entries: [entry] };
+    analysisStore.pending = true;
+
+    await analysisStore.deletePermanently(entry);
+
+    expect(remove).not.toHaveBeenCalled();
+    expect(analysisStore.deleting).toBe(false);
   });
 });

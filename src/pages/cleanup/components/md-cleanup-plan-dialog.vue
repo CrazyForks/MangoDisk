@@ -29,27 +29,50 @@ const runningProcesses = computed(() => [
 ]);
 const runningProcessLabel = computed(() => FormatUtils.list(runningProcesses.value, locale.value));
 const requiresAppClose = computed(() => props.rules.some(rule => rule.requiresAppClose));
+const planItems = computed(() => {
+  const items = props.rules.map(rule => ({
+    bytes: rule.bytes,
+    description: rule.impact,
+    key: `rule:${rule.ruleId}`,
+    name: rule.name,
+  }));
+
+  if (props.leftoverItemCount) {
+    const summary = t(
+      'applicationLeftovers.planSummary',
+      {
+        applications: FormatUtils.integer(props.leftoverApplicationCount),
+        locations: FormatUtils.integer(props.leftoverItemCount),
+      },
+      props.leftoverApplicationCount
+    );
+    items.push({
+      bytes: props.leftoverBytes,
+      description: `${summary} · ${t('applicationLeftovers.planImpact')}`,
+      key: 'application-leftovers',
+      name: t('applicationLeftovers.resultTitle'),
+    });
+  }
+
+  return items.sort((left, right) => right.bytes - left.bytes);
+});
 </script>
 
 <template>
   <Dialog :open="modelValue" @update:open="emit('update:modelValue', $event)">
-    <MdDialogContent
-      class="@container/cleanup-plan flex max-h-[84vh] min-h-0 flex-col overflow-hidden p-0 sm:max-w-[720px]"
-    >
-      <DialogHeader class="flex-none px-6 pt-6 pr-14">
+    <MdDialogContent class="flex max-h-[84vh] min-h-0 flex-col gap-0 overflow-hidden p-0 sm:max-w-[720px]">
+      <DialogHeader class="plan-header flex-none px-6 pt-5 pr-14">
         <DialogTitle>{{ t('cleanup.planDialogTitle') }}</DialogTitle>
-        <DialogDescription>{{ t('cleanup.planDialogDescription') }}</DialogDescription>
+        <DialogDescription class="plan-summary">
+          <span>
+            {{ t('cleanup.selectedItemCount', { count: FormatUtils.integer(selectedItemCount) }, selectedItemCount) }}
+          </span>
+          <span aria-hidden="true">·</span>
+          <span>{{ t('cleanup.estimated') }}</span>
+          <strong>{{ FormatUtils.bytes(selectedBytes) }}</strong>
+        </DialogDescription>
       </DialogHeader>
 
-      <div class="modal-summary flex-none">
-        <span class="summary-space">
-          <small>{{ t('cleanup.estimated') }}</small>
-          <strong>{{ FormatUtils.bytes(selectedBytes) }}</strong>
-        </span>
-        <span class="summary-count">
-          {{ t('cleanup.selectedItemCount', { count: FormatUtils.integer(selectedItemCount) }, selectedItemCount) }}
-        </span>
-      </div>
       <p v-if="requiresAppClose" class="process-warning flex-none">
         {{
           runningProcesses.length
@@ -60,41 +83,18 @@ const requiresAppClose = computed(() => props.rules.some(rule => rule.requiresAp
         }}
       </p>
       <div class="modal-rules scrollbar-stable min-h-0 flex-1">
-        <div v-for="rule in rules" :key="rule.ruleId">
-          <span class="risk" :class="rule.risk">
-            {{ rule.risk === 'safe' ? t('common.safe') : t('common.recoverable') }}
+        <div v-for="item in planItems" :key="item.key">
+          <span class="plan-item-copy">
+            <strong>{{ item.name }}</strong>
+            <small :title="item.description">{{ item.description }}</small>
           </span>
-          <span>
-            <strong>{{ rule.name }}</strong>
-            <small>{{ rule.impact }}</small>
-          </span>
-          <strong>{{ FormatUtils.bytes(rule.bytes) }}</strong>
-        </div>
-        <div v-if="leftoverItemCount">
-          <span class="risk recoverable">{{ t('common.recoverable') }}</span>
-          <span>
-            <strong>{{ t('applicationLeftovers.resultTitle') }}</strong>
-            <small>
-              {{
-                t(
-                  'applicationLeftovers.planSummary',
-                  {
-                    applications: FormatUtils.integer(leftoverApplicationCount),
-                    locations: FormatUtils.integer(leftoverItemCount),
-                  },
-                  leftoverApplicationCount
-                )
-              }}
-            </small>
-            <small class="leftover-impact">{{ t('applicationLeftovers.planImpact') }}</small>
-          </span>
-          <strong>{{ FormatUtils.bytes(leftoverBytes) }}</strong>
+          <strong class="plan-item-size">{{ FormatUtils.bytes(item.bytes) }}</strong>
         </div>
       </div>
 
       <DialogFooter class="flex-none border-t border-border/70 px-6 py-3.5">
         <Button variant="outline" type="button" :disabled="busy" @click="emit('update:modelValue', false)">
-          {{ t('common.cancel') }}
+          {{ t('cleanup.adjustSelection') }}
         </Button>
         <Button type="button" :disabled="busy" @click="emit('execute')">
           {{ t('cleanup.execute') }}
@@ -107,114 +107,75 @@ const requiresAppClose = computed(() => props.rules.some(rule => rule.requiresAp
 <style scoped>
 @reference "@assets/main.css";
 
-.modal-summary {
-  @apply border border-border/70 bg-muted/30;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin: 0 24px;
-  border-radius: 9px;
-  padding: 11px 14px;
+.plan-header {
+  gap: 4px;
 }
 
-.summary-space {
+.plan-summary {
   display: flex;
   align-items: baseline;
-  gap: 10px;
-}
-
-.summary-space small,
-.summary-count {
-  @apply text-muted-foreground;
+  gap: 6px;
   font-size: var(--font-content-secondary);
 }
 
-.summary-space strong {
+.plan-summary strong {
   @apply text-primary;
-  font-size: 22px;
-}
-
-.summary-count {
-  white-space: nowrap;
+  font-size: 17px;
+  font-weight: 600;
 }
 
 .modal-rules {
   @apply border border-border/70;
-  margin: 12px 24px;
+  margin: 8px 24px 10px;
   border-radius: 9px;
 }
 
 .process-warning {
-  margin: 12px 24px 0;
-  border-radius: 9px;
-  padding: 10px 12px;
-  @apply bg-warning/15 text-warning-foreground;
+  margin: 8px 24px 0;
+  border-radius: 7px;
+  padding: 6px 10px;
+  @apply bg-warning/12 text-warning-foreground;
   font-size: var(--font-content-secondary);
 }
 
 .modal-rules > div {
   @apply border-t border-border/70;
   display: grid;
-  grid-template-columns: 78px minmax(0, 1fr) auto;
+  min-height: 56px;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
+  gap: 16px;
+  padding: 8px 14px;
 }
 
 .modal-rules > div:first-child {
   border-top: 0;
 }
 
-.modal-rules div > span:nth-child(2) {
+.plan-item-copy {
   display: flex;
   min-width: 0;
   flex-direction: column;
+  gap: 2px;
 }
 
-.modal-rules div > span:nth-child(2) > strong,
-.modal-rules > div > strong:last-child {
+.plan-item-copy > strong,
+.plan-item-size {
   font-size: 13px;
+  font-weight: 500;
   line-height: 1.35;
 }
 
-.modal-rules small {
+.plan-item-copy small {
   @apply text-muted-foreground;
-  margin-top: 2px;
+  overflow: hidden;
   font-size: 10.5px;
   line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.modal-rules .leftover-impact {
-  @apply text-warning-foreground;
-}
-
-.risk {
-  align-items: center;
-  justify-self: center;
-  gap: 4px;
-  border-radius: 999px;
-  padding: 4px 8px;
-  font-size: var(--font-content-secondary);
-  font-weight: 500;
-}
-
-.risk.safe {
-  @apply bg-success/12 text-success-foreground;
-}
-
-.risk.recoverable {
-  @apply bg-warning/15 text-warning-foreground;
-}
-
-@container cleanup-plan (max-width: 560px) {
-  .modal-rules > div {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  .risk {
-    grid-column: 1 / -1;
-    justify-self: start;
-  }
+.plan-item-size {
+  white-space: nowrap;
 }
 </style>

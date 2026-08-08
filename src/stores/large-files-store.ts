@@ -75,7 +75,7 @@ export const useLargeFilesStore = defineStore('large-files', {
       await this.deleteManyPermanently([entry]);
     },
     async deleteManyPermanently(entries: LargeFileEntry[]) {
-      if (this.deleting || !entries.length) return;
+      if (this.loading || this.deleting || !entries.length) return;
       const appStore = useAppStore();
       const sourceResult = this.result;
       this.deleting = true;

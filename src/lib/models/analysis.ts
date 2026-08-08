@@ -1,4 +1,3 @@
-export const ANALYSIS_PROGRESS_DELAY_MS = 180;
 export const ANALYSIS_RESULT_CACHE_LIMIT = 80;
 
 export const ANALYSIS_VIEW_IDS = {

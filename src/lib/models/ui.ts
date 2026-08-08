@@ -2,6 +2,7 @@ export const EMPTY_DISPLAY_TEXT = '—' as const;
 export const FOLDER_PICKER_NOTICE_DURATION_MS = 2600;
 export const TOOLTIP_OPEN_DELAY_MS = 300;
 export const OPERATION_PROGRESS_CLOCK_INTERVAL_MS = 1000;
+export const OPERATION_PROGRESS_DELAY_MS = 500;
 
 export const ICON_NAMES = {
   cleanup: 'sparkles',

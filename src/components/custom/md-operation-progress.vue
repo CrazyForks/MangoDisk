@@ -232,12 +232,11 @@ defineEmits<{ cancel: [] }>();
 }
 .folder-icon {
   display: grid;
-  width: 34px;
+  width: 24px;
   height: 34px;
   flex: none;
   place-items: center;
-  border-radius: 8px;
-  @apply bg-accent text-accent-foreground;
+  @apply text-primary;
 }
 .path-content {
   display: flex;

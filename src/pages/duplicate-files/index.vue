@@ -2,11 +2,11 @@
 import { useI18n } from 'vue-i18n';
 import { computed, nextTick, ref, watch } from 'vue';
 
+import MdDelayedOperationWorkspace from '@/components/custom/md-delayed-operation-workspace.vue';
 import MdStorageScopeSelect from '@/components/custom/md-storage-scope-select.vue';
 import MdEmptyState from '@/components/custom/md-empty-state.vue';
 import MdFileCategoryFilter from '@/components/custom/md-file-category-filter.vue';
 import MdOperationProgress from '@/components/custom/md-operation-progress.vue';
-import MdOperationWorkspace from '@/components/custom/md-operation-workspace.vue';
 import MdPageShell from '@/components/custom/md-page-shell.vue';
 import MdResultFilterToolbar from '@/components/custom/md-result-filter-toolbar.vue';
 import MdResultSummary from '@/components/custom/md-result-summary.vue';
@@ -185,13 +185,13 @@ function toggleSmartSelection() {
 }
 
 function requestDelete(entries: DuplicateFileEntry[]) {
-  if (props.deleting || !entries.length) return;
+  if (props.busy || props.deleting || !entries.length) return;
   pendingDeleteEntries.value = entries;
   confirmOpen.value = true;
 }
 
 function confirmDelete() {
-  if (props.deleting || !pendingDeleteEntries.value.length) return;
+  if (props.busy || props.deleting || !pendingDeleteEntries.value.length) return;
   deleteRequested.value = true;
   emit('delete', pendingDeleteEntries.value);
   // Keep the confirmation visible as an activity dialog until the Store
@@ -217,14 +217,18 @@ function confirmDelete() {
           @update:model-value="selectScope"
         />
         <Button
-          v-if="result && !busy"
+          v-if="result"
           class="scan-button"
           :variant="resultMatchesScope ? 'outline' : 'default'"
           type="button"
-          :disabled="deleting || !canStart"
+          :disabled="busy || deleting || !canStart"
           @click="start"
         >
-          <MdIcon :name="resultMatchesScope ? ICON_NAMES.refresh : ICON_NAMES.duplicateFiles" :size="17" />
+          <MdIcon
+            :class="{ 'icon-spin': busy }"
+            :name="busy || resultMatchesScope ? ICON_NAMES.refresh : ICON_NAMES.duplicateFiles"
+            :size="17"
+          />
           {{ t(resultMatchesScope ? 'duplicateFiles.rescan' : 'duplicateFiles.start') }}
         </Button>
       </div>
@@ -247,7 +251,7 @@ function confirmDelete() {
       </MdSelectionActionBar>
     </template>
 
-    <MdResultWorkspace v-if="!busy || result">
+    <MdResultWorkspace>
       <template v-if="result" #summary>
         <MdResultSummary
           :title="
@@ -298,82 +302,79 @@ function confirmDelete() {
 
       <template v-if="result" #header>
         <MdResultFilterToolbar>
-          <MdFileCategoryFilter v-model="activeCategory" class="min-w-0 flex-1" :options="categoryOptions" />
+          <MdFileCategoryFilter
+            v-model="activeCategory"
+            class="min-w-0 flex-1"
+            :options="categoryOptions"
+            :disabled="busy"
+          />
         </MdResultFilterToolbar>
       </template>
 
-      <template v-if="result && busy" #notice>
-        <div class="flex min-w-0 items-center justify-between gap-3">
-          <span class="min-w-0">{{ t('duplicateFiles.streamingResults') }}</span>
-          <Button size="sm" variant="ghost" type="button" :disabled="cancelling" @click="emit('cancel')">
-            {{ cancelling ? t('loading.cancelling') : t('common.cancel') }}
-          </Button>
-        </div>
-      </template>
-
-      <template v-if="result">
-        <MdDuplicateFileGroups
-          v-show="filteredGroups.length > 0"
-          v-model:selected-paths="selectedPaths"
-          :scan-id="result.scanId"
-          :category="activeCategory"
-          :groups="filteredGroups"
-          :keeper-rule="keeperRule"
-          :selection-disabled="deleting"
-          :delete-disabled="busy || deleting || !resultComplete"
-          :has-more="hasMore"
-          :loading-more="loadingMore"
-          :remaining-group-count="Math.max(0, (result?.returnedGroupCount ?? 0) - groups.length)"
-          @open="emit('open', $event)"
-          @delete="requestDelete([$event])"
-          @load-more="emit('loadMore', $event)"
-        />
-        <MdEmptyState
-          v-if="!filteredGroups.length"
-          compact
-          :icon-name="ICON_NAMES.duplicateFiles"
-          :title="t('duplicateFiles.noResults')"
-          :description="t('duplicateFiles.noResultsDescription')"
-        >
-          <Button
-            v-if="hasMore && resultComplete"
-            size="sm"
-            type="button"
-            variant="ghost"
-            :disabled="loadingMore"
-            @click="emit('loadMore', activeCategory)"
+      <div class="result-content" :inert="busy ? '' : undefined" :aria-busy="busy">
+        <template v-if="result">
+          <MdDuplicateFileGroups
+            v-show="filteredGroups.length > 0"
+            v-model:selected-paths="selectedPaths"
+            :scan-id="result.scanId"
+            :category="activeCategory"
+            :groups="filteredGroups"
+            :keeper-rule="keeperRule"
+            :selection-disabled="busy || deleting"
+            :delete-disabled="busy || deleting || !resultComplete"
+            :has-more="hasMore"
+            :loading-more="loadingMore"
+            :remaining-group-count="Math.max(0, (result?.returnedGroupCount ?? 0) - groups.length)"
+            @open="emit('open', $event)"
+            @delete="requestDelete([$event])"
+            @load-more="emit('loadMore', $event)"
+          />
+          <MdEmptyState
+            v-if="!filteredGroups.length"
+            compact
+            :icon-name="ICON_NAMES.duplicateFiles"
+            :title="t('duplicateFiles.noResults')"
+            :description="t('duplicateFiles.noResultsDescription')"
           >
-            {{ loadingMore ? t('loading.processing') : t('common.loadMore') }}
+            <Button
+              v-if="hasMore && resultComplete"
+              size="sm"
+              type="button"
+              variant="ghost"
+              :disabled="busy || loadingMore"
+              @click="emit('loadMore', activeCategory)"
+            >
+              {{ loadingMore ? t('loading.processing') : t('common.loadMore') }}
+            </Button>
+          </MdEmptyState>
+        </template>
+        <MdEmptyState
+          v-else
+          :icon-name="ICON_NAMES.duplicateFiles"
+          :title="t('duplicateFiles.emptyTitle')"
+          :description="t('duplicateFiles.emptyDescription')"
+        >
+          <Button v-if="canStart" type="button" :disabled="busy || deleting" @click="start">
+            <MdIcon :name="ICON_NAMES.duplicateFiles" :size="17" />
+            {{ t('duplicateFiles.start') }}
           </Button>
         </MdEmptyState>
-      </template>
+      </div>
 
-      <MdEmptyState
-        v-else
-        :icon-name="ICON_NAMES.duplicateFiles"
-        :title="t('duplicateFiles.emptyTitle')"
-        :description="t('duplicateFiles.emptyDescription')"
-      >
-        <Button v-if="canStart" type="button" :disabled="busy || deleting" @click="start">
-          <MdIcon :name="ICON_NAMES.duplicateFiles" :size="17" />
-          {{ t('duplicateFiles.start') }}
-        </Button>
-      </MdEmptyState>
+      <MdDelayedOperationWorkspace :active="busy" mode="overlay" role="status" aria-live="polite">
+        <MdOperationProgress
+          :icon-name="ICON_NAMES.duplicateFiles"
+          :title="progressTitle"
+          :progress="progress"
+          :path-label="t('loading.currentAnalysisDirectory')"
+          :preparing-text="t('loading.preparingAnalysisDirectory')"
+          :hint="t('duplicateFiles.scanHint')"
+          :cancelable="true"
+          :cancel-disabled="cancelling"
+          @cancel="emit('cancel')"
+        />
+      </MdDelayedOperationWorkspace>
     </MdResultWorkspace>
-
-    <MdOperationWorkspace v-else>
-      <MdOperationProgress
-        :icon-name="ICON_NAMES.duplicateFiles"
-        :title="progressTitle"
-        :progress="progress"
-        :path-label="t('loading.currentAnalysisDirectory')"
-        :preparing-text="t('loading.preparingAnalysisDirectory')"
-        :hint="t('duplicateFiles.scanHint')"
-        :cancelable="true"
-        :cancel-disabled="cancelling"
-        @cancel="emit('cancel')"
-      />
-    </MdOperationWorkspace>
 
     <MdDestructiveActionDialog
       v-model:open="confirmOpen"
@@ -410,6 +411,13 @@ function confirmDelete() {
   align-items: center;
   justify-content: flex-end;
   gap: 10px;
+}
+
+.result-content {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
 }
 .smart-select-action {
   height: 34px;

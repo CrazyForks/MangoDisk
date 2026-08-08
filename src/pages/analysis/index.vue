@@ -1,16 +1,16 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n';
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 
+import MdDelayedOperationWorkspace from '@/components/custom/md-delayed-operation-workspace.vue';
 import MdStorageScopeSelect from '@/components/custom/md-storage-scope-select.vue';
 import MdEmptyState from '@/components/custom/md-empty-state.vue';
 import MdOperationProgress from '@/components/custom/md-operation-progress.vue';
-import MdOperationWorkspace from '@/components/custom/md-operation-workspace.vue';
 import MdPageShell from '@/components/custom/md-page-shell.vue';
 import MdDestructiveActionDialog from '@/components/custom/md-destructive-action-dialog.vue';
 import MdIcon from '@/components/icons/md-icon.vue';
 import { Button } from '@/components/ui/button';
-import { ANALYSIS_PROGRESS_DELAY_MS, ANALYSIS_VIEW_IDS } from '@/lib/models/analysis';
+import { ANALYSIS_VIEW_IDS } from '@/lib/models/analysis';
 import { STORAGE_SCOPE_IDS } from '@/lib/models/storage-scope';
 import { ICON_NAMES } from '@/lib/models/ui';
 import type { AnalysisResult, AnalysisViewId, DirectoryEntryInfo } from '@/lib/models/analysis';
@@ -60,12 +60,10 @@ interface PendingHistoryNavigation {
 }
 
 const pendingHistoryNavigation = ref<PendingHistoryNavigation | null>(null);
-const showAnalysisProgress = ref(false);
 const primaryAnalysisPending = ref(false);
 const confirmOpen = ref(false);
 const pendingDelete = ref<DirectoryEntryInfo | null>(null);
 const viewMode = ref<AnalysisViewId>(ANALYSIS_VIEW_IDS.treemap);
-let progressTimer: ReturnType<typeof setTimeout> | null = null;
 
 const entries = computed(() => [...(props.result?.entries ?? [])].sort((left, right) => right.bytes - left.bytes));
 const folderCount = computed(() => entries.value.filter(entry => entry.isDirectory).length);
@@ -136,32 +134,15 @@ watch(
 watch(
   () => props.busy,
   busy => {
-    if (progressTimer) clearTimeout(progressTimer);
-    progressTimer = null;
-    if (!busy) {
-      showAnalysisProgress.value = false;
-      primaryAnalysisPending.value = false;
-      // Let the result watcher settle before discarding a failed request so one
-      // Store update cannot create a duplicate history entry.
-      void nextTick(() => {
-        if (!props.busy) pendingHistoryNavigation.value = null;
-      });
-      return;
-    }
-
-    // Delay the overlay for cache hits while preserving progress and
-    // cancellation for actual scans.
-    progressTimer = setTimeout(() => {
-      showAnalysisProgress.value = true;
-      progressTimer = null;
-    }, ANALYSIS_PROGRESS_DELAY_MS);
-  },
-  { immediate: true }
+    if (busy) return;
+    primaryAnalysisPending.value = false;
+    // Let the result watcher settle before discarding a failed request so one
+    // Store update cannot create a duplicate history entry.
+    void nextTick(() => {
+      if (!props.busy) pendingHistoryNavigation.value = null;
+    });
+  }
 );
-
-onBeforeUnmount(() => {
-  if (progressTimer) clearTimeout(progressTimer);
-});
 
 function analyze(path?: string, refresh = false, setHome = false) {
   const target = path?.trim() || selectedScopePath.value;
@@ -214,7 +195,7 @@ function requestDelete(entry: DirectoryEntryInfo) {
 }
 
 function confirmDelete() {
-  if (!pendingDelete.value || props.deleting) return;
+  if (!pendingDelete.value || props.busy || props.deleting) return;
   emit('delete', pendingDelete.value);
   confirmOpen.value = false;
   pendingDelete.value = null;
@@ -296,10 +277,10 @@ function navigateHistory(index: number) {
       />
 
       <!-- The local overlay preserves workspace geometry during navigation. -->
-      <MdOperationWorkspace
-        v-if="showAnalysisProgress"
+      <MdDelayedOperationWorkspace
         class="analysis-overlay"
         :class="{ 'analysis-overlay--initial': !result }"
+        :active="busy"
         mode="overlay"
         role="status"
         aria-live="polite"
@@ -315,7 +296,7 @@ function navigateHistory(index: number) {
           :cancel-disabled="cancelling"
           @cancel="emit('cancel')"
         />
-      </MdOperationWorkspace>
+      </MdDelayedOperationWorkspace>
 
       <MdEmptyState
         v-if="!result"
@@ -333,6 +314,8 @@ function navigateHistory(index: number) {
         v-else
         class="browser-content"
         :class="{ 'browser-content--details': viewMode === ANALYSIS_VIEW_IDS.details }"
+        :inert="busy ? '' : undefined"
+        :aria-busy="busy"
       >
         <MdAnalysisFolderPane
           v-if="viewMode === ANALYSIS_VIEW_IDS.treemap"

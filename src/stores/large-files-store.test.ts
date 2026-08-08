@@ -70,4 +70,17 @@ describe('large files store deletion', () => {
       releasedBytes: removed.bytes,
     });
   });
+
+  it('rejects deletion while a scan is active', async () => {
+    const remove = vi.spyOn(PermanentDeleteService, 'deleteFiles');
+    const store = useLargeFilesStore();
+    store.result = createResult();
+    store.loading = true;
+
+    const result = await store.deleteManyPermanently([removed]);
+
+    expect(result).toBeUndefined();
+    expect(remove).not.toHaveBeenCalled();
+    expect(store.deleting).toBe(false);
+  });
 });

@@ -118,4 +118,77 @@ describe('duplicate files store pagination', () => {
       releasedBytes: removed.bytes,
     });
   });
+
+  it('rejects deletion while a scan is active', async () => {
+    const group = createGroup('active-scan', 'document.pdf');
+    const remove = vi.spyOn(DuplicateFileService, 'deletePermanently');
+    const store = useDuplicateFilesStore();
+    store.result = createResult([group]);
+    store.resultComplete = true;
+    store.loading = true;
+
+    const result = await store.deletePermanently([group.entries[0]!]);
+
+    expect(result).toBeUndefined();
+    expect(remove).not.toHaveBeenCalled();
+    expect(store.deleting).toBe(false);
+  });
+
+  it('keeps same-scope results visible until a refresh completes', async () => {
+    const currentGroup = createGroup('current', 'document.pdf');
+    const replacementGroup = createGroup('replacement', 'recording.mp3');
+    const currentResult = createResult([currentGroup]);
+    const replacementResult = { ...createResult([replacementGroup]), scanId: 8 };
+    let finishScan: (result: DuplicateFilesResult) => void = () => undefined;
+    vi.spyOn(DuplicateFileService, 'listenProgress').mockResolvedValue(vi.fn());
+    vi.spyOn(DuplicateFileService, 'listenGroups').mockResolvedValue(vi.fn());
+    vi.spyOn(DuplicateFileService, 'find').mockImplementation(
+      () =>
+        new Promise(resolve => {
+          finishScan = resolve;
+        })
+    );
+    const store = useDuplicateFilesStore();
+    store.result = currentResult;
+    store.resultComplete = true;
+
+    const refresh = store.find(['/fixture'], useAppStore().settings.duplicateFileMinimumBytes);
+    await vi.waitFor(() => expect(DuplicateFileService.find).toHaveBeenCalledOnce());
+
+    expect(store.loading).toBe(true);
+    expect(store.result).toEqual(currentResult);
+    expect(store.result?.scanId).toBe(7);
+    expect(store.resultComplete).toBe(true);
+
+    finishScan(replacementResult);
+    await refresh;
+
+    expect(store.result).toEqual(replacementResult);
+    expect(store.resultComplete).toBe(true);
+    expect(store.loading).toBe(false);
+  });
+
+  it('clears stale results when scanning a different scope', async () => {
+    let finishScan: (result: DuplicateFilesResult) => void = () => undefined;
+    vi.spyOn(DuplicateFileService, 'listenProgress').mockResolvedValue(vi.fn());
+    vi.spyOn(DuplicateFileService, 'listenGroups').mockResolvedValue(vi.fn());
+    vi.spyOn(DuplicateFileService, 'find').mockImplementation(
+      () =>
+        new Promise(resolve => {
+          finishScan = resolve;
+        })
+    );
+    const store = useDuplicateFilesStore();
+    store.result = createResult([createGroup('current', 'document.pdf')]);
+    store.resultComplete = true;
+
+    const scan = store.find(['/another-fixture'], useAppStore().settings.duplicateFileMinimumBytes);
+    await vi.waitFor(() => expect(DuplicateFileService.find).toHaveBeenCalledOnce());
+
+    expect(store.result).toBeNull();
+    expect(store.resultComplete).toBe(false);
+
+    finishScan({ ...createResult([]), roots: ['/another-fixture'], scanId: 9 });
+    await scan;
+  });
 });

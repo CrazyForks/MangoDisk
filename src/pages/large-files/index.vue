@@ -2,11 +2,11 @@
 import { useI18n } from 'vue-i18n';
 import { computed, nextTick, ref, watch } from 'vue';
 
+import MdDelayedOperationWorkspace from '@/components/custom/md-delayed-operation-workspace.vue';
 import MdStorageScopeSelect from '@/components/custom/md-storage-scope-select.vue';
 import MdEmptyState from '@/components/custom/md-empty-state.vue';
 import MdFileCategoryFilter from '@/components/custom/md-file-category-filter.vue';
 import MdOperationProgress from '@/components/custom/md-operation-progress.vue';
-import MdOperationWorkspace from '@/components/custom/md-operation-workspace.vue';
 import MdPageShell from '@/components/custom/md-page-shell.vue';
 import MdResultFilterToolbar from '@/components/custom/md-result-filter-toolbar.vue';
 import MdResultSummary from '@/components/custom/md-result-summary.vue';
@@ -183,13 +183,13 @@ function removeScopeFolder(path: string) {
 }
 
 function requestDelete(entries: LargeFileEntry[]) {
-  if (props.deleting || !entries.length) return;
+  if (props.busy || props.deleting || !entries.length) return;
   pendingDelete.value = entries;
   confirmOpen.value = true;
 }
 
 function confirmDelete() {
-  if (props.deleting || !pendingDelete.value.length) return;
+  if (props.busy || props.deleting || !pendingDelete.value.length) return;
   deleteRequested.value = true;
   emit('deleteMany', pendingDelete.value);
   // Keep the dialog visible while deletion runs so single-file and batch
@@ -240,7 +240,7 @@ function confirmDelete() {
             :name="busy || resultMatchesScope ? ICON_NAMES.refresh : ICON_NAMES.largeFiles"
             :size="17"
           />
-          {{ busy ? t('loading.currentStage') : resultMatchesScope ? t('largeFiles.rescan') : t('largeFiles.start') }}
+          {{ t(resultMatchesScope ? 'largeFiles.rescan' : 'largeFiles.start') }}
         </Button>
       </div>
     </template>
@@ -262,21 +262,7 @@ function confirmDelete() {
       </MdSelectionActionBar>
     </template>
 
-    <MdOperationWorkspace v-if="busy">
-      <MdOperationProgress
-        :icon-name="ICON_NAMES.largeFiles"
-        :title="cancelling ? t('loading.cancelling') : t('largeFiles.scanning')"
-        :progress="progress"
-        :path-label="t('loading.currentAnalysisDirectory')"
-        :preparing-text="t('loading.preparingAnalysisDirectory')"
-        :hint="t('largeFiles.scanHint')"
-        :cancelable="true"
-        :cancel-disabled="cancelling"
-        @cancel="emit('cancel')"
-      />
-    </MdOperationWorkspace>
-
-    <MdResultWorkspace v-else>
+    <MdResultWorkspace>
       <template v-if="result" #summary>
         <MdResultSummary
           :title="
@@ -316,7 +302,7 @@ function confirmDelete() {
 
       <template v-if="result" #header>
         <MdResultFilterToolbar>
-          <MdFileCategoryFilter v-model="activeCategory" :options="categoryOptions" />
+          <MdFileCategoryFilter v-model="activeCategory" :options="categoryOptions" :disabled="busy" />
         </MdResultFilterToolbar>
       </template>
 
@@ -324,34 +310,49 @@ function confirmDelete() {
         {{ thresholdNeedsRefresh ? t('largeFiles.thresholdChangedNotice') : t('common.limitedResults') }}
       </template>
 
-      <template v-if="result">
-        <MdLargeFileList
-          v-show="filteredEntries.length > 0"
-          v-model:selected-paths="selectedPaths"
-          :entries="filteredEntries"
-          @open="emit('open', $event)"
-          @delete="requestDelete([$event])"
-        />
+      <div class="result-content" :inert="busy ? '' : undefined" :aria-busy="busy">
+        <template v-if="result">
+          <MdLargeFileList
+            v-show="filteredEntries.length > 0"
+            v-model:selected-paths="selectedPaths"
+            :entries="filteredEntries"
+            @open="emit('open', $event)"
+            @delete="requestDelete([$event])"
+          />
+          <MdEmptyState
+            v-if="!filteredEntries.length"
+            compact
+            :icon-name="ICON_NAMES.fileSearch"
+            :title="t('largeFiles.noResults')"
+            :description="t('largeFiles.noResultsDescription')"
+          />
+        </template>
         <MdEmptyState
-          v-if="!filteredEntries.length"
-          compact
-          :icon-name="ICON_NAMES.fileSearch"
-          :title="t('largeFiles.noResults')"
-          :description="t('largeFiles.noResultsDescription')"
-        />
-      </template>
+          v-else
+          :icon-name="ICON_NAMES.largeFiles"
+          :title="t('largeFiles.emptyTitle')"
+          :description="t('largeFiles.emptyDescription', { size: FormatUtils.storageThreshold(minimumBytes) })"
+        >
+          <Button type="button" :disabled="busy || deleting || !selectedScopePath" @click="start(false)">
+            <MdIcon :name="ICON_NAMES.largeFiles" :size="17" />
+            {{ t('largeFiles.start') }}
+          </Button>
+        </MdEmptyState>
+      </div>
 
-      <MdEmptyState
-        v-else
-        :icon-name="ICON_NAMES.largeFiles"
-        :title="t('largeFiles.emptyTitle')"
-        :description="t('largeFiles.emptyDescription', { size: FormatUtils.storageThreshold(minimumBytes) })"
-      >
-        <Button type="button" :disabled="busy || deleting || !selectedScopePath" @click="start(false)">
-          <MdIcon :name="ICON_NAMES.largeFiles" :size="17" />
-          {{ t('largeFiles.start') }}
-        </Button>
-      </MdEmptyState>
+      <MdDelayedOperationWorkspace :active="busy" mode="overlay" role="status" aria-live="polite">
+        <MdOperationProgress
+          :icon-name="ICON_NAMES.largeFiles"
+          :title="cancelling ? t('loading.cancelling') : t('largeFiles.scanning')"
+          :progress="progress"
+          :path-label="t('loading.currentAnalysisDirectory')"
+          :preparing-text="t('loading.preparingAnalysisDirectory')"
+          :hint="t('largeFiles.scanHint')"
+          :cancelable="true"
+          :cancel-disabled="cancelling"
+          @cancel="emit('cancel')"
+        />
+      </MdDelayedOperationWorkspace>
     </MdResultWorkspace>
 
     <MdDestructiveActionDialog
@@ -380,6 +381,13 @@ function confirmDelete() {
   align-items: center;
   justify-content: flex-end;
   gap: 10px;
+}
+
+.result-content {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
 }
 .size-filter {
   display: flex;

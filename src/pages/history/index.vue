@@ -437,10 +437,6 @@ function fileCleanupActionMessage(status: 'deleted' | 'failed'): string {
   @apply border-border/70 bg-card text-card-foreground;
 }
 
-.history-list :deep(.result-table-header) {
-  @apply border-border/70 bg-muted/35;
-}
-
 .history-list-header,
 .record {
   display: grid;
@@ -467,9 +463,9 @@ function fileCleanupActionMessage(status: 'deleted' | 'failed'): string {
 
 .record {
   width: 100%;
-  min-height: 64px;
+  min-height: 52px;
   border: 0;
-  padding: 9px 14px;
+  padding: 5px 14px;
   background: transparent;
   color: inherit;
   font: inherit;
@@ -494,7 +490,7 @@ function fileCleanupActionMessage(status: 'deleted' | 'failed'): string {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
 }
 
 .record-main > span {

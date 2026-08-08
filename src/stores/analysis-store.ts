@@ -86,7 +86,7 @@ export const useAnalysisStore = defineStore('analysis', {
       }
     },
     async deletePermanently(entry: DirectoryEntryInfo) {
-      if (!this.result || this.deleting) return;
+      if (!this.result || this.pending || this.deleting) return;
       const appStore = useAppStore();
       this.deleting = true;
       appStore.clearError();

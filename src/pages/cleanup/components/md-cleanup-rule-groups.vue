@@ -26,6 +26,7 @@ import { PathUtils } from '@/lib/utils/path';
 import { RenderBatchUtils } from '@/lib/utils/render-batch';
 
 import { applicationLeftoverGroupSelection, groupApplicationLeftovers } from '../application-leftover-groups';
+import { hasCleanupRuleDetails, isAggregateOnlyCleanupRule } from '../cleanup-rule-details';
 import { cleanupGroupIcon, cleanupRuleIcon } from '../cleanup-rule-icon';
 import { buildCleanupResultCategories, type CleanupResultCategory } from '../cleanup-result-categories';
 import MdCleanupDetailHeader from './md-cleanup-detail-header.vue';
@@ -129,10 +130,6 @@ function categoryTitle(category: CleanupResultGroup): string {
   return t(`cleanup.categoryTitles.${category}`);
 }
 
-function categoryDescription(category: CleanupResultGroup): string {
-  return t(`cleanup.categoryDescriptions.${category}`);
-}
-
 function categoryItemCount(count: number): string {
   return t('cleanup.categoryItemCount', { count: FormatUtils.integer(count) }, count);
 }
@@ -199,26 +196,6 @@ function loadMoreLeftoverCandidates(group: ApplicationLeftoverGroup) {
   };
 }
 
-function onlyHasAggregateDetails(rule: PresentedScanRuleResult): boolean {
-  /*
-   * A specialized cleaner may report aggregate counts through an OS API
-   * without exposing paths that are safe to display or select individually.
-   * Derive this state only from protocol sources, never from rule IDs, so a
-   * newly added cleaner cannot silently inherit incorrect interaction rules.
-   */
-  return rule.selectable && !rule.sources.length;
-}
-
-function hasRuleDetails(rule: PresentedScanRuleResult): boolean {
-  /*
-   * File-backed rules expose selectable sources, while native OS cleaners may
-   * expose only aggregate totals. Treat localized impact text as inspectable
-   * details for those aggregate cleaners so users can review the consequence
-   * before selecting the rule, even though no individual paths are available.
-   */
-  return rule.sources.length > 0 || (onlyHasAggregateDetails(rule) && Boolean(rule.impact));
-}
-
 function runningProcessWarning(rule: PresentedScanRuleResult): string {
   if (!rule.runningProcesses.length) return t('cleanup.requiresClose');
   return t('cleanup.requiresCloseProcesses', {
@@ -235,7 +212,7 @@ function toggleRule(rule: PresentedScanRuleResult, checked: boolean) {
 }
 
 async function toggleRuleDetails(rule: PresentedScanRuleResult) {
-  if (!hasRuleDetails(rule)) return;
+  if (!hasCleanupRuleDetails(rule)) return;
   const next = new Set(expandedRuleIds.value);
   if (next.has(rule.ruleId)) {
     next.delete(rule.ruleId);
@@ -311,7 +288,7 @@ watch(
     // category-to-item browser while preserving explicit disclosure for
     // categories containing several independent rules.
     const rules = activeCategory.value?.rules ?? [];
-    if (rules.length === 1 && hasRuleDetails(rules[0])) {
+    if (rules.length === 1 && hasCleanupRuleDetails(rules[0])) {
       expandedRuleIds.value = new Set([...expandedRuleIds.value, rules[0].ruleId]);
     }
   },
@@ -380,9 +357,7 @@ watch(
 
     <section v-if="showingLeftovers && leftovers" class="cleanup-details">
       <MdCleanupDetailHeader
-        :icon="ICON_NAMES.application"
         :title="t('applicationLeftovers.resultTitle')"
-        :description="t('applicationLeftovers.resultDescription')"
         :selected-bytes="selectedLeftoverBytes"
         :total-bytes="leftovers.totalBytes"
         :selection="leftoverSelection"
@@ -458,7 +433,6 @@ watch(
                   "
                   @update:checked="emit('toggleLeftover', candidate)"
                 />
-                <span class="source-icon"><MdIcon :name="ICON_NAMES.folder" :size="18" /></span>
                 <span class="source-primary">
                   <span class="source-main">
                     <strong class="md-result-primary">{{
@@ -509,9 +483,7 @@ watch(
       class="cleanup-details"
     >
       <MdCleanupDetailHeader
-        :icon="ICON_NAMES.application"
         :title="categoryTitle(activeCategory.id)"
-        :description="categoryDescription(activeCategory.id)"
         :selected-bytes="activeCategory.selectedBytes"
         :total-bytes="activeCategory.bytes"
         :selection="activeCategory.selection"
@@ -563,9 +535,7 @@ watch(
 
     <section v-else-if="activeCategory" class="cleanup-details">
       <MdCleanupDetailHeader
-        :icon="cleanupGroupIcon(activeCategory.id)"
         :title="categoryTitle(activeCategory.id)"
-        :description="categoryDescription(activeCategory.id)"
         :selected-bytes="activeCategory.selectedBytes"
         :total-bytes="activeCategory.bytes"
         :selection="activeCategory.selection"
@@ -592,34 +562,19 @@ watch(
               <button
                 class="rule-disclosure"
                 type="button"
-                :disabled="!hasRuleDetails(row.rule)"
-                :aria-expanded="hasRuleDetails(row.rule) ? expandedRuleIds.has(row.rule.ruleId) : undefined"
+                :disabled="!hasCleanupRuleDetails(row.rule)"
+                :aria-expanded="hasCleanupRuleDetails(row.rule) ? expandedRuleIds.has(row.rule.ruleId) : undefined"
                 @click="toggleRuleDetails(row.rule)"
               >
                 <span class="rule-icon" :class="{ recoverable: row.rule.risk === 'recoverable' }">
                   <MdIcon :name="cleanupRuleIcon(row.rule.ruleId, row.rule.group)" :size="20" />
                 </span>
-                <span class="rule-main" :class="{ 'aggregate-only': onlyHasAggregateDetails(row.rule) }">
+                <span class="rule-main">
                   <span class="rule-title">
                     <strong class="md-result-primary">{{ row.rule.name }}</strong>
-                    <em v-if="activeCategory.id !== 'userCache'" :class="row.rule.risk">
-                      {{ row.rule.risk === 'safe' ? t('common.safe') : t('common.recoverable') }}
+                    <em v-if="activeCategory.id !== 'userCache' && row.rule.risk === 'safe'" class="safe">
+                      {{ t('common.safe') }}
                     </em>
-                  </span>
-                  <small
-                    v-if="row.rule.requiresAppClose"
-                    class="rule-close-hint"
-                    :title="runningProcessWarning(row.rule)"
-                  >
-                    <MdIcon :name="ICON_NAMES.info" :size="12" />
-                    <span>{{ runningProcessWarning(row.rule) }}</span>
-                  </small>
-                  <small v-else-if="activeCategory.id !== 'userCache' && row.rule.description">
-                    {{ row.rule.description }}
-                  </small>
-                  <span v-if="onlyHasAggregateDetails(row.rule)" class="rule-inspection-hint">
-                    <MdIcon :name="ICON_NAMES.info" :size="12" />
-                    <span>{{ t('cleanup.aggregateOnlyDetails') }}</span>
                   </span>
                 </span>
                 <span class="rule-size" :class="row.selection">
@@ -632,7 +587,7 @@ watch(
                   </small>
                   <small v-else>{{ t('cleanup.selected') }}</small>
                 </span>
-                <span v-if="hasRuleDetails(row.rule)" class="expand-icon">
+                <span v-if="hasCleanupRuleDetails(row.rule)" class="expand-icon">
                   <MdIcon
                     :name="ICON_NAMES.chevronDown"
                     :size="17"
@@ -642,15 +597,27 @@ watch(
               </button>
             </MdResultTableRow>
 
-            <MdResultTableHierarchy v-if="expandedRuleIds.has(row.rule.ruleId) && hasRuleDetails(row.rule)">
-              <div v-if="row.rule.impact" class="rule-impact">
-                <MdIcon :name="ICON_NAMES.info" :size="14" />
-                <span>{{ row.rule.impact }}</span>
+            <MdResultTableHierarchy v-if="expandedRuleIds.has(row.rule.ruleId) && hasCleanupRuleDetails(row.rule)">
+              <div class="rule-details">
+                <p v-if="row.rule.description" class="rule-description">{{ row.rule.description }}</p>
+                <p v-if="row.rule.impact" class="rule-detail-note impact">
+                  <MdIcon :name="ICON_NAMES.info" :size="13" />
+                  <span>{{ row.rule.impact }}</span>
+                </p>
+                <p v-if="row.rule.requiresAppClose" class="rule-detail-note warning">
+                  <MdIcon :name="ICON_NAMES.info" :size="13" />
+                  <span>{{ runningProcessWarning(row.rule) }}</span>
+                </p>
+                <p v-if="isAggregateOnlyCleanupRule(row.rule)" class="rule-detail-note">
+                  <MdIcon :name="ICON_NAMES.info" :size="13" />
+                  <span>{{ t('cleanup.aggregateOnlyDetails') }}</span>
+                </p>
               </div>
               <MdResultTableRow
                 v-for="source in visibleRuleSources(row.rule)"
                 :key="source.path"
                 class="source-row"
+                :class="{ 'with-artwork': isUniversalBinaryRule(row.rule) }"
                 :data-selected="sourceSelected(row.rule.ruleId, source.path)"
               >
                 <MdResultCheckbox
@@ -666,9 +633,6 @@ watch(
                   :artwork-size="34"
                   @error="handleApplicationIconError(source.path)"
                 />
-                <span v-else class="source-icon">
-                  <MdIcon :name="ICON_NAMES.folder" :size="18" />
-                </span>
                 <span class="source-primary">
                   <span class="source-main">
                     <MdMiddleEllipsis :text="PathUtils.display(source.path)" :tail-length="22" />

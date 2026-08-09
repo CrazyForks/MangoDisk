@@ -174,7 +174,7 @@ mangodisk clean --help
 ### 环境要求
 
 - Node.js 24 LTS
-- pnpm 11.13.0
+- pnpm 11.13.1
 - Stable Rust
 - macOS：Xcode Command Line Tools
 - Windows：Visual Studio 2022 Build Tools，并安装“使用 C++ 的桌面开发”

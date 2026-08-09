@@ -173,7 +173,7 @@ mangodisk clean --help
 ### Prerequisites
 
 - Node.js 24 LTS
-- pnpm 11.13.0
+- pnpm 11.13.1
 - Stable Rust
 - macOS: Xcode Command Line Tools
 - Windows: Visual Studio 2022 Build Tools with **Desktop development with C++**

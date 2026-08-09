@@ -155,7 +155,7 @@ brew install harry0703/tap/mangodisk-cli
 Install it on Windows with WinGet:
 
 ```powershell
-winget install --id Harry0703.MangoDisk.CLI -e
+winget install --id MangoDisk.CLI -e
 ```
 
 Both package managers add `mangodisk` to your command path. Open a new terminal if the command is not immediately available, then verify the installation:

@@ -156,7 +156,7 @@ brew install harry0703/tap/mangodisk-cli
 Windows 用户可以通过 WinGet 安装：
 
 ```powershell
-winget install --id Harry0703.MangoDisk.CLI -e
+winget install --id MangoDisk.CLI -e
 ```
 
 两种安装方式都会将 `mangodisk` 加入命令路径。如果安装后暂时无法识别命令，请重新打开终端，然后检查版本：

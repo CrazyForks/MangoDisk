@@ -189,8 +189,18 @@ impl CleanupService {
     }
 
     pub fn execute(request: CleanupRequest) -> CoreResult<CleanupResult> {
+        Self::execute_with_progress(request, |_| {})
+    }
+
+    pub fn execute_with_progress<F>(
+        request: CleanupRequest,
+        progress: F,
+    ) -> CoreResult<CleanupResult>
+    where
+        F: FnMut(CleanupExecutionProgress),
+    {
         let operation_id = format!("deep-cleanup-{}", now_ms());
-        Self::execute_deep_cleanup_step(request, operation_id)
+        Self::execute_deep_cleanup_step_with_progress(request, operation_id, progress)
     }
 
     pub fn execute_deep_cleanup_step(

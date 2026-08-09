@@ -1,7 +1,4 @@
-mod applications;
 mod clean;
-mod history;
-mod storage;
 
 use crate::{
     arguments::{Command, OutputFormat},
@@ -72,8 +69,5 @@ pub fn dispatch(
 ) -> Result<CommandOutcome, CliFailure> {
     match command {
         Command::Clean(arguments) => clean::run(arguments, context),
-        Command::Applications(command) => applications::run(command.command, context),
-        Command::Storage(command) => storage::run(command.command, context),
-        Command::History(command) => history::run(command.command),
     }
 }

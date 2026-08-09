@@ -17,7 +17,7 @@ use output::{write_error, write_outcome};
 use progress::CancellationController;
 
 fn main() -> std::process::ExitCode {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn"))
+    env_logger::Builder::from_env(env_logger::Env::new().filter_or("MANGODISK_LOG", "error"))
         .target(env_logger::Target::Stderr)
         .format_timestamp_millis()
         .init();

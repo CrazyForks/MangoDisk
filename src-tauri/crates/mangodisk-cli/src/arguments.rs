@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
 #[derive(Debug, Parser)]
@@ -55,12 +53,6 @@ pub enum ColorMode {
 pub enum Command {
     /// Scan cleanup candidates and optionally apply a reviewed selection.
     Clean(CleanArgs),
-    /// Inspect installed applications or their leftovers without changing the system.
-    Applications(ApplicationsCommand),
-    /// Analyze storage, large files, or exact duplicates.
-    Storage(StorageCommand),
-    /// Inspect persisted operation history.
-    History(HistoryCommand),
 }
 
 #[derive(Debug, Args)]
@@ -106,113 +98,6 @@ pub enum CleanSelection {
     All,
 }
 
-#[derive(Debug, Args)]
-pub struct ApplicationsCommand {
-    #[command(subcommand)]
-    pub command: ApplicationsSubcommand,
-}
-
-#[derive(Debug, Subcommand)]
-pub enum ApplicationsSubcommand {
-    /// Inspect installed applications and their uninstall capabilities.
-    Uninstall(ApplicationUninstallCommand),
-    /// Inspect high-confidence data left by uninstalled applications.
-    Leftovers(ApplicationLeftoversCommand),
-}
-
-#[derive(Debug, Args)]
-pub struct ApplicationUninstallCommand {
-    #[command(subcommand)]
-    pub command: ApplicationUninstallSubcommand,
-}
-
-#[derive(Debug, Subcommand)]
-pub enum ApplicationUninstallSubcommand {
-    /// List installed applications without changing the system.
-    Scan,
-    /// Measure one application and exact-identifier associations without changing files.
-    Inspect(ApplicationUninstallInspectArgs),
-}
-
-#[derive(Debug, Args)]
-pub struct ApplicationUninstallInspectArgs {
-    /// Stable application identifier returned by `applications uninstall scan`.
-    #[arg(long)]
-    pub application_id: String,
-}
-
-#[derive(Debug, Args)]
-pub struct ApplicationLeftoversCommand {
-    #[command(subcommand)]
-    pub command: ApplicationLeftoversSubcommand,
-}
-
-#[derive(Debug, Subcommand)]
-pub enum ApplicationLeftoversSubcommand {
-    /// Scan application leftovers without changing files.
-    Scan,
-}
-
-#[derive(Debug, Args)]
-pub struct StorageCommand {
-    #[command(subcommand)]
-    pub command: StorageSubcommand,
-}
-
-#[derive(Debug, Subcommand)]
-pub enum StorageSubcommand {
-    /// Analyze one disk or folder.
-    Analyze(StorageAnalyzeArgs),
-    /// Find large files under one disk or folder.
-    LargeFiles(StorageLargeFilesArgs),
-    /// Find byte-identical duplicate files under one or more folders.
-    DuplicateFiles(StorageDuplicateFilesArgs),
-}
-
-#[derive(Debug, Args)]
-pub struct StorageAnalyzeArgs {
-    #[arg(long)]
-    pub root: PathBuf,
-
-    /// Ignore a compatible persisted index and scan again.
-    #[arg(long)]
-    pub refresh: bool,
-}
-
-#[derive(Debug, Args)]
-pub struct StorageLargeFilesArgs {
-    #[arg(long)]
-    pub root: PathBuf,
-
-    #[arg(long, default_value_t = 50 * 1024 * 1024)]
-    pub minimum_bytes: u64,
-
-    /// Ignore a compatible persisted index and scan again.
-    #[arg(long)]
-    pub refresh: bool,
-}
-
-#[derive(Debug, Args)]
-pub struct StorageDuplicateFilesArgs {
-    #[arg(long, required = true)]
-    pub root: Vec<PathBuf>,
-
-    #[arg(long, default_value_t = 1024 * 1024)]
-    pub minimum_bytes: u64,
-}
-
-#[derive(Debug, Args)]
-pub struct HistoryCommand {
-    #[command(subcommand)]
-    pub command: HistorySubcommand,
-}
-
-#[derive(Debug, Subcommand)]
-pub enum HistorySubcommand {
-    /// List cleanup operation records.
-    List,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -222,9 +107,7 @@ mod tests {
         let parsed =
             Cli::try_parse_from(["mangodisk", "clean"]).expect("the documented command must parse");
 
-        let Command::Clean(arguments) = parsed.command else {
-            panic!("clean command expected");
-        };
+        let Command::Clean(arguments) = parsed.command;
         assert!(!arguments.apply);
         assert_eq!(arguments.selection, None);
         assert!(!arguments.dry_run);
@@ -247,9 +130,7 @@ mod tests {
         .expect("the documented command must parse");
 
         assert_eq!(parsed.format, OutputFormat::Json);
-        let Command::Clean(arguments) = parsed.command else {
-            panic!("clean command expected");
-        };
+        let Command::Clean(arguments) = parsed.command;
         assert!(arguments.apply);
         assert_eq!(arguments.selection, Some(CleanSelection::All));
         assert!(arguments.dry_run);
@@ -265,95 +146,12 @@ mod tests {
     }
 
     #[test]
-    fn application_leftover_scan_uses_the_applications_domain() {
-        let parsed = Cli::try_parse_from(["mangodisk", "applications", "leftovers", "scan"])
-            .expect("the documented application leftover scan must parse");
+    fn incomplete_read_only_workflows_are_not_public_commands() {
+        for command in ["applications", "storage", "history"] {
+            let error = Cli::try_parse_from(["mangodisk", command])
+                .expect_err("removed workflows must not remain public commands");
 
-        let Command::Applications(command) = parsed.command else {
-            panic!("applications command expected");
-        };
-        let ApplicationsSubcommand::Leftovers(command) = command.command else {
-            panic!("application leftover command expected");
-        };
-        assert!(matches!(
-            command.command,
-            ApplicationLeftoversSubcommand::Scan
-        ));
-    }
-
-    #[test]
-    fn application_uninstall_scan_uses_the_applications_domain() {
-        let parsed = Cli::try_parse_from([
-            "mangodisk",
-            "--format",
-            "json",
-            "applications",
-            "uninstall",
-            "scan",
-        ])
-        .expect("the documented application uninstall scan must parse");
-
-        let Command::Applications(command) = parsed.command else {
-            panic!("applications command expected");
-        };
-        let ApplicationsSubcommand::Uninstall(command) = command.command else {
-            panic!("application uninstall command expected");
-        };
-        assert!(matches!(
-            command.command,
-            ApplicationUninstallSubcommand::Scan
-        ));
-    }
-
-    #[test]
-    fn application_uninstall_inspect_requires_a_catalog_identifier() {
-        let parsed = Cli::try_parse_from([
-            "mangodisk",
-            "applications",
-            "uninstall",
-            "inspect",
-            "--application-id",
-            "application-example",
-        ])
-        .expect("the documented application uninstall inspect command must parse");
-
-        let Command::Applications(command) = parsed.command else {
-            panic!("applications command expected");
-        };
-        let ApplicationsSubcommand::Uninstall(command) = command.command else {
-            panic!("application uninstall command expected");
-        };
-        let ApplicationUninstallSubcommand::Inspect(arguments) = command.command else {
-            panic!("application uninstall inspect command expected");
-        };
-        assert_eq!(arguments.application_id, "application-example");
-    }
-
-    #[test]
-    fn application_uninstall_plan_is_not_a_public_command() {
-        let result = Cli::try_parse_from([
-            "mangodisk",
-            "applications",
-            "uninstall",
-            "plan",
-            "--application-id",
-            "application-example",
-        ]);
-
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn application_leftover_execution_is_not_a_public_command() {
-        let result = Cli::try_parse_from([
-            "mangodisk",
-            "applications",
-            "leftovers",
-            "execute",
-            "--plan",
-            "plan.json",
-        ]);
-
-        assert!(result.is_err());
+            assert!(error.to_string().contains("unrecognized subcommand"));
+        }
     }
 }

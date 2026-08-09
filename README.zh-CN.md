@@ -147,7 +147,25 @@ brew install --cask harry0703/tap/mangodisk
 
 ## CLI 快速示例
 
-`mangodisk` 是桌面应用的命令行入口。从源码构建 CLI 后，可以使用以下命令：
+macOS 用户可以通过 Homebrew 安装独立 CLI：
+
+```sh
+brew install harry0703/tap/mangodisk-cli
+```
+
+Windows 用户可以通过 WinGet 安装：
+
+```powershell
+winget install --id Harry0703.MangoDisk.CLI -e
+```
+
+两种安装方式都会将 `mangodisk` 加入命令路径。如果安装后暂时无法识别命令，请重新打开终端，然后检查版本：
+
+```sh
+mangodisk --version
+```
+
+CLI 与桌面应用使用同一套安全清理引擎，可以使用以下命令：
 
 ```sh
 # 只扫描并展示可清理内容

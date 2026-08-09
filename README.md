@@ -146,7 +146,25 @@ Alternatively, download the latest version from the [MangoDisk website](https://
 
 ## CLI Quick Start
 
-`mangodisk` is the command-line entry point for the desktop application. After building the CLI from source, use commands such as:
+Install the standalone CLI on macOS with Homebrew:
+
+```sh
+brew install harry0703/tap/mangodisk-cli
+```
+
+Install it on Windows with WinGet:
+
+```powershell
+winget install --id Harry0703.MangoDisk.CLI -e
+```
+
+Both package managers add `mangodisk` to your command path. Open a new terminal if the command is not immediately available, then verify the installation:
+
+```sh
+mangodisk --version
+```
+
+The CLI uses the same safety-first cleanup engine as the desktop application. Use commands such as:
 
 ```sh
 # Scan and show cleanable content without changing anything

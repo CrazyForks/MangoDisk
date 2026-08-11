@@ -1,0 +1,48 @@
+# Current Weixin and legacy WeChat create multiple direct Chromium profiles.
+# Each profile mixes history, cookies, storage, and preferences with rendering
+# caches, so dynamic discovery appends fixed cache suffixes only.
+id = "app.wechat-rendering-cache"
+schema_version = 3
+rule_version = 1
+platform = "windows"
+category = "application"
+risk = "safe"
+default_selected = false
+recommended_selected = true
+required_stopped_processes = ["Weixin.exe", "WeChat.exe"]
+
+[[applicability]]
+kind = "anyOf"
+items = [
+  { kind = "applicationInstalled", identifiers = ["Weixin", "WeChat", "微信"] },
+  { kind = "anyRootExists" },
+]
+
+[[roots]]
+template = "${roaming_app_data}/Tencent/xwechat/radium/web/profiles"
+kind = "childDirectories"
+include_all_children = true
+suffixes = ["Cache", "Code Cache", "GPUCache", "DawnCache", "DawnGraphiteCache", "DawnWebGPUCache", "GrShaderCache", "GraphiteDawnCache", "Shared Dictionary/cache"]
+
+[[roots]]
+template = "${roaming_app_data}/Tencent/WeChat/radium/web/profiles"
+kind = "childDirectories"
+include_all_children = true
+suffixes = ["Cache", "Code Cache", "GPUCache", "DawnCache", "DawnGraphiteCache", "DawnWebGPUCache", "GrShaderCache", "GraphiteDawnCache", "Shared Dictionary/cache"]
+
+[matcher]
+kind = "all"
+
+[execution]
+kind = "deleteMatchingContents"
+requires_app_close = true
+
+[verification]
+lifecycle = "verified"
+evidence = "Signed Weixin 4.1.10.53 reproduced seven direct Chromium profiles and 40 MiB of fixed rendering caches. Accounts, messages, files, history, cookies, Network, IndexedDB, Local Storage, sessions, Service Worker, and preferences are excluded"
+verified_at = "2026-08-11"
+verified_platform = "windows"
+references = [
+  "https://weixin.qq.com/cgi-bin/readtemplate?lang=zh_CN&t=download/windows",
+  "https://chromium.googlesource.com/chromium/src/+/main/docs/user_data_dir.md",
+]

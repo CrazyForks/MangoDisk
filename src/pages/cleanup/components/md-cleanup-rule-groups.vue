@@ -393,17 +393,24 @@ watch(
               >
                 <span class="rule-icon"><MdIcon :name="ICON_NAMES.application" :size="20" /></span>
                 <span class="rule-main">
-                  <strong class="md-result-primary">{{ group.applicationName }}</strong>
-                  <small
-                    >{{ group.applicationIdentifier }} ·
-                    {{
-                      t(
-                        'applicationLeftovers.locationCount',
-                        { count: group.candidates.length },
-                        group.candidates.length
-                      )
-                    }}</small
-                  >
+                  <strong class="md-result-primary" :title="group.applicationName">
+                    {{ group.applicationName }}
+                  </strong>
+                  <small class="leftover-meta">
+                    <span class="leftover-identifier" :title="group.applicationIdentifier">
+                      {{ group.applicationIdentifier }}
+                    </span>
+                    <span aria-hidden="true">·</span>
+                    <span class="leftover-location-count">
+                      {{
+                        t(
+                          'applicationLeftovers.locationCount',
+                          { count: group.candidates.length },
+                          group.candidates.length
+                        )
+                      }}
+                    </span>
+                  </small>
                 </span>
                 <strong class="rule-size md-result-primary">{{ FormatUtils.bytes(group.bytes) }}</strong>
                 <span class="expand-icon">

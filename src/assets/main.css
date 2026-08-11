@@ -126,6 +126,12 @@
   --layout-action-bar-height: 48px;
 
   /*
+   * Modal surfaces must dim the workspace consistently without obscuring the
+   * context behind the active dialog or operation card.
+   */
+  --modal-overlay-background: color-mix(in oklab, var(--background) 50%, transparent);
+
+  /*
    * Result rows use transparent wrappers and inset their visual background.
    * Keep both values global so ordinary rows, grouped rows, and page-owned
    * navigation items preserve the same 2px rhythm without stacking local
@@ -252,7 +258,7 @@ body,
 }
 
 [data-slot='dialog-overlay'] {
-  background-color: color-mix(in oklab, var(--background) 50%, transparent) !important;
+  background-color: var(--modal-overlay-background) !important;
   -webkit-backdrop-filter: blur(0px) !important;
   backdrop-filter: blur(0px) !important;
 }

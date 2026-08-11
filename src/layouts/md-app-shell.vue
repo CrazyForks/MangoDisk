@@ -1033,8 +1033,9 @@ function requestCancelDeepCleanup() {
   display: grid;
   place-items: center;
   padding: 24px;
-  @apply bg-background/80;
-  backdrop-filter: blur(10px);
+  background-color: var(--modal-overlay-background);
+  -webkit-backdrop-filter: blur(0);
+  backdrop-filter: blur(0);
 }
 .loading-drag-region {
   position: absolute;

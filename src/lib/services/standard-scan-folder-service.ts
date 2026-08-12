@@ -18,6 +18,21 @@ export interface StandardScanFolder {
   path: string;
 }
 
+/**
+ * 按平台路径规则查找标准资料夹。
+ *
+ * 标准资料夹的真实路径通常不会随应用语言变化，例如繁体中文界面中的“下载”
+ * 在磁盘上仍可能是 `Downloads`。调用方应使用匹配结果中的稳定 ID 读取本地化文案，
+ * 不应直接把路径末级名称展示给用户。
+ */
+export function findStandardScanFolderByPath(
+  folders: readonly StandardScanFolder[],
+  path: string
+): StandardScanFolder | null {
+  const pathKey = PathUtils.comparisonKey(path);
+  return folders.find(folder => PathUtils.comparisonKey(folder.path) === pathKey) ?? null;
+}
+
 interface StandardScanFolderDefinition {
   id: StandardScanFolderId;
   resolvePath: () => Promise<string>;

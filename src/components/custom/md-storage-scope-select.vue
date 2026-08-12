@@ -11,7 +11,11 @@ import { LOG_DOMAINS, LOG_EVENTS } from '@/lib/models/telemetry';
 import { ICON_NAMES } from '@/lib/models/ui';
 import { FolderSelectionService } from '@/lib/services/folder-selection-service';
 import { LoggerService } from '@/lib/services/logger-service';
-import { StandardScanFolderService, type StandardScanFolder } from '@/lib/services/standard-scan-folder-service';
+import {
+  findStandardScanFolderByPath,
+  StandardScanFolderService,
+  type StandardScanFolder,
+} from '@/lib/services/standard-scan-folder-service';
 import { PathUtils } from '@/lib/utils/path';
 
 const { t } = useI18n({ useScope: 'global' });
@@ -46,7 +50,17 @@ const selectedDisk = computed(() => {
   const selectedKey = PathUtils.comparisonKey(props.modelValue);
   return props.disks.find(disk => PathUtils.comparisonKey(disk.mountPoint) === selectedKey) ?? null;
 });
-const selectedLabel = computed(() => selectedDisk.value?.name ?? PathUtils.fileName(props.modelValue));
+const selectedStandardFolder = computed(() =>
+  selectedDisk.value ? null : findStandardScanFolderByPath(standardFolders.value, props.modelValue)
+);
+const selectedLabel = computed(() => {
+  if (selectedDisk.value) return selectedDisk.value.name;
+  if (selectedStandardFolder.value) {
+    // 标准资料夹保留真实路径用于扫描和提示，仅在界面上通过稳定 ID 显示当前语言名称。
+    return t(`folderPicker.standardFolders.${selectedStandardFolder.value.id}`);
+  }
+  return PathUtils.fileName(props.modelValue);
+});
 const standardFolderKeys = computed(
   () => new Set(standardFolders.value.map(folder => PathUtils.comparisonKey(folder.path)))
 );

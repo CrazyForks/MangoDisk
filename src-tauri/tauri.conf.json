@@ -36,7 +36,7 @@
   },
   "bundle": {
     "active": true,
-    "publisher": "harry0703",
+    "publisher": "https://github.com/harry0703",
     "homepage": "https://mangodisk.app",
     "copyright": "Copyright © 2026 mangodisk.app",
     "license": "GPL-3.0-only",

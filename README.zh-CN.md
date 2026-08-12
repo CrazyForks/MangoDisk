@@ -15,7 +15,7 @@
 </p>
 
 <p align="center">
-  <a href="https://mangodisk.app/">
+  <a href="https://mangodisk.app/zh">
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="https://assets.mangodisk.app/images/readme/zh-dark.jpg">
       <source media="(prefers-color-scheme: light)" srcset="https://assets.mangodisk.app/images/readme/zh-light.jpg">

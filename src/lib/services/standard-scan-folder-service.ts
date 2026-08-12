@@ -19,11 +19,11 @@ export interface StandardScanFolder {
 }
 
 /**
- * 按平台路径规则查找标准资料夹。
+ * Finds a standard folder using the current platform's path rules.
  *
- * 标准资料夹的真实路径通常不会随应用语言变化，例如繁体中文界面中的“下载”
- * 在磁盘上仍可能是 `Downloads`。调用方应使用匹配结果中的稳定 ID 读取本地化文案，
- * 不应直接把路径末级名称展示给用户。
+ * A standard folder's real path usually remains unchanged when the app locale changes. For example,
+ * a localized Downloads label may still map to `Downloads` on disk. Callers should use the stable ID
+ * to resolve localized text instead of displaying the final path segment directly.
  */
 export function findStandardScanFolderByPath(
   folders: readonly StandardScanFolder[],

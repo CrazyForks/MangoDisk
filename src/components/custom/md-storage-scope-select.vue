@@ -56,7 +56,7 @@ const selectedStandardFolder = computed(() =>
 const selectedLabel = computed(() => {
   if (selectedDisk.value) return selectedDisk.value.name;
   if (selectedStandardFolder.value) {
-    // 标准资料夹保留真实路径用于扫描和提示，仅在界面上通过稳定 ID 显示当前语言名称。
+    // Keep the real path for scanning and tooltips, but render the localized name through its stable ID.
     return t(`folderPicker.standardFolders.${selectedStandardFolder.value.id}`);
   }
   return PathUtils.fileName(props.modelValue);

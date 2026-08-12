@@ -9,7 +9,7 @@ import { Card } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { APP_UPDATE_STATUS_IDS } from '@/lib/models/app-update';
 import { PROJECT_LINKS } from '@/lib/models/application-shell';
-import { DUPLICATE_FILE_MINIMUM_OPTIONS, DUPLICATE_KEEPER_RULE_IDS } from '@/lib/models/duplicate-file';
+import { DUPLICATE_FILE_MINIMUM_PRESETS, DUPLICATE_KEEPER_RULE_IDS } from '@/lib/models/duplicate-file';
 import {
   MACOS_ACCESS_STATUS_IDS,
   MACOS_PRIVACY_DESTINATION_IDS,
@@ -27,6 +27,7 @@ import { useAppUpdateStore } from '@/stores/app-update-store';
 
 const { t } = useI18n({ useScope: 'global' });
 const appUpdateStore = useAppUpdateStore();
+const duplicateMinimumOptions = ByteSizeService.presetOptions(DUPLICATE_FILE_MINIMUM_PRESETS);
 
 const props = defineProps<{
   settings: AppSettings;
@@ -150,7 +151,7 @@ function updateTheme(value: unknown) {
 
 function updateDuplicateFileMinimum(value: unknown) {
   const parsed = Number(value);
-  if (!(DUPLICATE_FILE_MINIMUM_OPTIONS as readonly number[]).includes(parsed)) return;
+  if (!duplicateMinimumOptions.some(option => option.bytes === parsed)) return;
   form.duplicateFileMinimumBytes = parsed;
   save();
 }
@@ -227,9 +228,9 @@ function updateDuplicateKeeperRule(value: unknown) {
               ><SelectValue
             /></SelectTrigger>
             <SelectContent>
-              <SelectItem v-for="value in DUPLICATE_FILE_MINIMUM_OPTIONS" :key="value" :value="String(value)">{{
-                ByteSizeService.bytes(value)
-              }}</SelectItem>
+              <SelectItem v-for="option in duplicateMinimumOptions" :key="option.bytes" :value="String(option.bytes)">
+                {{ option.label }}
+              </SelectItem>
             </SelectContent>
           </Select>
         </div>

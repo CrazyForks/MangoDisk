@@ -859,6 +859,8 @@ mod permanent_delete_tests {
 
     use super::*;
 
+    static NEXT_DELETE_SANDBOX_ID: AtomicU64 = AtomicU64::new(1);
+
     struct DeleteSandbox(PathBuf);
 
     impl DeleteSandbox {
@@ -867,8 +869,9 @@ mod permanent_delete_tests {
                 .duration_since(UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_nanos();
+            let id = NEXT_DELETE_SANDBOX_ID.fetch_add(1, Ordering::Relaxed);
             let path = std::env::temp_dir().join(format!(
-                "mangodisk-permanent-delete-{}-{unique}",
+                "mangodisk-permanent-delete-{}-{unique}-{id}",
                 std::process::id()
             ));
             fs::create_dir_all(&path).expect("create the permanent-delete fixture");

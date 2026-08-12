@@ -15,7 +15,7 @@ import {
   type AppUpdateStatus,
 } from '@/lib/models/app-update';
 import { PROJECT_LINKS } from '@/lib/models/application-shell';
-import { LANGUAGE_IDS } from '@/lib/models/settings';
+import { LANGUAGE_OPTIONS } from '@/lib/models/settings';
 import { ICON_NAMES } from '@/lib/models/ui';
 import { AppUpdateProgressUtils } from '@/lib/utils/app-update-progress';
 import { FormatUtils } from '@/lib/utils/format';
@@ -71,9 +71,11 @@ const dialogDescription = computed(() =>
     ? t('updates.currentVersionDescription', { version: currentVersionLabel.value })
     : currentVersionLabel.value
 );
-const websiteUrl = computed(() =>
-  locale.value === LANGUAGE_IDS.zhCN ? `${PROJECT_LINKS.website}/zh` : PROJECT_LINKS.website
-);
+const websiteUrl = computed(() => {
+  // Website prefixes live in the locale registry so this dialog needs no locale-specific branches.
+  const option = LANGUAGE_OPTIONS.find(candidate => candidate.id === locale.value);
+  return `${PROJECT_LINKS.website}${option?.websitePath ?? ''}`;
+});
 const downloadPercent = computed(() => AppUpdateProgressUtils.percent(props.downloadedBytes, props.totalBytes));
 const progressLabel = computed(() => {
   if (!props.totalBytes) return t('updates.downloading');

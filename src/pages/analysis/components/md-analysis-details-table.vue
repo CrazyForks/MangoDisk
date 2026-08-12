@@ -12,6 +12,7 @@ import { ICON_NAMES } from '@/lib/models/ui';
 import type { DirectoryEntryInfo } from '@/lib/models/analysis';
 import { SORT_DIRECTIONS } from '@/lib/models/sort';
 import { AnalysisEntryUtils, type AnalysisSortKey, type SortDirection } from '@/lib/utils/analysis-entry';
+import { ByteSizeService } from '@/lib/services/byte-size-service';
 import { FormatUtils } from '@/lib/utils/format';
 
 import MdAnalysisEntryContextMenu from './md-analysis-entry-context-menu.vue';
@@ -141,7 +142,7 @@ function sortTitle(key: AnalysisSortKey) {
             </MdResultRowAction>
           </span>
         </span>
-        <strong class="details-number md-result-primary">{{ FormatUtils.bytes(entry.bytes) }}</strong>
+        <strong class="details-number md-result-primary">{{ ByteSizeService.bytes(entry.bytes) }}</strong>
         <span class="details-number">{{ FormatUtils.integer(entry.fileCount) }}</span>
         <span class="details-modified hidden @5xl/analysis:block">{{
           FormatUtils.dateTime(entry.modifiedAtMs, locale)

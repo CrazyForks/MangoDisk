@@ -22,7 +22,7 @@ import { FileManagerService } from '@/lib/services/file-manager-service';
 import { LinkService } from '@/lib/services/link-service';
 import { MacOsPermissionService } from '@/lib/services/macos-permission-service';
 import { AppUpdateProgressUtils } from '@/lib/utils/app-update-progress';
-import { FormatUtils } from '@/lib/utils/format';
+import { ByteSizeService } from '@/lib/services/byte-size-service';
 import { useAppUpdateStore } from '@/stores/app-update-store';
 
 const { t } = useI18n({ useScope: 'global' });
@@ -228,7 +228,7 @@ function updateDuplicateKeeperRule(value: unknown) {
             /></SelectTrigger>
             <SelectContent>
               <SelectItem v-for="value in DUPLICATE_FILE_MINIMUM_OPTIONS" :key="value" :value="String(value)">{{
-                FormatUtils.storageThreshold(value)
+                ByteSizeService.bytes(value)
               }}</SelectItem>
             </SelectContent>
           </Select>

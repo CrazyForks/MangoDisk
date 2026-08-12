@@ -5,6 +5,7 @@ import MdIcon from '@/components/icons/md-icon.vue';
 import { ANALYSIS_VIEW_IDS } from '@/lib/models/analysis';
 import { ICON_NAMES } from '@/lib/models/ui';
 import type { AnalysisResult, AnalysisViewId, DirectoryEntryInfo } from '@/lib/models/analysis';
+import { ByteSizeService } from '@/lib/services/byte-size-service';
 import { FormatUtils } from '@/lib/utils/format';
 
 import MdAnalysisDetailsTable from './md-analysis-details-table.vue';
@@ -34,7 +35,7 @@ const emit = defineEmits<{
         {{
           t(
             'analysis.folderSpaceSummary',
-            { folders: FormatUtils.integer(folderCount), size: FormatUtils.bytes(result.totalBytes) },
+            { folders: FormatUtils.integer(folderCount), size: ByteSizeService.bytes(result.totalBytes) },
             folderCount
           )
         }}

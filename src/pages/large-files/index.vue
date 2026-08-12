@@ -26,6 +26,7 @@ import type { FileCategoryId } from '@/lib/models/file-category';
 import type { LargeFileEntry, LargeFilesResult } from '@/lib/models/large-file';
 import { DiskUtils } from '@/lib/utils/disk';
 import { FileTypeUtils } from '@/lib/utils/file-type';
+import { ByteSizeService } from '@/lib/services/byte-size-service';
 import { FormatUtils } from '@/lib/utils/format';
 import { LargeFileEntryUtils } from '@/lib/utils/large-file-entry';
 import { PathUtils } from '@/lib/utils/path';
@@ -209,11 +210,11 @@ function confirmDelete() {
           <span>{{ t('largeFiles.minimumSize') }}</span>
           <Select :model-value="String(minimumBytes)" :disabled="busy || deleting" @update:model-value="updateMinimum">
             <SelectTrigger class="w-28" size="sm" :aria-label="t('largeFiles.minimumSize')">
-              <SelectValue>≥ {{ FormatUtils.storageThreshold(minimumBytes) }}</SelectValue>
+              <SelectValue>≥ {{ ByteSizeService.bytes(minimumBytes) }}</SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem v-for="minimum in LARGE_FILE_MINIMUM_OPTIONS" :key="minimum" :value="String(minimum)">
-                ≥ {{ FormatUtils.storageThreshold(minimum) }}
+                ≥ {{ ByteSizeService.bytes(minimum) }}
               </SelectItem>
             </SelectContent>
           </Select>
@@ -252,7 +253,7 @@ function confirmDelete() {
           t('common.fileCount', { count: FormatUtils.integer(selectedEntries.length) }, selectedEntries.length)
         "
         :space-label="t('common.estimatedRelease')"
-        :space-value="FormatUtils.bytes(selectedBytes)"
+        :space-value="ByteSizeService.bytes(selectedBytes)"
         :action-label="t('largeFiles.batchDelete')"
         :disabled="!selectedEntries.length"
         :busy="deleting"
@@ -270,13 +271,13 @@ function confirmDelete() {
               'largeFiles.summaryCount',
               {
                 count: FormatUtils.integer(resultSummaryCount),
-                size: FormatUtils.storageThreshold(minimumBytes),
+                size: ByteSizeService.bytes(minimumBytes),
               },
               resultSummaryCount
             )
           "
           :metric-label="t('largeFiles.summarySpace')"
-          :metric-value="FormatUtils.bytes(resultSummaryBytes)"
+          :metric-value="ByteSizeService.bytes(resultSummaryBytes)"
         >
           <template #actions>
             <label class="size-filter summary-size-filter">
@@ -287,11 +288,11 @@ function confirmDelete() {
                 @update:model-value="updateMinimum"
               >
                 <SelectTrigger class="w-28" size="sm" :aria-label="t('largeFiles.minimumSize')">
-                  <SelectValue>≥ {{ FormatUtils.storageThreshold(minimumBytes) }}</SelectValue>
+                  <SelectValue>≥ {{ ByteSizeService.bytes(minimumBytes) }}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem v-for="minimum in LARGE_FILE_MINIMUM_OPTIONS" :key="minimum" :value="String(minimum)">
-                    ≥ {{ FormatUtils.storageThreshold(minimum) }}
+                    ≥ {{ ByteSizeService.bytes(minimum) }}
                   </SelectItem>
                 </SelectContent>
               </Select>
@@ -331,7 +332,7 @@ function confirmDelete() {
           v-else
           :icon-name="ICON_NAMES.largeFiles"
           :title="t('largeFiles.emptyTitle')"
-          :description="t('largeFiles.emptyDescription', { size: FormatUtils.storageThreshold(minimumBytes) })"
+          :description="t('largeFiles.emptyDescription', { size: ByteSizeService.bytes(minimumBytes) })"
         >
           <Button type="button" :disabled="busy || deleting || !selectedScopePath" @click="start(false)">
             <MdIcon :name="ICON_NAMES.largeFiles" :size="17" />
@@ -362,7 +363,7 @@ function confirmDelete() {
         pendingDelete.length > 1 ? t('largeFiles.batchDeleteDescription') : t('largeFiles.deleteConfirmDescription')
       "
       :summary-label="pendingSummaryLabel"
-      :summary-value="FormatUtils.bytes(pendingBytes)"
+      :summary-value="ByteSizeService.bytes(pendingBytes)"
       :note="t('largeFiles.deleteSafetyNote')"
       :cancel-label="t('common.cancel')"
       :confirm-label="t('largeFiles.deleteConfirmAction')"

@@ -23,6 +23,7 @@ import { FileManagerService } from '@/lib/services/file-manager-service';
 import { LinkService } from '@/lib/services/link-service';
 import { OperatingSystemService } from '@/lib/services/operating-system-service';
 import { CleanupRuleTextUtils, type CleanupRuleMessageResolver } from '@/lib/utils/cleanup-rule-text';
+import { ByteSizeService } from '@/lib/services/byte-size-service';
 import { FormatUtils } from '@/lib/utils/format';
 import { PathUtils } from '@/lib/utils/path';
 import { useAnalysisStore } from '@/stores/analysis-store';
@@ -226,14 +227,14 @@ const cleanupExecutionItems = computed(() => {
     } else if (result?.status === 'partial') {
       detail = t('loading.cleanupItemPartial', {
         count: FormatUtils.integer(result.affectedItemCount),
-        size: FormatUtils.bytes(result.releasedBytes),
+        size: ByteSizeService.bytes(result.releasedBytes),
       });
     } else if (result && ['blocked', 'failed'].includes(result.status)) {
       detail = t('loading.cleanupItemSkipped');
     } else if (result) {
       detail = t('loading.cleanupItemCompleted', {
         count: FormatUtils.integer(result.affectedItemCount),
-        size: FormatUtils.bytes(result.releasedBytes),
+        size: ByteSizeService.bytes(result.releasedBytes),
       });
     } else if (active && progress?.stage === 'validating') {
       detail = t('loading.cleanupItemValidating');
@@ -333,13 +334,13 @@ const cleanupExecutionSecondaryMetric = computed(() => {
   if (progress?.stage === 'validating') {
     return {
       label: t('loading.checkedData'),
-      value: FormatUtils.bytes(progress.checkedBytes),
+      value: ByteSizeService.bytes(progress.checkedBytes),
     };
   }
   return {
     label:
       cleanupStore.operation === CLEANUP_OPERATION_IDS.previewing ? t('cleanup.estimated') : t('loading.releasedSpace'),
-    value: FormatUtils.bytes(progress?.releasedBytes ?? 0),
+    value: ByteSizeService.bytes(progress?.releasedBytes ?? 0),
   };
 });
 
@@ -545,7 +546,7 @@ async function deleteLargeFilesPermanently(entries: LargeFileEntry[]) {
     'largeFiles.deleteCompletedDescription',
     {
       count: FormatUtils.integer(result.removedPaths.length),
-      size: FormatUtils.bytes(result.releasedBytes),
+      size: ByteSizeService.bytes(result.releasedBytes),
       failed: FormatUtils.integer(result.failed.length),
     },
     result.removedPaths.length
@@ -568,7 +569,7 @@ async function deleteDuplicateFilesPermanently(entries: DuplicateFileEntry[]) {
     'duplicateFiles.deleteCompletedDescription',
     {
       count: FormatUtils.integer(result.removedPaths.length),
-      size: FormatUtils.bytes(result.releasedBytes),
+      size: ByteSizeService.bytes(result.releasedBytes),
       failed: FormatUtils.integer(result.failed.length),
     },
     result.removedPaths.length
@@ -640,7 +641,7 @@ async function executeCleanup(leftovers: ApplicationLeftoverCandidate[]) {
       'cleanup.completedDescription',
       {
         count: FormatUtils.integer(affectedItemCount),
-        size: FormatUtils.bytes(releasedBytes),
+        size: ByteSizeService.bytes(releasedBytes),
         failed: FormatUtils.integer(failedItemCount),
       },
       affectedItemCount

@@ -18,7 +18,7 @@ import type { DiskInfo } from '@/lib/models/disk';
 import type { TraversalProgress } from '@/lib/models/progress';
 import { AnalysisBreadcrumbUtils } from '@/lib/utils/analysis-breadcrumb';
 import { DiskUtils } from '@/lib/utils/disk';
-import { FormatUtils } from '@/lib/utils/format';
+import { ByteSizeService } from '@/lib/services/byte-size-service';
 import { PathUtils } from '@/lib/utils/path';
 import { useStorageScopeStore } from '@/stores/storage-scope-store';
 
@@ -345,7 +345,7 @@ function navigateHistory(index: number) {
       :title="t('analysis.deleteTitle')"
       :description="t('analysis.deleteDescription')"
       :summary-label="pendingDelete?.name"
-      :summary-value="pendingDelete ? FormatUtils.bytes(pendingDelete.bytes) : ''"
+      :summary-value="pendingDelete ? ByteSizeService.bytes(pendingDelete.bytes) : ''"
       :cancel-label="t('common.cancel')"
       :confirm-label="t('analysis.deleteAction')"
       :busy="deleting"

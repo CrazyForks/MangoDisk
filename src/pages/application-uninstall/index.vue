@@ -30,6 +30,7 @@ import type {
 import type { TraversalProgress } from '@/lib/models/progress';
 import { ICON_NAMES } from '@/lib/models/ui';
 import { ApplicationIconService } from '@/lib/services/application-icon-service';
+import { ByteSizeService } from '@/lib/services/byte-size-service';
 import { FormatUtils } from '@/lib/utils/format';
 
 import {
@@ -363,7 +364,7 @@ watch(
         : 'applicationUninstall.batchExecutionSummary',
       {
         count: FormatUtils.integer(result.affectedApplicationCount),
-        size: FormatUtils.bytes(result.releasedBytes),
+        size: ByteSizeService.bytes(result.releasedBytes),
         failed: FormatUtils.integer(result.failedApplicationCount),
       }
     );
@@ -483,7 +484,7 @@ function confirmCancelExecution() {
             t('applicationUninstall.summary', { count: FormatUtils.integer(candidates.length) }, candidates.length)
           "
           :metric-label="t('applicationUninstall.summarySpace')"
-          :metric-value="FormatUtils.bytes(catalogBytes)"
+          :metric-value="ByteSizeService.bytes(catalogBytes)"
         />
       </template>
 
@@ -646,7 +647,7 @@ function confirmCancelExecution() {
         :selected-label="t('applicationUninstall.selectedApplicationsLabel')"
         :selected-value="FormatUtils.integer(selectedCandidates.length)"
         :space-label="t('applicationUninstall.selectedSizeLabel')"
-        :space-value="FormatUtils.bytes(selectedBytes)"
+        :space-value="ByteSizeService.bytes(selectedBytes)"
         :action-label="t('applicationUninstall.uninstallSelected')"
         :disabled="!selectedCandidates.length"
         :busy="busy"
@@ -691,7 +692,7 @@ function confirmCancelExecution() {
               })
       "
       :summary-value="
-        executing ? '' : FormatUtils.bytes(preview?.previewedBytes ?? plan?.expectedBytes ?? selectedBytes)
+        executing ? '' : ByteSizeService.bytes(preview?.previewedBytes ?? plan?.expectedBytes ?? selectedBytes)
       "
       :cancel-label="t('common.cancel')"
       :confirm-label="t('applicationUninstall.confirmBatchAction')"

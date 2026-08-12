@@ -7,6 +7,7 @@ import MdIcon from '@/components/icons/md-icon.vue';
 import { ICON_NAMES } from '@/lib/models/ui';
 import { TREEMAP_TILE_KINDS } from '@/lib/models/analysis';
 import type { DirectoryEntryInfo, TreemapTile } from '@/lib/models/analysis';
+import { ByteSizeService } from '@/lib/services/byte-size-service';
 import { FormatUtils } from '@/lib/utils/format';
 import { TreemapLayoutUtils } from '@/lib/utils/treemap-layout';
 
@@ -129,7 +130,7 @@ function tooltipStyle() {
           class="treemap-tile"
           :class="tileClass(tile)"
           :style="tileStyle(tile, tileIndex)"
-          :aria-label="`${tile.entry.name} · ${FormatUtils.bytes(tile.bytes)}`"
+          :aria-label="`${tile.entry.name} · ${ByteSizeService.bytes(tile.bytes)}`"
           @pointerenter="showTooltip(tile, $event)"
           @pointermove="updateTooltipPosition"
           @pointerleave="hideTooltip"
@@ -145,7 +146,7 @@ function tooltipStyle() {
           />
           <span class="tile-copy">
             <strong class="md-result-primary">{{ tile.entry.name }}</strong>
-            <small>{{ FormatUtils.bytes(tile.bytes) }}</small>
+            <small>{{ ByteSizeService.bytes(tile.bytes) }}</small>
           </span>
           <em>{{ tilePercentage(tile) }}%</em>
         </button>
@@ -162,7 +163,7 @@ function tooltipStyle() {
             'analysis.treemapRemainderHint',
             {
               count: FormatUtils.integer(tile.entryCount),
-              size: FormatUtils.bytes(tile.bytes),
+              size: ByteSizeService.bytes(tile.bytes),
             },
             tile.entryCount
           )
@@ -178,7 +179,7 @@ function tooltipStyle() {
           <strong class="md-result-primary">
             {{ t('analysis.treemapRemainder', { count: FormatUtils.integer(tile.entryCount) }, tile.entryCount) }}
           </strong>
-          <small>{{ FormatUtils.bytes(tile.bytes) }}</small>
+          <small>{{ ByteSizeService.bytes(tile.bytes) }}</small>
         </span>
         <em>{{ tilePercentage(tile) }}%</em>
       </div>
@@ -217,7 +218,7 @@ function tooltipStyle() {
           }}
         </strong>
         <small>
-          {{ FormatUtils.bytes(hoveredTile.bytes) }} · {{ tilePercentage(hoveredTile) }}%
+          {{ ByteSizeService.bytes(hoveredTile.bytes) }} · {{ tilePercentage(hoveredTile) }}%
           <template v-if="hoveredTile.kind === TREEMAP_TILE_KINDS.entry">
             ·
             {{

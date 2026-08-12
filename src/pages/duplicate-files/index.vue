@@ -25,6 +25,7 @@ import type { TraversalProgress } from '@/lib/models/progress';
 import type { FileCategoryId } from '@/lib/models/file-category';
 import { DuplicateFileSelectionUtils } from '@/lib/utils/duplicate-file-selection';
 import { DuplicateFileGroupUtils } from '@/lib/utils/duplicate-file-group';
+import { ByteSizeService } from '@/lib/services/byte-size-service';
 import { FormatUtils } from '@/lib/utils/format';
 import { PathUtils } from '@/lib/utils/path';
 import { useStorageScopeStore } from '@/stores/storage-scope-store';
@@ -241,7 +242,7 @@ function confirmDelete() {
           t('duplicateFiles.copyCount', { count: FormatUtils.integer(selectedEntries.length) }, selectedEntries.length)
         "
         :space-label="t('common.estimatedRelease')"
-        :space-value="FormatUtils.bytes(selectedBytes)"
+        :space-value="ByteSizeService.bytes(selectedBytes)"
         :action-label="t('duplicateFiles.batchDelete')"
         :disabled="!selectedEntries.length"
         :busy="deleting"
@@ -262,7 +263,7 @@ function confirmDelete() {
             )
           "
           :metric-label="summaryMetricLabel"
-          :metric-value="FormatUtils.bytes(result.reclaimableBytes)"
+          :metric-value="ByteSizeService.bytes(result.reclaimableBytes)"
         >
           <template #actions>
             <TooltipProvider :delay-duration="TOOLTIP_OPEN_DELAY_MS">
@@ -387,7 +388,7 @@ function confirmDelete() {
         )
       "
       :summary-label="pendingSummaryLabel"
-      :summary-value="FormatUtils.bytes(pendingDeleteBytes)"
+      :summary-value="ByteSizeService.bytes(pendingDeleteBytes)"
       :note="t('duplicateFiles.deleteSafetyNote')"
       :cancel-label="t('common.cancel')"
       :confirm-label="t('duplicateFiles.batchDelete')"

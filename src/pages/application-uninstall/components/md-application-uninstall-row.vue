@@ -9,6 +9,7 @@ import MdResultTableRow from '@/components/custom/md-result-table-row.vue';
 import MdIcon from '@/components/icons/md-icon.vue';
 import type { ApplicationUninstallCandidate, ApplicationUninstallComponentSummary } from '@/lib/models/application';
 import { ICON_NAMES, type IconName } from '@/lib/models/ui';
+import { ByteSizeService } from '@/lib/services/byte-size-service';
 import { FormatUtils } from '@/lib/utils/format';
 import { PathUtils } from '@/lib/utils/path';
 
@@ -92,14 +93,14 @@ function componentDescription(component: ApplicationUninstallComponentSummary): 
 
 function displayedApplicationSize(): string {
   if (!props.candidate.totalBytes) return t('applicationUninstall.applicationSizeUnavailable');
-  const size = FormatUtils.bytes(props.candidate.totalBytes);
+  const size = ByteSizeService.bytes(props.candidate.totalBytes);
   return props.candidate.installerKind === 'windowsAppx'
     ? t('applicationUninstall.estimatedPackageSize', { size })
     : size;
 }
 
 function displayedComponentSize(component: ApplicationUninstallComponentSummary): string {
-  const size = FormatUtils.bytes(component.bytes);
+  const size = ByteSizeService.bytes(component.bytes);
   return component.kind === 'nativeInstaller' && props.candidate.installerKind === 'windowsAppx'
     ? t('applicationUninstall.estimatedPackageSize', { size })
     : size;

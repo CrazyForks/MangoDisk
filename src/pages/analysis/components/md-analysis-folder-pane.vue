@@ -4,6 +4,7 @@ import MdNativeFileIcon from '@/components/custom/md-native-file-icon.vue';
 import MdIcon from '@/components/icons/md-icon.vue';
 import { ICON_NAMES } from '@/lib/models/ui';
 import type { DirectoryEntryInfo } from '@/lib/models/analysis';
+import { ByteSizeService } from '@/lib/services/byte-size-service';
 import { FormatUtils } from '@/lib/utils/format';
 
 import MdAnalysisEntryContextMenu from './md-analysis-entry-context-menu.vue';
@@ -62,7 +63,7 @@ const emit = defineEmits<{
             </span>
             <span class="item-metrics">
               <span>
-                <strong class="md-result-primary">{{ FormatUtils.bytes(entry.bytes) }}</strong>
+                <strong class="md-result-primary">{{ ByteSizeService.bytes(entry.bytes) }}</strong>
                 <small>{{ Math.round(FormatUtils.percent(entry.bytes, totalBytes)) }}%</small>
               </span>
               <i>

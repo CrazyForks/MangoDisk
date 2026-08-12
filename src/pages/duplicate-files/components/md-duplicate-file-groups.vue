@@ -24,6 +24,7 @@ import {
 import { FILE_CATEGORY_IDS, type FileCategoryId } from '@/lib/models/file-category';
 import { DuplicateFileSelectionUtils } from '@/lib/utils/duplicate-file-selection';
 import { DuplicateFileGroupUtils } from '@/lib/utils/duplicate-file-group';
+import { ByteSizeService } from '@/lib/services/byte-size-service';
 import { FormatUtils } from '@/lib/utils/format';
 import { PathUtils } from '@/lib/utils/path';
 import { RenderBatchUtils } from '@/lib/utils/render-batch';
@@ -220,13 +221,13 @@ function loadMoreGroups() {
                     : 'duplicateFiles.groupSummary',
                   {
                     count: FormatUtils.integer(group.entries.length),
-                    size: FormatUtils.bytes(group.bytesPerFile),
+                    size: ByteSizeService.bytes(group.bytesPerFile),
                     files: t(
                       'common.fileCount',
                       { count: FormatUtils.integer(group.fileCountPerEntry) },
                       group.fileCountPerEntry
                     ),
-                    reclaimable: FormatUtils.bytes(group.reclaimableBytes),
+                    reclaimable: ByteSizeService.bytes(group.reclaimableBytes),
                   },
                   group.entries.length
                 )

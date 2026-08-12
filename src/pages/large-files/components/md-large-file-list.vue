@@ -15,6 +15,7 @@ import { SORT_DIRECTIONS } from '@/lib/models/sort';
 import { ICON_NAMES } from '@/lib/models/ui';
 import type { LargeFileEntry } from '@/lib/models/large-file';
 import type { SortDirection } from '@/lib/models/sort';
+import { ByteSizeService } from '@/lib/services/byte-size-service';
 import { FormatUtils } from '@/lib/utils/format';
 import { LargeFileEntryUtils, type LargeFileSortKey } from '@/lib/utils/large-file-entry';
 import { PathUtils } from '@/lib/utils/path';
@@ -164,7 +165,7 @@ function loadMore() {
       <button class="location-button" type="button" :title="entry.parentPath" @click="emit('open', entry.path)">
         <MdMiddleEllipsis :text="PathUtils.display(entry.parentPath)" />
       </button>
-      <strong class="file-size md-result-primary">{{ FormatUtils.bytes(entry.bytes) }}</strong>
+      <strong class="file-size md-result-primary">{{ ByteSizeService.bytes(entry.bytes) }}</strong>
       <span class="modified">{{ FormatUtils.dateTime(entry.modifiedAtMs, locale) }}</span>
     </MdResultTableRow>
 

@@ -18,7 +18,7 @@ import { PROJECT_LINKS } from '@/lib/models/application-shell';
 import { LANGUAGE_OPTIONS } from '@/lib/models/settings';
 import { ICON_NAMES } from '@/lib/models/ui';
 import { AppUpdateProgressUtils } from '@/lib/utils/app-update-progress';
-import { FormatUtils } from '@/lib/utils/format';
+import { ByteSizeService } from '@/lib/services/byte-size-service';
 
 const props = defineProps<{
   open: boolean;
@@ -80,8 +80,8 @@ const downloadPercent = computed(() => AppUpdateProgressUtils.percent(props.down
 const progressLabel = computed(() => {
   if (!props.totalBytes) return t('updates.downloading');
   return t('updates.downloadProgress', {
-    downloaded: FormatUtils.bytes(props.downloadedBytes),
-    total: FormatUtils.bytes(props.totalBytes),
+    downloaded: ByteSizeService.bytes(props.downloadedBytes),
+    total: ByteSizeService.bytes(props.totalBytes),
   });
 });
 const updateStateTitle = computed(() => {

@@ -130,8 +130,7 @@ const exclusiveOperationBusy = computed(
     duplicateFilesStore.deleting ||
     applicationStore.scanningUninstallCatalog ||
     applicationStore.preparingUninstall ||
-    applicationStore.executingUninstall ||
-    applicationStore.synchronizingUninstallCatalog
+    applicationStore.executingUninstall
 );
 // Custom title bars keep the application chrome visually continuous. macOS
 // only needs a drag region beneath the native traffic lights, while Windows
@@ -382,8 +381,7 @@ const busyPages = computed<PageId[]>(() => [
   ...(duplicateFilesStore.loading || duplicateFilesStore.deleting ? [PAGE_IDS.duplicateFiles] : []),
   ...(applicationStore.scanningUninstallCatalog ||
   applicationStore.preparingUninstall ||
-  applicationStore.executingUninstall ||
-  applicationStore.synchronizingUninstallCatalog
+  applicationStore.executingUninstall
     ? [PAGE_IDS.applicationUninstall]
     : []),
   ...(historyStore.loading ? [PAGE_IDS.history] : []),
@@ -790,7 +788,6 @@ function requestCancelDeepCleanup() {
           :executing="applicationStore.executingUninstall"
           :cancelling-execution="applicationStore.cancellingUninstall"
           :cancellation-revision="applicationStore.uninstallCancellationRevision"
-          :synchronizing="applicationStore.synchronizingUninstallCatalog"
           @scan="scanApplications"
           @cancel-scan="applicationStore.cancelUninstallCatalogScan()"
           @prepare="prepareApplicationUninstall"

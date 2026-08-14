@@ -10,7 +10,7 @@ export type MessageSchema = typeof zhCN;
 export type SupportedLocale = LanguageId;
 
 /**
- * All locale resources ship with the application so language changes also work offline.
+ * All locale resources are imported into one message graph so every view can switch languages offline.
  * Their bounded size does not justify asynchronous loading, extra failure states, or switch latency.
  */
 export const i18n = createI18n<[MessageSchema], SupportedLocale>({

@@ -96,6 +96,20 @@ describe('i18n resources', () => {
     expect(i18n.global.t('common.cancel')).toBe('Cancel');
   });
 
+  it('resolves the disk analysis open action in every locale', () => {
+    const expectedLabels = {
+      [LANGUAGE_IDS.enUS]: 'Open',
+      [LANGUAGE_IDS.jaJP]: '開く',
+      [LANGUAGE_IDS.zhCN]: '打开',
+      [LANGUAGE_IDS.zhTW]: '開啟',
+    };
+
+    for (const locale of i18n.global.availableLocales) {
+      i18n.global.locale.value = locale;
+      expect(i18n.global.t('common.open')).toBe(expectedLabels[locale]);
+    }
+  });
+
   it('matches supported system languages and falls back to English', () => {
     expect(LanguageService.resolveSupportedLanguage(['zh-Hans-CN', 'en-US'])).toBe(LANGUAGE_IDS.zhCN);
     expect(LanguageService.resolveSupportedLanguage(['fr-FR', 'en-GB'])).toBe(LANGUAGE_IDS.enUS);

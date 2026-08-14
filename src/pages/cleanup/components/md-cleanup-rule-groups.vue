@@ -452,7 +452,7 @@ watch(
                   <span class="source-actions">
                     <MdResultRowAction
                       variant="ghost"
-                      :title="t('analysis.showInFileManager')"
+                      :title="t('common.showInFileManager')"
                       @click="emit('open', candidate.path)"
                     >
                       <MdIcon :name="ICON_NAMES.folder" :size="16" />
@@ -528,7 +528,7 @@ watch(
               <span class="source-actions">
                 <MdResultRowAction
                   variant="ghost"
-                  :title="t('analysis.showInFileManager')"
+                  :title="t('common.showInFileManager')"
                   @click="emit('open', source.path)"
                 >
                   <MdIcon :name="ICON_NAMES.folder" :size="16" />
@@ -660,7 +660,7 @@ watch(
                   <span class="source-actions">
                     <MdResultRowAction
                       variant="ghost"
-                      :title="t('analysis.showInFileManager')"
+                      :title="t('common.showInFileManager')"
                       @click="emit('open', source.path)"
                     >
                       <MdIcon :name="ICON_NAMES.folder" :size="16" />

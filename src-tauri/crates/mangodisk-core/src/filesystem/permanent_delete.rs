@@ -13,7 +13,7 @@ use crate::{
         PermanentDeleteCandidate,
     },
     shared::CoreErrorReason,
-    storage::analysis::{AnalysisDeleteCandidate, AnalysisDeleteResult},
+    storage::analysis::{AnalysisDeleteResult, AnalysisEntryCandidate},
 };
 
 pub(crate) struct AnalysisDeleteOutcome {
@@ -253,7 +253,7 @@ fn permanent_delete_io_reason(error: &std::io::Error) -> Option<CoreErrorReason>
 /// The analysis service owns cache synchronization because filesystem helpers
 /// must not depend on storage-domain state.
 pub(crate) fn delete_analysis_candidate_permanently(
-    candidate: AnalysisDeleteCandidate,
+    candidate: AnalysisEntryCandidate,
 ) -> Result<AnalysisDeleteOutcome, PermanentDeleteError> {
     let requested_root = PathBuf::from(&candidate.root);
     let root = current_platform()
@@ -1085,7 +1085,7 @@ mod permanent_delete_tests {
             .expect("write the changed analysis fixture");
         fs::write(path.join("new-after-analysis.bin"), b"new")
             .expect("write the new analysis fixture");
-        let candidate = AnalysisDeleteCandidate {
+        let candidate = AnalysisEntryCandidate {
             root: sandbox.0.to_string_lossy().into_owned(),
             path: path.to_string_lossy().into_owned(),
             expected_bytes: b"payload".len() as u64,

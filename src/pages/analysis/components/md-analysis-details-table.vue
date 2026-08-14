@@ -3,6 +3,7 @@ import { useI18n } from 'vue-i18n';
 import { computed, ref } from 'vue';
 
 import MdNativeFileIcon from '@/components/custom/md-native-file-icon.vue';
+import MdFileEntryContextMenu from '@/components/custom/md-file-entry-context-menu.vue';
 import MdResultRowAction from '@/components/custom/md-result-row-action.vue';
 import MdResultTable from '@/components/custom/md-result-table.vue';
 import MdResultTableRow from '@/components/custom/md-result-table-row.vue';
@@ -15,17 +16,18 @@ import { AnalysisEntryUtils, type AnalysisSortKey, type SortDirection } from '@/
 import { ByteSizeService } from '@/lib/services/byte-size-service';
 import { FormatUtils } from '@/lib/utils/format';
 
-import MdAnalysisEntryContextMenu from './md-analysis-entry-context-menu.vue';
-
 const { locale, t } = useI18n({ useScope: 'global' });
 
 const props = defineProps<{
   entries: DirectoryEntryInfo[];
+  openDisabled: boolean;
+  deleteDisabled: boolean;
 }>();
 
 const emit = defineEmits<{
   activate: [entry: DirectoryEntryInfo];
-  open: [path: string];
+  openEntry: [entry: DirectoryEntryInfo];
+  reveal: [path: string];
   delete: [entry: DirectoryEntryInfo];
 }>();
 
@@ -105,12 +107,14 @@ function sortTitle(key: AnalysisSortKey) {
       </div>
     </template>
 
-    <MdAnalysisEntryContextMenu
+    <MdFileEntryContextMenu
       v-for="entry in sortedEntries"
       :key="entry.path"
-      :entry="entry"
-      @open="emit('open', $event)"
-      @delete="emit('delete', $event)"
+      :open-disabled="openDisabled"
+      :delete-disabled="deleteDisabled"
+      @open="emit('openEntry', entry)"
+      @reveal="emit('reveal', entry.path)"
+      @delete="emit('delete', entry)"
     >
       <MdResultTableRow
         class="details-row grid-cols-[minmax(178px,1fr)_90px_72px] @5xl/analysis:grid-cols-[minmax(188px,1fr)_100px_85px_110px]"
@@ -120,8 +124,9 @@ function sortTitle(key: AnalysisSortKey) {
             class="details-name"
             type="button"
             :title="entry.path"
-            :disabled="!entry.isDirectory"
             @click="emit('activate', entry)"
+            @dblclick="!entry.isDirectory && emit('openEntry', entry)"
+            @keydown.enter="!entry.isDirectory && emit('openEntry', entry)"
           >
             <MdNativeFileIcon
               :path="entry.path"
@@ -135,8 +140,16 @@ function sortTitle(key: AnalysisSortKey) {
           <span class="details-actions">
             <MdResultRowAction
               variant="ghost"
-              :title="t('analysis.showInFileManager')"
-              @click="emit('open', entry.path)"
+              :title="t('common.open')"
+              :disabled="openDisabled"
+              @click="emit('openEntry', entry)"
+            >
+              <MdIcon :name="ICON_NAMES.external" :size="16" />
+            </MdResultRowAction>
+            <MdResultRowAction
+              variant="ghost"
+              :title="t('common.showInFileManager')"
+              @click="emit('reveal', entry.path)"
             >
               <MdIcon :name="ICON_NAMES.folder" :size="16" />
             </MdResultRowAction>
@@ -148,7 +161,7 @@ function sortTitle(key: AnalysisSortKey) {
           FormatUtils.dateTime(entry.modifiedAtMs, locale)
         }}</span>
       </MdResultTableRow>
-    </MdAnalysisEntryContextMenu>
+    </MdFileEntryContextMenu>
   </MdResultTable>
 </template>
 
@@ -226,10 +239,6 @@ function sortTitle(key: AnalysisSortKey) {
   cursor: pointer;
 }
 
-.details-name:disabled {
-  cursor: default;
-}
-
 .details-name strong {
   min-width: 0;
   flex: 1;
@@ -254,6 +263,6 @@ function sortTitle(key: AnalysisSortKey) {
 }
 
 .details-row:is(:hover, :has(:focus-visible)) .details-name strong {
-  padding-right: 32px;
+  padding-right: 64px;
 }
 </style>

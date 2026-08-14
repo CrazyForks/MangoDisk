@@ -52,7 +52,8 @@ const emit = defineEmits<{
   cancel: [];
   error: [error: unknown];
   updateMinimum: [minimumBytes: number];
-  open: [path: string];
+  openEntry: [scanId: number, path: string];
+  reveal: [path: string];
   deleteMany: [entries: LargeFileEntry[]];
 }>();
 
@@ -320,7 +321,10 @@ function confirmDelete() {
             v-show="filteredEntries.length > 0"
             v-model:selected-paths="selectedPaths"
             :entries="filteredEntries"
-            @open="emit('open', $event)"
+            :open-disabled="busy || deleting"
+            :delete-disabled="busy || deleting"
+            @open-entry="emit('openEntry', result.scanId, $event.path)"
+            @reveal="emit('reveal', $event)"
             @delete="requestDelete([$event])"
           />
           <MdEmptyState

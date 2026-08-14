@@ -52,7 +52,8 @@ const emit = defineEmits<{
   error: [error: unknown];
   find: [path: string];
   cancel: [];
-  open: [path: string];
+  openEntry: [scanId: number, path: string];
+  reveal: [path: string];
   delete: [entries: DuplicateFileEntry[]];
   loadMore: [category: FileCategoryId];
 }>();
@@ -322,11 +323,13 @@ function confirmDelete() {
             :groups="filteredGroups"
             :keeper-rule="keeperRule"
             :selection-disabled="busy || deleting"
+            :open-disabled="busy || deleting || !resultComplete"
             :delete-disabled="busy || deleting || !resultComplete"
             :has-more="hasMore"
             :loading-more="loadingMore"
             :remaining-group-count="Math.max(0, (result?.returnedGroupCount ?? 0) - groups.length)"
-            @open="emit('open', $event)"
+            @open-entry="emit('openEntry', result.scanId, $event.path)"
+            @reveal="emit('reveal', $event)"
             @delete="requestDelete([$event])"
             @load-more="emit('loadMore', $event)"
           />

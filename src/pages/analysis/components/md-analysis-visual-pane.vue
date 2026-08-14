@@ -18,11 +18,14 @@ const props = defineProps<{
   entries: DirectoryEntryInfo[];
   folderCount: number;
   viewMode: AnalysisViewId;
+  openDisabled: boolean;
+  deleteDisabled: boolean;
 }>();
 
 const emit = defineEmits<{
   activate: [entry: DirectoryEntryInfo];
-  open: [path: string];
+  openEntry: [entry: DirectoryEntryInfo];
+  reveal: [path: string];
   delete: [entry: DirectoryEntryInfo];
   'update:viewMode': [viewMode: AnalysisViewId];
 }>();
@@ -66,15 +69,21 @@ const emit = defineEmits<{
       v-if="props.viewMode === ANALYSIS_VIEW_IDS.treemap"
       :entries="entries"
       :total-bytes="result.totalBytes"
+      :open-disabled="openDisabled"
+      :delete-disabled="deleteDisabled"
       @activate="emit('activate', $event)"
-      @open="emit('open', $event)"
+      @open-entry="emit('openEntry', $event)"
+      @reveal="emit('reveal', $event)"
       @delete="emit('delete', $event)"
     />
     <MdAnalysisDetailsTable
       v-else
       :entries="entries"
+      :open-disabled="openDisabled"
+      :delete-disabled="deleteDisabled"
       @activate="emit('activate', $event)"
-      @open="emit('open', $event)"
+      @open-entry="emit('openEntry', $event)"
+      @reveal="emit('reveal', $event)"
       @delete="emit('delete', $event)"
     />
   </section>

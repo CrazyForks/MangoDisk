@@ -593,11 +593,27 @@ function executeApplicationUninstall() {
 }
 
 async function openPath(path: string) {
+  await executeFileManagerAction(() => FileManagerService.reveal(path));
+}
+
+async function executeFileManagerAction(action: () => Promise<void>) {
   try {
-    await FileManagerService.reveal(path);
+    await action();
   } catch (error) {
     store.reportError(error);
   }
+}
+
+async function openAnalysisEntry(scanId: number, path: string) {
+  await executeFileManagerAction(() => FileManagerService.openAnalysisEntry(scanId, path));
+}
+
+async function openLargeFileEntry(scanId: number, path: string) {
+  await executeFileManagerAction(() => FileManagerService.openLargeFileEntry(scanId, path));
+}
+
+async function openDuplicateFileEntry(scanId: number, path: string) {
+  await executeFileManagerAction(() => FileManagerService.openDuplicateFileEntry(scanId, path));
 }
 
 async function scanCleanup(deepProjectDiscovery: boolean) {
@@ -738,7 +754,8 @@ function requestCancelDeepCleanup() {
           @analyze="analyze"
           @cancel="analysisStore.cancel()"
           @error="store.reportError"
-          @open="openPath"
+          @open-entry="openAnalysisEntry"
+          @reveal="openPath"
           @delete="deleteAnalysisEntryPermanently"
         />
         <LargeFilesPage
@@ -755,7 +772,8 @@ function requestCancelDeepCleanup() {
           @update-minimum="updateLargeFileMinimum"
           @cancel="largeFilesStore.cancel()"
           @error="store.reportError"
-          @open="openPath"
+          @open-entry="openLargeFileEntry"
+          @reveal="openPath"
           @delete-many="deleteLargeFilesPermanently"
         />
         <DuplicateFilesPage
@@ -774,7 +792,8 @@ function requestCancelDeepCleanup() {
           @find="findDuplicateFiles"
           @cancel="duplicateFilesStore.cancel()"
           @error="store.reportError"
-          @open="openPath"
+          @open-entry="openDuplicateFileEntry"
+          @reveal="openPath"
           @delete="deleteDuplicateFilesPermanently"
           @load-more="duplicateFilesStore.loadMore"
         />

@@ -2,6 +2,7 @@
 import { useI18n } from 'vue-i18n';
 import { computed, ref } from 'vue';
 
+import MdFileEntryContextMenu from '@/components/custom/md-file-entry-context-menu.vue';
 import MdNativeFileIcon from '@/components/custom/md-native-file-icon.vue';
 import MdIcon from '@/components/icons/md-icon.vue';
 import { ICON_NAMES } from '@/lib/models/ui';
@@ -11,18 +12,19 @@ import { ByteSizeService } from '@/lib/services/byte-size-service';
 import { FormatUtils } from '@/lib/utils/format';
 import { TreemapLayoutUtils } from '@/lib/utils/treemap-layout';
 
-import MdAnalysisEntryContextMenu from './md-analysis-entry-context-menu.vue';
-
 const { t } = useI18n({ useScope: 'global' });
 
 const props = defineProps<{
   entries: DirectoryEntryInfo[];
   totalBytes: number;
+  openDisabled: boolean;
+  deleteDisabled: boolean;
 }>();
 
 const emit = defineEmits<{
   activate: [entry: DirectoryEntryInfo];
-  open: [path: string];
+  openEntry: [entry: DirectoryEntryInfo];
+  reveal: [path: string];
   delete: [entry: DirectoryEntryInfo];
 }>();
 
@@ -59,7 +61,6 @@ function tileClass(tile: TreemapTile) {
     prominent: tile.kind === TREEMAP_TILE_KINDS.entry && area >= 1_800,
     compact: area < 650,
     tiny: area < 240,
-    file: tile.kind === TREEMAP_TILE_KINDS.entry && !tile.entry.isDirectory,
     remainder: tile.kind === TREEMAP_TILE_KINDS.remainder,
   };
 }
@@ -118,12 +119,14 @@ function tooltipStyle() {
       v-for="(tile, tileIndex) in tiles"
       :key="tile.kind === TREEMAP_TILE_KINDS.entry ? tile.entry.path : tile.kind"
     >
-      <MdAnalysisEntryContextMenu
+      <MdFileEntryContextMenu
         v-if="tile.kind === TREEMAP_TILE_KINDS.entry"
-        :entry="tile.entry"
+        :open-disabled="openDisabled"
+        :delete-disabled="deleteDisabled"
         @menu-state-change="setContextMenuOpen"
-        @open="emit('open', $event)"
-        @delete="emit('delete', $event)"
+        @open="emit('openEntry', tile.entry)"
+        @reveal="emit('reveal', tile.entry.path)"
+        @delete="emit('delete', tile.entry)"
       >
         <button
           type="button"
@@ -136,6 +139,8 @@ function tooltipStyle() {
           @pointerleave="hideTooltip"
           @contextmenu="hideTooltip"
           @click="emit('activate', tile.entry)"
+          @dblclick="!tile.entry.isDirectory && emit('openEntry', tile.entry)"
+          @keydown.enter="!tile.entry.isDirectory && emit('openEntry', tile.entry)"
         >
           <MdNativeFileIcon
             v-if="shouldLoadTileIcon(tile)"
@@ -150,7 +155,7 @@ function tooltipStyle() {
           </span>
           <em>{{ tilePercentage(tile) }}%</em>
         </button>
-      </MdAnalysisEntryContextMenu>
+      </MdFileEntryContextMenu>
 
       <div
         v-else
@@ -288,10 +293,6 @@ function tooltipStyle() {
 .treemap-tile:focus-visible {
   z-index: 2;
   @apply border-ring outline-none ring-2 ring-inset ring-ring/55;
-}
-
-.treemap-tile.file {
-  cursor: default;
 }
 
 .treemap-tile.prominent {

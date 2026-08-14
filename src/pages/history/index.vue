@@ -146,7 +146,7 @@ function fileCleanupActionMessage(status: 'deleted' | 'failed'): string {
     <template v-if="history.length" #actions>
       <Button
         class="clear-history-button"
-        variant="outline"
+        variant="ghost"
         type="button"
         :disabled="busy"
         @click="clearConfirmOpen = true"
@@ -424,7 +424,7 @@ function fileCleanupActionMessage(status: 'deleted' | 'failed'): string {
 }
 
 .clear-history-button {
-  @apply border-destructive/25 text-destructive hover:border-destructive/40 hover:bg-destructive/7 hover:text-destructive;
+  @apply border-0 bg-transparent text-muted-foreground shadow-none hover:bg-destructive/8 hover:text-destructive;
 }
 
 .history-list {

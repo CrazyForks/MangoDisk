@@ -7,15 +7,9 @@ import MdIcon from '@/components/icons/md-icon.vue';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { DiskInfo } from '@/lib/models/disk';
-import { LOG_DOMAINS, LOG_EVENTS } from '@/lib/models/telemetry';
 import { ICON_NAMES } from '@/lib/models/ui';
 import { FolderSelectionService } from '@/lib/services/folder-selection-service';
-import { LoggerService } from '@/lib/services/logger-service';
-import {
-  findStandardScanFolderByPath,
-  StandardScanFolderService,
-  type StandardScanFolder,
-} from '@/lib/services/standard-scan-folder-service';
+import { findStandardScanFolderByPath, type StandardScanFolder } from '@/lib/services/standard-scan-folder-service';
 import { PathUtils } from '@/lib/utils/path';
 
 const { t } = useI18n({ useScope: 'global' });
@@ -25,11 +19,13 @@ const props = withDefaults(
     modelValue: string;
     disks: DiskInfo[];
     recentFolders?: string[];
+    standardFolders?: StandardScanFolder[];
     disabled?: boolean;
     allowFolder?: boolean;
   }>(),
   {
     recentFolders: () => [],
+    standardFolders: () => [],
     disabled: false,
     allowFolder: true,
   }
@@ -45,13 +41,12 @@ const CHOOSE_FOLDER_VALUE = '__mangodisk_choose_folder__';
 const selectOpen = ref(false);
 const selectedPathTooltipOpen = ref(false);
 const hoveredFolderPath = ref('');
-const standardFolders = ref<StandardScanFolder[]>([]);
 const selectedDisk = computed(() => {
   const selectedKey = PathUtils.comparisonKey(props.modelValue);
   return props.disks.find(disk => PathUtils.comparisonKey(disk.mountPoint) === selectedKey) ?? null;
 });
 const selectedStandardFolder = computed(() =>
-  selectedDisk.value ? null : findStandardScanFolderByPath(standardFolders.value, props.modelValue)
+  selectedDisk.value ? null : findStandardScanFolderByPath(props.standardFolders, props.modelValue)
 );
 const selectedLabel = computed(() => {
   if (selectedDisk.value) return selectedDisk.value.name;
@@ -62,7 +57,7 @@ const selectedLabel = computed(() => {
   return PathUtils.fileName(props.modelValue);
 });
 const standardFolderKeys = computed(
-  () => new Set(standardFolders.value.map(folder => PathUtils.comparisonKey(folder.path)))
+  () => new Set(props.standardFolders.map(folder => PathUtils.comparisonKey(folder.path)))
 );
 const folderOptions = computed(() => {
   const selectedKey = selectedDisk.value ? '' : PathUtils.comparisonKey(props.modelValue);
@@ -96,16 +91,6 @@ const folderOptions = computed(() => {
   }
   return folders;
 });
-
-async function loadStandardFolders() {
-  try {
-    standardFolders.value = await StandardScanFolderService.listAvailable();
-  } catch (error) {
-    // Standard folders are convenience shortcuts. Disk selection and the
-    // native folder dialog remain available when platform discovery fails.
-    LoggerService.info(LOG_DOMAINS.storageScope, LOG_EVENTS.standardScanFoldersLoadFailed, { error });
-  }
-}
 
 async function updateValue(value: unknown) {
   if (typeof value !== 'string' || !value) return;
@@ -160,7 +145,6 @@ function closeTooltips() {
 // the portal from retaining a tooltip without a valid positioning anchor.
 onMounted(() => {
   window.addEventListener('blur', closeTooltips);
-  void loadStandardFolders();
 });
 onBeforeUnmount(() => window.removeEventListener('blur', closeTooltips));
 watch(() => props.modelValue, closeTooltips);

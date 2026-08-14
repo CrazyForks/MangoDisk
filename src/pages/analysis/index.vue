@@ -223,6 +223,7 @@ function navigateHistory(index: number) {
           :model-value="selectedScopePath || activeDisk?.mountPoint || ''"
           :disks="disks"
           :recent-folders="storageScopeStore.recentFolders"
+          :standard-folders="storageScopeStore.standardFolders"
           :disabled="busy || deleting"
           @error="emit('error', $event)"
           @remove-folder="removeScopeFolder"

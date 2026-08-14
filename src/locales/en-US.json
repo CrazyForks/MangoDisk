@@ -205,7 +205,7 @@
     "fileName": "File name",
     "location": "Path",
     "size": "Size",
-    "minimumSize": "Minimum file size",
+    "minimumSize": "Minimum size",
     "modified": "Modified",
     "openLocation": "Open File Location",
     "deletePermanently": "Delete Permanently",

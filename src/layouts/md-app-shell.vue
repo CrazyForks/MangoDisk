@@ -687,7 +687,11 @@ function requestCancelDeepCleanup() {
       'sidebar-expanded': sidebarExpanded,
     }"
   >
-    <MdWindowTitlebar v-if="customTitlebarPlatform" :platform="customTitlebarPlatform" />
+    <MdWindowTitlebar
+      v-if="customTitlebarPlatform"
+      :platform="customTitlebarPlatform"
+      :sidebar-expanded="sidebarExpanded"
+    />
     <MdSidebar
       :current-page="store.currentPage"
       :busy-pages="busyPages"
@@ -988,6 +992,7 @@ function requestCancelDeepCleanup() {
 @reference "@assets/main.css";
 .app-shell {
   --titlebar-height: 0px;
+  --window-controls-width: 144px;
   --sidebar-width: var(--layout-sidebar-collapsed-width);
   display: flex;
   width: 100%;
@@ -1002,19 +1007,10 @@ function requestCancelDeepCleanup() {
   --titlebar-height: 34px;
 }
 .windows-custom-titlebar {
-  --titlebar-height: 48px;
+  --titlebar-height: var(--layout-page-header-height);
 }
 .custom-titlebar :deep(.sidebar) {
   padding-top: var(--titlebar-height);
-}
-/*
- * macOS overlays the native traffic lights on the application canvas, so only
- * the sidebar reserves their safe area. Windows still needs the full offset
- * because its window controls live in the custom titlebar.
- */
-.windows-custom-titlebar .content-shell {
-  height: calc(100vh - var(--titlebar-height));
-  margin-top: var(--titlebar-height);
 }
 .content-shell {
   flex: 1;

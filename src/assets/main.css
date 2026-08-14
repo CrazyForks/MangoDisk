@@ -116,7 +116,7 @@
   --layout-page-padding-inline: 20px;
   --layout-page-padding-top: 14px;
   --layout-scrollbar-width: 10px;
-  --layout-page-header-height: 44px;
+  --layout-page-header-height: 58px;
   --layout-workspace-toolbar-height: 36px;
   --layout-workspace-control-height: 32px;
   --layout-result-header-height: 36px;
@@ -160,7 +160,6 @@ body,
 
   body {
     @apply bg-background text-foreground;
-    font-family: system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     cursor: default;
   }

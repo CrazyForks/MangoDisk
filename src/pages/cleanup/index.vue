@@ -500,7 +500,7 @@ watch(
   box-shadow: 0 5px 18px color-mix(in srgb, var(--foreground) 7%, transparent);
 }
 
-@container (max-width: 840px) {
+@container (max-width: 800px) {
   .scan-action {
     width: 100%;
     justify-content: space-between;

@@ -443,7 +443,7 @@ function confirmDelete() {
   font-size: var(--font-content-meta);
   text-align: center;
 }
-@container (max-width: 840px) {
+@container (max-width: 800px) {
   .header-actions {
     width: 100%;
     justify-content: flex-start;

@@ -129,7 +129,7 @@
     "requiresClose": "Apps to close",
     "clean": "Clean",
     "scanFirst": "Find cleanable items",
-    "emptyDescription": "Scan system caches, app caches, and temporary files that are safe to clean",
+    "emptyDescription": "Scan system and app caches, logs, and temporary files to find space you can reclaim",
     "planDialogTitle": "Confirm cleanup",
     "adjustSelection": "Back to selection",
     "execute": "Start cleanup",

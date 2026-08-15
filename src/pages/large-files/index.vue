@@ -342,7 +342,7 @@ function confirmDelete() {
           :title="t('largeFiles.emptyTitle')"
           :description="t('largeFiles.emptyDescription', { size: minimumLabel })"
         >
-          <Button type="button" :disabled="busy || deleting || !selectedScopePath" @click="start(false)">
+          <Button size="lg" type="button" :disabled="busy || deleting || !selectedScopePath" @click="start(false)">
             <MdIcon :name="ICON_NAMES.largeFiles" :size="17" />
             {{ t('largeFiles.start') }}
           </Button>

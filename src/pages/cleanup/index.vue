@@ -417,7 +417,7 @@ watch(
 }
 
 .system-disk-usage {
-  @apply border-border bg-card/70 text-muted-foreground;
+  @apply border-border/70 bg-card/35 text-muted-foreground;
   display: grid;
   width: 270px;
   height: 40px;
@@ -452,7 +452,7 @@ watch(
 }
 
 .system-disk-track {
-  @apply bg-primary/10;
+  @apply bg-border/45;
   position: relative;
   display: block;
   height: 3px;
@@ -461,7 +461,7 @@ watch(
 }
 
 .system-disk-progress {
-  @apply bg-primary/55;
+  @apply bg-muted-foreground/45;
   position: absolute;
   top: 0;
   bottom: 0;

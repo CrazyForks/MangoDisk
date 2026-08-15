@@ -129,7 +129,7 @@
     "requiresClose": "需要關閉應用程式",
     "clean": "清理",
     "scanFirst": "尋找可清理內容",
-    "emptyDescription": "掃描系統快取、應用程式快取和可安全清理的暫存檔案",
+    "emptyDescription": "掃描系統與應用程式快取、記錄檔及暫存檔案，尋找可釋放的磁碟空間",
     "planDialogTitle": "確認清理",
     "adjustSelection": "回到選取項目",
     "execute": "開始清理",

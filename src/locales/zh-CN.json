@@ -129,7 +129,7 @@
     "requiresClose": "需要关闭应用",
     "clean": "清理",
     "scanFirst": "查找可清理内容",
-    "emptyDescription": "扫描系统缓存、应用缓存和可安全清理的临时文件",
+    "emptyDescription": "扫描系统与应用缓存、日志及临时文件，查找可释放的磁盘空间",
     "planDialogTitle": "确认清理",
     "adjustSelection": "返回调整",
     "execute": "开始清理",

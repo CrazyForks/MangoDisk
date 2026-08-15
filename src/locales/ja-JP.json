@@ -129,7 +129,7 @@
     "requiresClose": "終了するアプリ",
     "clean": "クリーンアップ",
     "scanFirst": "削除できるデータを検索",
-    "emptyDescription": "安全に削除できるシステムキャッシュ、アプリキャッシュ、一時ファイルをスキャンします",
+    "emptyDescription": "システムやアプリのキャッシュ、ログ、一時ファイルをスキャンし、解放できる容量を確認します",
     "planDialogTitle": "クリーンアップを確認",
     "adjustSelection": "選択に戻る",
     "execute": "クリーンアップ開始",

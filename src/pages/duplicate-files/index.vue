@@ -359,7 +359,7 @@ function confirmDelete() {
           :title="t('duplicateFiles.emptyTitle')"
           :description="t('duplicateFiles.emptyDescription')"
         >
-          <Button v-if="canStart" type="button" :disabled="busy || deleting" @click="start">
+          <Button v-if="canStart" size="lg" type="button" :disabled="busy || deleting" @click="start">
             <MdIcon :name="ICON_NAMES.duplicateFiles" :size="17" />
             {{ t('duplicateFiles.start') }}
           </Button>

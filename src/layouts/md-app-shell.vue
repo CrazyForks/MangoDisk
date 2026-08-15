@@ -498,12 +498,7 @@ async function checkForUpdates() {
 }
 
 function saveSettings(settings: AppSettings) {
-  const duplicateFileMinimumChanged = settings.duplicateFileMinimumBytes !== store.settings.duplicateFileMinimumBytes;
   store.saveSettings(settings);
-  // Large-file results remain useful when the threshold changes. The page
-  // safely filters a higher threshold in memory and asks for an explicit
-  // rescan when a lower threshold needs entries not present in the snapshot.
-  if (duplicateFileMinimumChanged) duplicateFilesStore.clearResult();
 }
 
 function ensureOperationAvailable(): boolean {
@@ -557,6 +552,16 @@ async function deleteLargeFilesPermanently(entries: LargeFileEntry[]) {
 function findDuplicateFiles(path: string) {
   if (!ensureOperationAvailable()) return;
   return duplicateFilesStore.find([path], store.settings.duplicateFileMinimumBytes);
+}
+
+function updateDuplicateFileMinimum(minimumBytes: number) {
+  if (minimumBytes === store.settings.duplicateFileMinimumBytes) return;
+  saveSettings({ ...store.settings, duplicateFileMinimumBytes: minimumBytes });
+}
+
+function updateDuplicateKeeperRule(keeperRule: AppSettings['duplicateKeeperRule']) {
+  if (keeperRule === store.settings.duplicateKeeperRule) return;
+  saveSettings({ ...store.settings, duplicateKeeperRule: keeperRule });
 }
 
 async function deleteDuplicateFilesPermanently(entries: DuplicateFileEntry[]) {
@@ -788,8 +793,11 @@ function requestCancelDeepCleanup() {
           :busy="duplicateFilesStore.loading"
           :cancelling="duplicateFilesStore.cancelling"
           :deleting="duplicateFilesStore.deleting"
+          :minimum-bytes="store.settings.duplicateFileMinimumBytes"
           :keeper-rule="store.settings.duplicateKeeperRule"
           @find="findDuplicateFiles"
+          @update-minimum="updateDuplicateFileMinimum"
+          @update-keeper-rule="updateDuplicateKeeperRule"
           @cancel="duplicateFilesStore.cancel()"
           @error="store.reportError"
           @open-entry="openDuplicateFileEntry"

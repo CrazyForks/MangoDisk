@@ -91,7 +91,7 @@ const dynamicKeyGroups = {
   ],
   'applicationUninstall.executionModes': ['silent', 'interactive', 'externalClient'],
   'applicationUninstall.componentRisks': ['required', 'rebuildable', 'userData'],
-  'settings.duplicateKeeperRuleLabels': ['shortestPath', 'shortestName', 'oldestModified', 'newestModified'],
+  'duplicateFiles.keeperRuleLabels': ['shortestPath', 'shortestName', 'oldestModified', 'newestModified'],
   'settings.permissionStatus': ['notChecked', 'available', 'limited'],
   'history.categories': ['deepCleanup', 'largeFileCleanup', 'duplicateFileCleanup', 'applicationUninstall'],
   'history.applicationLeftoverReasons': [

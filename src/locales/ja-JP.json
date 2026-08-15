@@ -1055,6 +1055,21 @@
         "description": "Chrome が保存した一時的なウェブサイトおよび起動ファイル。",
         "impact": "パスワード、クッキー、履歴、拡張機能、ブックマークは保持されます。ブラウザを先に閉じてください。"
       },
+      "browser.uc-cache": {
+        "name": "UC Browser キャッシュ",
+        "description": "UC Browser が保存する一時的な Web、コード、GPU、シェーダー、およびダウンロード済みコンポーネントパッケージのデータ。",
+        "impact": "パスワード、Cookie、履歴、拡張機能、ブックマーク、ダウンロード、セッションは保持されます。先に UC Browser を終了してください。キャッシュは必要に応じて再構築または再ダウンロードされます。"
+      },
+      "browser.360-speed-cache": {
+        "name": "360 Extreme Browser キャッシュ",
+        "description": "360 Extreme Browser が保存する一時的な Web、コード、GPU、シェーダー、およびダウンロード済みコンポーネントパッケージのデータ。",
+        "impact": "パスワード、Cookie、履歴、拡張機能、ブックマーク、ダウンロード、セッションは保持されます。先に 360 Extreme Browser を終了してください。キャッシュは必要に応じて再構築または再ダウンロードされます。"
+      },
+      "browser.sogou-cache": {
+        "name": "Sogou Explorer キャッシュ",
+        "description": "Sogou Explorer が保存する一時的な Web、コード、GPU、Dawn、およびシェーダーデータ。",
+        "impact": "パスワード、Cookie、履歴、拡張機能、ブックマーク、ダウンロード、セッションは保持されます。先に Sogou Explorer を終了してください。キャッシュは必要に応じて再構築されます。"
+      },
       "browser.edge-cache": {
         "name": "Edge キャッシュ",
         "description": "Edge が保存した一時的なウェブサイトおよび起動ファイル。",

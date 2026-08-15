@@ -1055,6 +1055,21 @@
         "description": "Chrome 保存的临时网页和启动文件",
         "impact": "不会清理 Cookie、密码、历史、扩展或书签；关闭浏览器后清理，下次使用时会按需重建。"
       },
+      "browser.uc-cache": {
+        "name": "UC 浏览器缓存",
+        "description": "UC 浏览器保存的临时网页、代码、GPU、着色器和组件下载缓存",
+        "impact": "不会清理 Cookie、密码、历史、扩展、书签、下载或会话；关闭 UC 浏览器后清理，缓存之后会按需重建或重新下载。"
+      },
+      "browser.360-speed-cache": {
+        "name": "360 极速浏览器缓存",
+        "description": "360 极速浏览器保存的临时网页、代码、GPU、着色器和组件下载缓存",
+        "impact": "不会清理 Cookie、密码、历史、扩展、书签、下载或会话；关闭 360 极速浏览器后清理，缓存之后会按需重建或重新下载。"
+      },
+      "browser.sogou-cache": {
+        "name": "搜狗高速浏览器缓存",
+        "description": "搜狗高速浏览器保存的临时网页、代码、GPU、Dawn 和着色器缓存",
+        "impact": "不会清理 Cookie、密码、历史、扩展、书签、下载或会话；关闭搜狗高速浏览器后清理，缓存之后会按需重建。"
+      },
       "browser.edge-cache": {
         "name": "Edge 缓存",
         "description": "Edge 保存的临时网页和启动文件",

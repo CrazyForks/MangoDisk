@@ -1055,6 +1055,21 @@
         "description": "Temporary website and startup files saved by Chrome.",
         "impact": "Passwords, cookies, history, extensions, and bookmarks are kept. Close the browser first."
       },
+      "browser.uc-cache": {
+        "name": "UC Browser cache",
+        "description": "Temporary web, code, GPU, shader, and downloaded component-package data saved by UC Browser.",
+        "impact": "Passwords, cookies, history, extensions, bookmarks, downloads, and sessions are kept. Close UC Browser first; cache data is rebuilt or downloaded again as needed."
+      },
+      "browser.360-speed-cache": {
+        "name": "360 Extreme Browser cache",
+        "description": "Temporary web, code, GPU, shader, and downloaded component-package data saved by 360 Extreme Browser.",
+        "impact": "Passwords, cookies, history, extensions, bookmarks, downloads, and sessions are kept. Close 360 Extreme Browser first; cache data is rebuilt or downloaded again as needed."
+      },
+      "browser.sogou-cache": {
+        "name": "Sogou Explorer cache",
+        "description": "Temporary web, code, GPU, Dawn, and shader data saved by Sogou Explorer.",
+        "impact": "Passwords, cookies, history, extensions, bookmarks, downloads, and sessions are kept. Close Sogou Explorer first; cache data is rebuilt as needed."
+      },
       "browser.edge-cache": {
         "name": "Edge cache",
         "description": "Temporary website and startup files saved by Edge.",

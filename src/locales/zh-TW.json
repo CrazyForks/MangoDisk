@@ -1055,6 +1055,21 @@
         "description": "Chrome 儲存的暫存網頁和啟動檔案",
         "impact": "不會清理 Cookie、密碼、瀏覽紀錄、擴充功能或書籤；請先關閉瀏覽器再清理，下次使用時會視需要重建。"
       },
+      "browser.uc-cache": {
+        "name": "UC 瀏覽器快取",
+        "description": "UC 瀏覽器儲存的暫存網頁、程式碼、GPU、著色器和元件下載快取",
+        "impact": "不會清理 Cookie、密碼、瀏覽紀錄、擴充功能、書籤、下載或工作階段；請先關閉 UC 瀏覽器再清理，快取之後會視需要重建或重新下載。"
+      },
+      "browser.360-speed-cache": {
+        "name": "360 極速瀏覽器快取",
+        "description": "360 極速瀏覽器儲存的暫存網頁、程式碼、GPU、著色器和元件下載快取",
+        "impact": "不會清理 Cookie、密碼、瀏覽紀錄、擴充功能、書籤、下載或工作階段；請先關閉 360 極速瀏覽器再清理，快取之後會視需要重建或重新下載。"
+      },
+      "browser.sogou-cache": {
+        "name": "搜狗高速瀏覽器快取",
+        "description": "搜狗高速瀏覽器儲存的暫存網頁、程式碼、GPU、Dawn 和著色器快取",
+        "impact": "不會清理 Cookie、密碼、瀏覽紀錄、擴充功能、書籤、下載或工作階段；請先關閉搜狗高速瀏覽器再清理，快取之後會視需要重建。"
+      },
       "browser.edge-cache": {
         "name": "Edge 快取",
         "description": "Edge 儲存的暫存網頁和啟動檔案",

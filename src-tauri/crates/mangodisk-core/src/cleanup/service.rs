@@ -4894,6 +4894,333 @@ mod macos_cleanup_tests {
         );
     }
 
+    /// Confirms that the signed UC browser and its Chromium helper processes
+    /// block cleanup before any real profile or component cache is traversed.
+    #[test]
+    #[ignore = "requires the real UC browser to be running"]
+    fn real_uc_browser_cache_blocks_while_running() {
+        assert_eq!(
+            std::env::var("MANGODISK_TEST_REAL_MACOS_UC_CACHE_BLOCK").as_deref(),
+            Ok("1"),
+            "set MANGODISK_TEST_REAL_MACOS_UC_CACHE_BLOCK=1 for the real process-gate diagnostic"
+        );
+        let process_names =
+            ["UC", "UC Helper", "UC Helper (GPU)", "UC Helper (Renderer)"].map(str::to_string);
+        let running = ProcessSnapshot::capture()
+            .expect("the macOS process inventory must be available")
+            .matching_processes(&process_names);
+        assert!(!running.is_empty(), "UC browser must be running");
+
+        let result = CleanupService::execute(CleanupRequest {
+            rule_ids: vec!["browser.uc-cache".to_string()],
+            source_selections: Vec::new(),
+            dry_run: false,
+            project_roots: Vec::new(),
+        })
+        .expect("the blocked UC cleanup must return a structured result");
+        assert_eq!(result.actions.len(), 1);
+        let action = &result.actions[0];
+        assert_eq!(action.status, crate::cleanup::CleanupActionStatus::Blocked);
+        assert_eq!(
+            action.reason_code,
+            Some(crate::cleanup::CleanupActionReason::RunningProcesses)
+        );
+        assert_eq!(action.released_bytes, 0);
+        assert_eq!(action.affected_item_count, 0);
+        assert!(!action.running_processes.is_empty());
+        println!(
+            "real_macos_uc_cache_block running_process_count={}",
+            running.len()
+        );
+    }
+
+    /// Clears only UC's dedicated HTTP, code, GPU, shader, and downloaded
+    /// component-package cache roots. Full digests protect representative
+    /// credentials, cookies, history, bookmarks, extensions, sessions, local
+    /// storage, Service Worker state, downloads, and browser preferences.
+    #[test]
+    #[ignore = "permanently clears real UC browser caches"]
+    fn real_uc_browser_cache_preserves_profile_and_download_state() {
+        assert_eq!(
+            std::env::var("MANGODISK_TEST_REAL_MACOS_UC_CACHE").as_deref(),
+            Ok("1"),
+            "set MANGODISK_TEST_REAL_MACOS_UC_CACHE=1 to authorize this real cache diagnostic"
+        );
+        let process_names =
+            ["UC", "UC Helper", "UC Helper (GPU)", "UC Helper (Renderer)"].map(str::to_string);
+        let running = ProcessSnapshot::capture()
+            .expect("the macOS process inventory must be available")
+            .matching_processes(&process_names);
+        assert!(running.is_empty(), "UC browser must be completely stopped");
+
+        let home = std::env::var_os("HOME")
+            .map(PathBuf::from)
+            .expect("HOME must be available");
+        let uc_root = home.join("Library/Application Support/UC");
+        let profile = uc_root.join("Default");
+        assert!(profile.is_dir(), "UC must complete a first launch");
+
+        let preserved_candidates = [
+            uc_root.join("Local State"),
+            uc_root.join("NativeMessagingHosts"),
+            uc_root.join("user_info"),
+            profile.join("Bookmarks"),
+            profile.join("Cookies"),
+            profile.join("History"),
+            profile.join("Login Data"),
+            profile.join("Network"),
+            profile.join("Extensions"),
+            profile.join("Local Storage"),
+            profile.join("Preferences"),
+            profile.join("Service Worker"),
+            profile.join("Session Storage"),
+            profile.join("Sessions"),
+            profile.join("WebStorage"),
+        ];
+        let preserved_paths = preserved_candidates
+            .into_iter()
+            .filter(|path| path.exists())
+            .collect::<Vec<_>>();
+        assert!(
+            preserved_paths.len() >= 12,
+            "the initialized UC profile must expose representative durable state"
+        );
+        let preserved_before = preserved_paths
+            .iter()
+            .map(|path| digest_macos_tree_without_following_links(path))
+            .collect::<Vec<_>>();
+
+        let target_candidates = [
+            home.join("Library/Caches/UC"),
+            home.join("Library/Caches/org.uc.UC"),
+            uc_root.join("ShaderCache"),
+            uc_root.join("GrShaderCache"),
+            uc_root.join("GraphiteDawnCache"),
+            uc_root.join("component_crx_cache"),
+            profile.join("Cache"),
+            profile.join("Code Cache"),
+            profile.join("GPUCache"),
+            profile.join("DawnGraphiteCache"),
+            profile.join("DawnWebGPUCache"),
+        ];
+        let target_roots = target_candidates
+            .into_iter()
+            .filter(|path| path.is_dir())
+            .collect::<Vec<_>>();
+        assert!(
+            target_roots.len() >= 9,
+            "the initialized UC profile must expose verified cache roots"
+        );
+        let markers = target_roots
+            .iter()
+            .map(|root| root.join("mangodisk-rule-validation.bin"))
+            .collect::<Vec<_>>();
+        for marker in &markers {
+            fs::write(marker, b"payload").expect("the UC cache marker must be created");
+        }
+        let request = |dry_run| CleanupRequest {
+            rule_ids: vec!["browser.uc-cache".to_string()],
+            source_selections: Vec::new(),
+            dry_run,
+            project_roots: Vec::new(),
+        };
+
+        let preview =
+            CleanupService::execute(request(true)).expect("the real UC cache dry run must succeed");
+        assert_eq!(preview.failed_item_count, 0, "{:?}", preview.actions);
+        assert!(preview.expected_bytes >= markers.len() as u64 * 7);
+        assert!(markers.iter().all(|marker| marker.exists()));
+
+        let result = CleanupService::execute(request(false))
+            .expect("the real UC cache cleanup must succeed");
+        assert_eq!(result.failed_item_count, 0, "{:?}", result.actions);
+        assert!(result.released_bytes >= markers.len() as u64 * 7);
+        assert!(markers.iter().all(|marker| !marker.exists()));
+        let preserved_after = preserved_paths
+            .iter()
+            .map(|path| digest_macos_tree_without_following_links(path))
+            .collect::<Vec<_>>();
+        assert_eq!(preserved_after, preserved_before);
+        println!(
+            "real_macos_uc_cache_cleanup expected_bytes={} released_bytes={} affected_item_count={} target_root_count={} preserved_root_count={}",
+            preview.expected_bytes,
+            result.released_bytes,
+            result.affected_item_count,
+            target_roots.len(),
+            preserved_paths.len()
+        );
+    }
+
+    /// Confirms that 360 Extreme Browser and its Chromium helper processes
+    /// block cleanup before any real profile or component cache is traversed.
+    #[test]
+    #[ignore = "requires the real 360 Extreme Browser to be running"]
+    fn real_360_speed_browser_cache_blocks_while_running() {
+        assert_eq!(
+            std::env::var("MANGODISK_TEST_REAL_MACOS_360_CACHE_BLOCK").as_deref(),
+            Ok("1"),
+            "set MANGODISK_TEST_REAL_MACOS_360_CACHE_BLOCK=1 for the real process-gate diagnostic"
+        );
+        let process_names = [
+            "360Chrome",
+            "360Chrome Helper",
+            "360Chrome Helper (GPU)",
+            "360Chrome Helper (Renderer)",
+        ]
+        .map(str::to_string);
+        let running = ProcessSnapshot::capture()
+            .expect("the macOS process inventory must be available")
+            .matching_processes(&process_names);
+        assert!(!running.is_empty(), "360 Extreme Browser must be running");
+
+        let result = CleanupService::execute(CleanupRequest {
+            rule_ids: vec!["browser.360-speed-cache".to_string()],
+            source_selections: Vec::new(),
+            dry_run: false,
+            project_roots: Vec::new(),
+        })
+        .expect("the blocked 360 cleanup must return a structured result");
+        assert_eq!(result.actions.len(), 1);
+        let action = &result.actions[0];
+        assert_eq!(action.status, crate::cleanup::CleanupActionStatus::Blocked);
+        assert_eq!(
+            action.reason_code,
+            Some(crate::cleanup::CleanupActionReason::RunningProcesses)
+        );
+        assert_eq!(action.released_bytes, 0);
+        assert_eq!(action.affected_item_count, 0);
+        assert!(!action.running_processes.is_empty());
+        println!(
+            "real_macos_360_cache_block running_process_count={}",
+            running.len()
+        );
+    }
+
+    /// Clears only 360 Extreme Browser's dedicated HTTP, code, GPU, shader,
+    /// and downloaded component-package caches. Full digests protect profile
+    /// credentials, cookies, history, extensions, sessions, local storage, and
+    /// preferences from accidental overlap with the cache boundary.
+    #[test]
+    #[ignore = "permanently clears real 360 Extreme Browser caches"]
+    fn real_360_speed_browser_cache_preserves_profile_state() {
+        assert_eq!(
+            std::env::var("MANGODISK_TEST_REAL_MACOS_360_CACHE").as_deref(),
+            Ok("1"),
+            "set MANGODISK_TEST_REAL_MACOS_360_CACHE=1 to authorize this real cache diagnostic"
+        );
+        let process_names = [
+            "360Chrome",
+            "360Chrome Helper",
+            "360Chrome Helper (GPU)",
+            "360Chrome Helper (Renderer)",
+        ]
+        .map(str::to_string);
+        let running = ProcessSnapshot::capture()
+            .expect("the macOS process inventory must be available")
+            .matching_processes(&process_names);
+        assert!(
+            running.is_empty(),
+            "360 Extreme Browser must be completely stopped"
+        );
+
+        let home = std::env::var_os("HOME")
+            .map(PathBuf::from)
+            .expect("HOME must be available");
+        let browser_root = home.join("Library/Application Support/360Chrome");
+        let profile = browser_root.join("Default");
+        assert!(
+            profile.is_dir(),
+            "360 Extreme Browser must complete a first launch"
+        );
+
+        let preserved_candidates = [
+            browser_root.join("Local State"),
+            browser_root.join("NativeMessagingHosts"),
+            profile.join("Bookmarks"),
+            profile.join("Cookies"),
+            profile.join("History"),
+            profile.join("Login Data"),
+            profile.join("Network"),
+            profile.join("Extensions"),
+            profile.join("Local Storage"),
+            profile.join("Preferences"),
+            profile.join("Service Worker"),
+            profile.join("Session Storage"),
+            profile.join("Sessions"),
+            profile.join("WebStorage"),
+        ];
+        let preserved_paths = preserved_candidates
+            .into_iter()
+            .filter(|path| path.exists())
+            .collect::<Vec<_>>();
+        assert!(
+            preserved_paths.len() >= 9,
+            "the initialized 360 profile must expose representative durable state"
+        );
+        let preserved_before = preserved_paths
+            .iter()
+            .map(|path| digest_macos_tree_without_following_links(path))
+            .collect::<Vec<_>>();
+
+        let target_candidates = [
+            home.join("Library/Caches/360Chrome"),
+            browser_root.join("ShaderCache64"),
+            browser_root.join("GrShaderCache64"),
+            browser_root.join("GraphiteDawnCache"),
+            browser_root.join("component_crx_cache"),
+            profile.join("GPUCache64"),
+            profile.join("DawnGraphiteCache"),
+            profile.join("DawnWebGPUCache"),
+        ];
+        let target_roots = target_candidates
+            .into_iter()
+            .filter(|path| path.is_dir())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            target_roots.len(),
+            8,
+            "the initialized 360 profile must expose every verified cache root"
+        );
+        let markers = target_roots
+            .iter()
+            .map(|root| root.join("mangodisk-rule-validation.bin"))
+            .collect::<Vec<_>>();
+        for marker in &markers {
+            fs::write(marker, b"payload").expect("the 360 cache marker must be created");
+        }
+        let request = |dry_run| CleanupRequest {
+            rule_ids: vec!["browser.360-speed-cache".to_string()],
+            source_selections: Vec::new(),
+            dry_run,
+            project_roots: Vec::new(),
+        };
+
+        let preview = CleanupService::execute(request(true))
+            .expect("the real 360 cache dry run must succeed");
+        assert_eq!(preview.failed_item_count, 0, "{:?}", preview.actions);
+        assert!(preview.expected_bytes >= markers.len() as u64 * 7);
+        assert!(markers.iter().all(|marker| marker.exists()));
+
+        let result = CleanupService::execute(request(false))
+            .expect("the real 360 cache cleanup must succeed");
+        assert_eq!(result.failed_item_count, 0, "{:?}", result.actions);
+        assert!(result.released_bytes >= markers.len() as u64 * 7);
+        assert!(markers.iter().all(|marker| !marker.exists()));
+        let preserved_after = preserved_paths
+            .iter()
+            .map(|path| digest_macos_tree_without_following_links(path))
+            .collect::<Vec<_>>();
+        assert_eq!(preserved_after, preserved_before);
+        println!(
+            "real_macos_360_cache_cleanup expected_bytes={} released_bytes={} affected_item_count={} target_root_count={} preserved_root_count={}",
+            preview.expected_bytes,
+            result.released_bytes,
+            result.affected_item_count,
+            target_roots.len(),
+            preserved_paths.len()
+        );
+    }
+
     fn direct_directory_children(root: &Path) -> Vec<PathBuf> {
         if !root.is_dir() {
             return Vec::new();
@@ -7449,10 +7776,11 @@ mod windows_cleanup_tests {
         );
     }
 
-    /// Clears only fixed renderer-cache suffixes below every real Weixin
-    /// profile. Per-profile browser state and the complete account user root are
-    /// hashed around production cleanup, proving that history, cookies, storage,
-    /// service workers, messages, and downloaded files stay outside the rule.
+    /// Clears fixed renderer-cache and mini-program compiled-code leaves below
+    /// real Weixin profiles. Per-profile browser state and every user-root file
+    /// except the exact `codecache` segment are hashed around production cleanup,
+    /// proving that applet data, history, cookies, storage, service workers,
+    /// messages, and downloaded files stay outside the rule.
     #[test]
     #[ignore = "clears real Weixin renderer caches in an isolated Windows VM"]
     fn real_wechat_rendering_cache_preserves_account_and_profile_state() {
@@ -7468,6 +7796,8 @@ mod windows_cleanup_tests {
         let current_root = tencent_root.join("xwechat/radium");
         let profiles_root = current_root.join("web/profiles");
         let users_root = current_root.join("users");
+        let legacy_radium_root = tencent_root.join("WeChat/radium");
+        let legacy_wmpf_cache = legacy_radium_root.join("WmpfCache");
         assert!(
             profiles_root.is_dir(),
             "Weixin must have completed a first launch"
@@ -7494,7 +7824,20 @@ mod windows_cleanup_tests {
             "the initialized client must expose the observed renderer profiles"
         );
 
-        let mut preserved_paths = vec![users_root];
+        let preserved_user_state_before =
+            digest_tree_excluding_segments(&users_root, &["codecache"]);
+        let legacy_applet = legacy_radium_root.join("Applet");
+        let preserved_legacy_applet_before =
+            legacy_applet.is_dir().then(|| digest_tree(&legacy_applet));
+        let mut preserved_paths = [
+            tencent_root.join("xwechat/login"),
+            tencent_root.join("xwechat/config"),
+            tencent_root.join("xwechat/All Users/config"),
+            tencent_root.join("WeChat/All Users/config"),
+        ]
+        .into_iter()
+        .filter(|path| path.exists())
+        .collect::<Vec<_>>();
         for profile in &profile_roots {
             for relative in [
                 "History",
@@ -7533,8 +7876,41 @@ mod windows_cleanup_tests {
                 markers.push(marker);
             }
         }
+        let renderer_marker_count = markers.len();
+        let user_roots = fs::read_dir(&users_root)
+            .expect("the Weixin account root must remain readable")
+            .map(|entry| {
+                entry
+                    .expect("the Weixin account entry must be readable")
+                    .path()
+            })
+            .filter(|path| path.is_dir())
+            .collect::<Vec<_>>();
+        let applet_code_caches = user_roots
+            .iter()
+            .map(|user| user.join("applet/codecache"))
+            .filter(|path| path.is_dir())
+            .collect::<Vec<_>>();
+        assert!(
+            !applet_code_caches.is_empty(),
+            "the initialized account must expose a mini-program code cache"
+        );
+        for cache in &applet_code_caches {
+            let marker = cache.join("mangodisk-rule-validation.bin");
+            fs::write(&marker, b"payload")
+                .expect("the Weixin applet code-cache marker must be created");
+            markers.push(marker);
+        }
+        assert!(
+            legacy_wmpf_cache.is_dir(),
+            "the migrated profile must expose the legacy WMPF cache"
+        );
+        let legacy_marker = legacy_wmpf_cache.join("mangodisk-rule-validation.bin");
+        fs::write(&legacy_marker, b"payload")
+            .expect("the legacy WMPF cache marker must be created");
+        markers.push(legacy_marker);
         assert_eq!(
-            markers.len(),
+            renderer_marker_count,
             profile_roots.len(),
             "every observed renderer profile must expose a Cache root"
         );
@@ -7563,12 +7939,21 @@ mod windows_cleanup_tests {
             .map(|path| digest_tree(path))
             .collect::<Vec<_>>();
         assert_eq!(preserved_after, preserved_before);
+        assert_eq!(
+            digest_tree_excluding_segments(&users_root, &["codecache"]),
+            preserved_user_state_before
+        );
+        assert_eq!(
+            legacy_applet.is_dir().then(|| digest_tree(&legacy_applet)),
+            preserved_legacy_applet_before
+        );
         println!(
-            "real_windows_wechat_rendering_cleanup expected_bytes={} released_bytes={} affected_item_count={} profile_count={} preserved_root_count={}",
+            "real_windows_wechat_rendering_cleanup expected_bytes={} released_bytes={} affected_item_count={} profile_count={} applet_code_cache_count={} preserved_root_count={}",
             preview.expected_bytes,
             result.released_bytes,
             result.affected_item_count,
             profile_roots.len(),
+            applet_code_caches.len(),
             preserved_paths.len()
         );
     }
@@ -8635,6 +9020,412 @@ mod windows_cleanup_tests {
             partition_count,
             target_roots.len(),
             preserved_paths.len()
+        );
+    }
+
+    /// Confirms that UC's browser and proxy processes block cleanup before
+    /// the real Chromium profile or downloaded component cache is traversed.
+    #[test]
+    #[ignore = "requires the real UC browser to be running"]
+    fn real_windows_uc_browser_cache_blocks_while_running() {
+        assert_eq!(
+            std::env::var("MANGODISK_TEST_REAL_WINDOWS_UC_CACHE_BLOCK").as_deref(),
+            Ok("1"),
+            "set MANGODISK_TEST_REAL_WINDOWS_UC_CACHE_BLOCK=1 for the real process-gate diagnostic"
+        );
+        let process_names = ["uc.exe", "uc_proxy.exe"].map(str::to_string);
+        let running = ProcessSnapshot::capture()
+            .expect("the Windows process inventory must be available")
+            .matching_processes(&process_names);
+        assert!(!running.is_empty(), "UC browser must be running");
+
+        let result = CleanupService::execute(CleanupRequest {
+            rule_ids: vec!["browser.uc-cache".to_string()],
+            source_selections: Vec::new(),
+            dry_run: false,
+            project_roots: Vec::new(),
+        })
+        .expect("the blocked UC cleanup must return a structured result");
+        assert_eq!(result.actions.len(), 1);
+        let action = &result.actions[0];
+        assert_eq!(action.status, crate::cleanup::CleanupActionStatus::Blocked);
+        assert_eq!(
+            action.reason_code,
+            Some(crate::cleanup::CleanupActionReason::RunningProcesses)
+        );
+        assert_eq!(action.released_bytes, 0);
+        assert_eq!(action.affected_item_count, 0);
+        assert!(!action.running_processes.is_empty());
+        println!(
+            "real_windows_uc_cache_block running_process_count={}",
+            running.len()
+        );
+    }
+
+    /// Clears UC's fixed response, code, GPU, shader, and downloaded component
+    /// caches. Full digests protect representative credentials, cookies,
+    /// history, bookmarks, extensions, sessions, local storage, Service Worker
+    /// state, and browser settings around the production cleanup.
+    #[test]
+    #[ignore = "clears real UC browser caches in an isolated Windows VM"]
+    fn real_windows_uc_browser_cache_preserves_profile_state() {
+        assert_eq!(
+            std::env::var("MANGODISK_TEST_REAL_WINDOWS_UC_CACHE").as_deref(),
+            Ok("1"),
+            "set MANGODISK_TEST_REAL_WINDOWS_UC_CACHE=1 only in an isolated Windows VM"
+        );
+        let process_names = ["uc.exe", "uc_proxy.exe"].map(str::to_string);
+        let running = ProcessSnapshot::capture()
+            .expect("the Windows process inventory must be available")
+            .matching_processes(&process_names);
+        assert!(running.is_empty(), "UC browser must be completely stopped");
+
+        let local_app_data = std::env::var_os("LOCALAPPDATA")
+            .map(PathBuf::from)
+            .expect("LOCALAPPDATA must be available");
+        let user_data = local_app_data.join("UC/User Data");
+        let profile = user_data.join("Default");
+        assert!(profile.is_dir(), "UC must complete a first launch");
+
+        let preserved_candidates = [
+            user_data.join("Local State"),
+            user_data.join("NativeMessagingHosts"),
+            user_data.join("user_info"),
+            profile.join("Bookmarks"),
+            profile.join("History"),
+            profile.join("Login Data"),
+            profile.join("Network"),
+            profile.join("Extensions"),
+            profile.join("Local Storage"),
+            profile.join("Preferences"),
+            profile.join("Service Worker"),
+            profile.join("Session Storage"),
+            profile.join("Sessions"),
+            profile.join("WebStorage"),
+        ];
+        let preserved_paths = preserved_candidates
+            .into_iter()
+            .filter(|path| path.exists())
+            .collect::<Vec<_>>();
+        assert!(
+            preserved_paths.len() >= 11,
+            "the initialized UC profile must expose representative durable state"
+        );
+        let preserved_before = preserved_paths
+            .iter()
+            .map(|path| digest_tree(path))
+            .collect::<Vec<_>>();
+
+        let target_candidates = [
+            user_data.join("ShaderCache"),
+            user_data.join("GrShaderCache"),
+            user_data.join("GraphiteDawnCache"),
+            user_data.join("component_crx_cache"),
+            profile.join("Cache"),
+            profile.join("Code Cache"),
+            profile.join("GPUCache"),
+            profile.join("DawnGraphiteCache"),
+            profile.join("DawnWebGPUCache"),
+        ];
+        let expected_target_count = target_candidates.len();
+        let target_roots = target_candidates
+            .into_iter()
+            .filter(|path| path.is_dir())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            target_roots.len(),
+            expected_target_count,
+            "the initialized UC profile must expose every verified cache root"
+        );
+        let markers = target_roots
+            .iter()
+            .map(|root| root.join("mangodisk-rule-validation.bin"))
+            .collect::<Vec<_>>();
+        for marker in &markers {
+            fs::write(marker, b"payload").expect("the UC cache marker must be created");
+        }
+        let request = |dry_run| CleanupRequest {
+            rule_ids: vec!["browser.uc-cache".to_string()],
+            source_selections: Vec::new(),
+            dry_run,
+            project_roots: Vec::new(),
+        };
+
+        let preview =
+            CleanupService::execute(request(true)).expect("the real UC cache dry run must succeed");
+        assert_eq!(preview.failed_item_count, 0, "{:?}", preview.actions);
+        assert!(preview.expected_bytes >= markers.len() as u64 * 7);
+        assert!(markers.iter().all(|marker| marker.exists()));
+
+        let result = CleanupService::execute(request(false))
+            .expect("the real UC cache cleanup must succeed");
+        assert_eq!(result.failed_item_count, 0, "{:?}", result.actions);
+        assert!(result.released_bytes >= markers.len() as u64 * 7);
+        assert!(markers.iter().all(|marker| !marker.exists()));
+        let preserved_after = preserved_paths
+            .iter()
+            .map(|path| digest_tree(path))
+            .collect::<Vec<_>>();
+        assert_eq!(preserved_after, preserved_before);
+        println!(
+            "real_windows_uc_cache_cleanup expected_bytes={} released_bytes={} affected_item_count={} target_root_count={} preserved_root_count={}",
+            preview.expected_bytes,
+            result.released_bytes,
+            result.affected_item_count,
+            target_roots.len(),
+            preserved_paths.len()
+        );
+    }
+
+    fn assert_windows_browser_cache_blocked(
+        rule_id: &str,
+        process_names: &[&str],
+        browser_name: &str,
+    ) {
+        let process_names = process_names
+            .iter()
+            .map(|name| (*name).to_string())
+            .collect::<Vec<_>>();
+        let running = ProcessSnapshot::capture()
+            .expect("the Windows process inventory must be available")
+            .matching_processes(&process_names);
+        assert!(!running.is_empty(), "{browser_name} must be running");
+
+        let result = CleanupService::execute(CleanupRequest {
+            rule_ids: vec![rule_id.to_string()],
+            source_selections: Vec::new(),
+            dry_run: false,
+            project_roots: Vec::new(),
+        })
+        .expect("the blocked browser cleanup must return a structured result");
+        assert_eq!(result.actions.len(), 1);
+        let action = &result.actions[0];
+        assert_eq!(action.status, crate::cleanup::CleanupActionStatus::Blocked);
+        assert_eq!(
+            action.reason_code,
+            Some(crate::cleanup::CleanupActionReason::RunningProcesses)
+        );
+        assert_eq!(action.released_bytes, 0);
+        assert_eq!(action.affected_item_count, 0);
+        assert!(!action.running_processes.is_empty());
+        println!(
+            "real_windows_browser_cache_block browser={} running_process_count={}",
+            browser_name,
+            running.len()
+        );
+    }
+
+    fn validate_real_windows_browser_cache_cleanup(
+        rule_id: &str,
+        process_names: &[&str],
+        user_data_relative: &str,
+        preserved_relatives: &[&str],
+        target_relatives: &[&str],
+        minimum_preserved_count: usize,
+        browser_name: &str,
+    ) {
+        let process_names = process_names
+            .iter()
+            .map(|name| (*name).to_string())
+            .collect::<Vec<_>>();
+        let running = ProcessSnapshot::capture()
+            .expect("the Windows process inventory must be available")
+            .matching_processes(&process_names);
+        assert!(
+            running.is_empty(),
+            "{browser_name} must be completely stopped"
+        );
+
+        let local_app_data = std::env::var_os("LOCALAPPDATA")
+            .map(PathBuf::from)
+            .expect("LOCALAPPDATA must be available");
+        let user_data = local_app_data.join(user_data_relative);
+        assert!(
+            user_data.join("Default").is_dir(),
+            "{browser_name} must complete a first launch"
+        );
+
+        let preserved_paths = preserved_relatives
+            .iter()
+            .map(|relative| user_data.join(relative))
+            .filter(|path| path.exists())
+            .collect::<Vec<_>>();
+        assert!(
+            preserved_paths.len() >= minimum_preserved_count,
+            "{browser_name} must expose representative durable profile state"
+        );
+        let preserved_before = preserved_paths
+            .iter()
+            .map(|path| digest_tree(path))
+            .collect::<Vec<_>>();
+
+        let target_roots = target_relatives
+            .iter()
+            .map(|relative| user_data.join(relative))
+            .filter(|path| path.is_dir())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            target_roots.len(),
+            target_relatives.len(),
+            "{browser_name} must expose every verified cache root"
+        );
+        let markers = target_roots
+            .iter()
+            .map(|root| root.join("mangodisk-rule-validation.bin"))
+            .collect::<Vec<_>>();
+        for marker in &markers {
+            fs::write(marker, b"payload").expect("the browser cache marker must be created");
+        }
+        let request = |dry_run| CleanupRequest {
+            rule_ids: vec![rule_id.to_string()],
+            source_selections: Vec::new(),
+            dry_run,
+            project_roots: Vec::new(),
+        };
+
+        let preview = CleanupService::execute(request(true))
+            .expect("the real browser cache dry run must succeed");
+        assert_eq!(preview.failed_item_count, 0, "{:?}", preview.actions);
+        assert!(preview.expected_bytes >= markers.len() as u64 * 7);
+        assert!(markers.iter().all(|marker| marker.exists()));
+
+        let result = CleanupService::execute(request(false))
+            .expect("the real browser cache cleanup must succeed");
+        assert_eq!(result.failed_item_count, 0, "{:?}", result.actions);
+        assert!(result.released_bytes >= markers.len() as u64 * 7);
+        assert!(markers.iter().all(|marker| !marker.exists()));
+        let preserved_after = preserved_paths
+            .iter()
+            .map(|path| digest_tree(path))
+            .collect::<Vec<_>>();
+        assert_eq!(preserved_after, preserved_before);
+        println!(
+            "real_windows_browser_cache_cleanup browser={} expected_bytes={} released_bytes={} affected_item_count={} target_root_count={} preserved_root_count={}",
+            browser_name,
+            preview.expected_bytes,
+            result.released_bytes,
+            result.affected_item_count,
+            target_roots.len(),
+            preserved_paths.len()
+        );
+    }
+
+    /// Confirms that 360 Extreme Browser X blocks cleanup while any of its
+    /// renderer processes still owns the real Chromium profile.
+    #[test]
+    #[ignore = "requires 360 Extreme Browser X to be running in the Windows VM"]
+    fn real_windows_360_speed_browser_cache_blocks_while_running() {
+        assert_eq!(
+            std::env::var("MANGODISK_TEST_REAL_WINDOWS_360_CACHE_BLOCK").as_deref(),
+            Ok("1"),
+            "set MANGODISK_TEST_REAL_WINDOWS_360_CACHE_BLOCK=1 for the real process-gate diagnostic"
+        );
+        assert_windows_browser_cache_blocked(
+            "browser.360-speed-cache",
+            &["360ChromeX.exe"],
+            "360-speed",
+        );
+    }
+
+    /// Clears only 360 Extreme Browser X response, code, GPU, Dawn, and shader
+    /// caches while hashing durable profile state around the production action.
+    #[test]
+    #[ignore = "clears real 360 Extreme Browser X caches in the Windows VM"]
+    fn real_windows_360_speed_browser_cache_preserves_profile_state() {
+        assert_eq!(
+            std::env::var("MANGODISK_TEST_REAL_WINDOWS_360_CACHE").as_deref(),
+            Ok("1"),
+            "set MANGODISK_TEST_REAL_WINDOWS_360_CACHE=1 only in the isolated Windows VM"
+        );
+        validate_real_windows_browser_cache_cleanup(
+            "browser.360-speed-cache",
+            &["360ChromeX.exe"],
+            "360ChromeX/Chrome/User Data",
+            &[
+                "Local State",
+                "Default/Login Data",
+                "Default/Network",
+                "Default/Extensions",
+                "Default/Local Storage",
+                "Default/Preferences",
+                "Default/Session Storage",
+                "Default/Sessions",
+                "Default/WebStorage",
+                "Default/Download Service",
+                "Default/Extension State",
+            ],
+            &[
+                "ShaderCache64",
+                "GrShaderCache64",
+                "GraphiteDawnCache",
+                "Default/Cache",
+                "Default/Code Cache",
+                "Default/GPUCache64",
+                "Default/DawnGraphiteCache",
+                "Default/DawnWebGPUCache",
+            ],
+            9,
+            "360-speed",
+        );
+    }
+
+    /// Confirms that Sogou Explorer blocks cleanup while its browser processes
+    /// still own the real profile. Sogou Input processes are intentionally not
+    /// part of this browser-specific gate.
+    #[test]
+    #[ignore = "requires Sogou Explorer to be running in the Windows VM"]
+    fn real_windows_sogou_browser_cache_blocks_while_running() {
+        assert_eq!(
+            std::env::var("MANGODISK_TEST_REAL_WINDOWS_SOGOU_CACHE_BLOCK").as_deref(),
+            Ok("1"),
+            "set MANGODISK_TEST_REAL_WINDOWS_SOGOU_CACHE_BLOCK=1 for the real process-gate diagnostic"
+        );
+        assert_windows_browser_cache_blocked(
+            "browser.sogou-cache",
+            &["SogouExplorer.exe"],
+            "sogou",
+        );
+    }
+
+    /// Clears only Sogou Explorer response, code, GPU, Dawn, and shader caches
+    /// while hashing credentials, history, storage, downloads, and settings.
+    #[test]
+    #[ignore = "clears real Sogou Explorer caches in the Windows VM"]
+    fn real_windows_sogou_browser_cache_preserves_profile_state() {
+        assert_eq!(
+            std::env::var("MANGODISK_TEST_REAL_WINDOWS_SOGOU_CACHE").as_deref(),
+            Ok("1"),
+            "set MANGODISK_TEST_REAL_WINDOWS_SOGOU_CACHE=1 only in the isolated Windows VM"
+        );
+        validate_real_windows_browser_cache_cleanup(
+            "browser.sogou-cache",
+            &["SogouExplorer.exe"],
+            "Sogou/SogouExplorer/User Data",
+            &[
+                "Local State",
+                "Default/History",
+                "Default/Login Data",
+                "Default/Network",
+                "Default/Extensions",
+                "Default/Local Storage",
+                "Default/Session Storage",
+                "Default/Sessions",
+                "Default/WebStorage",
+                "Default/IndexedDB",
+                "Default/Download Service",
+                "Default/Extension State",
+            ],
+            &[
+                "ShaderCache",
+                "GrShaderCache",
+                "GraphiteDawnCache",
+                "Default/Cache",
+                "Default/Code Cache",
+                "Default/GPUCache",
+                "Default/DawnCache",
+            ],
+            10,
+            "sogou",
         );
     }
 

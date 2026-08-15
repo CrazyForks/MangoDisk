@@ -78,6 +78,9 @@ const CLEANUP_RULE_ICONS: Readonly<Record<string, IconName>> = {
 
   'browser.chrome-cache': ICON_NAMES.brandChrome,
   'browser.chrome-offline-cache': ICON_NAMES.brandChrome,
+  'browser.uc-cache': ICON_NAMES.cleanupBrowserData,
+  'browser.360-speed-cache': ICON_NAMES.cleanupBrowserData,
+  'browser.sogou-cache': ICON_NAMES.cleanupBrowserData,
   'browser.edge-cache': ICON_NAMES.brandEdge,
   'browser.edge-offline-cache': ICON_NAMES.brandEdge,
   'browser.arc-cache': ICON_NAMES.brandArc,

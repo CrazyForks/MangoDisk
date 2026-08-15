@@ -348,7 +348,8 @@
     "viewOnlyDescription": "你可以查看已安裝應用程式，但 MangoDisk 暫時無法解除安裝",
     "applicationRunning": "需關閉應用程式",
     "requiresElevation": "需管理員權限",
-    "requiresElevationDescriptionMacos": "解除安裝此應用程式需要管理員授權，MangoDisk 目前暫不執行此類解除安裝，你仍可查看應用程式位置",
+    "requiresElevationDescriptionMacos": "解除安裝此應用程式時，macOS 將要求管理員授權。取消授權不會刪除應用程式",
+    "authorizationPromptMacos": "MangoDisk 需要管理員權限來解除安裝此應用程式",
     "readyForReview": "可解除安裝",
     "viewOnly": "解除安裝入口不可用",
     "orphanedRegistration": "應用程式檔案缺失",
@@ -503,6 +504,7 @@
       "executionAborted": "前一項處理失敗，後續內容未刪除",
       "externalUninstallerContinuing": "系統解除安裝視窗仍在執行，結果尚未確認",
       "permanentDeleteFailed": "無法永久刪除此項目",
+      "recoveryRequired": "解除安裝未完整結束，請檢查或還原應用程式後再重試",
       "nativeInstallerFailed": "Windows Installer 未能完成解除安裝",
       "verificationFailed": "MangoDisk 無法確認解除安裝結果"
     }

@@ -348,7 +348,8 @@
     "viewOnlyDescription": "你可以查看已安装应用，但 MangoDisk 暂时无法卸载",
     "applicationRunning": "需关闭应用",
     "requiresElevation": "需管理员权限",
-    "requiresElevationDescriptionMacos": "卸载此应用需要管理员授权，MangoDisk 当前暂不执行此类卸载，你仍可查看应用位置",
+    "requiresElevationDescriptionMacos": "卸载此应用时，macOS 将请求管理员授权。取消授权不会删除应用",
+    "authorizationPromptMacos": "MangoDisk 需要管理员权限来卸载此应用",
     "readyForReview": "可卸载",
     "viewOnly": "卸载入口不可用",
     "orphanedRegistration": "应用文件缺失",
@@ -503,6 +504,7 @@
       "executionAborted": "前一项处理失败，后续内容未删除",
       "externalUninstallerContinuing": "系统卸载窗口仍在运行，结果尚未确认",
       "permanentDeleteFailed": "无法彻底删除此项目",
+      "recoveryRequired": "卸载未完整结束，请检查或恢复应用后再重试",
       "nativeInstallerFailed": "Windows Installer 未能完成卸载",
       "verificationFailed": "MangoDisk 无法确认卸载结果"
     }

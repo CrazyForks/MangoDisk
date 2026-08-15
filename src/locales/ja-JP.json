@@ -348,7 +348,8 @@
     "viewOnlyDescription": "インストール済みアプリを確認できますが、MangoDisk ではここでアンインストールできません",
     "applicationRunning": "アプリを終了",
     "requiresElevation": "管理者権限",
-    "requiresElevationDescriptionMacos": "このアプリをアンインストールするには管理者の承認が必要です。MangoDisk はまだこのアンインストールを実行できませんが、場所を確認できます",
+    "requiresElevationDescriptionMacos": "このアプリをアンインストールするときに、macOS が管理者の承認を求めます。承認をキャンセルしてもアプリは削除されません",
+    "authorizationPromptMacos": "MangoDisk がこのアプリを削除するには管理者権限が必要です",
     "readyForReview": "準備完了",
     "viewOnly": "アンインストール不可",
     "orphanedRegistration": "アプリファイルがありません",
@@ -503,6 +504,7 @@
       "executionAborted": "前の操作が失敗したため、残りの内容は削除されませんでした",
       "externalUninstallerContinuing": "システムアンインストールウィンドウがまだ実行中です。結果は確認されていません",
       "permanentDeleteFailed": "項目を完全に削除できませんでした",
+      "recoveryRequired": "アンインストールが正常に完了しませんでした。再試行する前にアプリを確認または復元してください",
       "nativeInstallerFailed": "Windows インストーラーがアンインストールを完了できませんでした",
       "verificationFailed": "MangoDisk が結果を確認できませんでした"
     }

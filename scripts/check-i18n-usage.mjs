@@ -111,6 +111,7 @@ const dynamicKeyGroups = {
     'unsupportedExecutor',
     'executionAborted',
     'permanentDeleteFailed',
+    'recoveryRequired',
     'nativeInstallerFailed',
     'verificationFailed',
   ],

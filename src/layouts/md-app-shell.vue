@@ -589,7 +589,7 @@ function prepareApplicationUninstall(selections: ApplicationUninstallBatchSelect
 
 function executeApplicationUninstall() {
   if (!ensureOperationAvailable()) return;
-  return applicationStore.executePreparedUninstall();
+  return applicationStore.executePreparedUninstall(t('applicationUninstall.authorizationPromptMacos'));
 }
 
 async function openPath(path: string) {

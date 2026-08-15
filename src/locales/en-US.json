@@ -348,7 +348,8 @@
     "viewOnlyDescription": "You can review installed apps, but MangoDisk cannot uninstall them here",
     "applicationRunning": "Close app",
     "requiresElevation": "Admin required",
-    "requiresElevationDescriptionMacos": "Uninstalling this app requires administrator approval. MangoDisk cannot perform this uninstall yet, but you can still review its location",
+    "requiresElevationDescriptionMacos": "macOS will request administrator approval when this app is uninstalled. Cancelling approval will leave the app installed",
+    "authorizationPromptMacos": "MangoDisk needs administrator permission to uninstall this app",
     "readyForReview": "Ready",
     "viewOnly": "Uninstall unavailable",
     "orphanedRegistration": "App files missing",
@@ -503,6 +504,7 @@
       "executionAborted": "A previous action failed, so remaining contents were not deleted",
       "externalUninstallerContinuing": "The system uninstall window is still running; its result is not confirmed",
       "permanentDeleteFailed": "Could not permanently delete the item",
+      "recoveryRequired": "Uninstall did not finish cleanly; inspect or restore the application before retrying",
       "nativeInstallerFailed": "Windows Installer could not complete the uninstall",
       "verificationFailed": "MangoDisk could not confirm the result"
     }

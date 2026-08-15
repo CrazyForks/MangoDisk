@@ -26,7 +26,7 @@ const dynamicKeyGroups = {
   errors: commandErrorCodes,
   errorTitles: commandErrorCodes,
   'folderPicker.standardFolders': ['downloads', 'documents', 'pictures', 'videos', 'music'],
-  fileCategories: ['all', 'video', 'audio', 'document', 'installer', 'archive', 'image', 'other'],
+  fileCategories: ['all', 'video', 'audio', 'document', 'installer', 'archive', 'image', 'aiModel', 'other'],
   'cleanup.categoryTitles': [
     'system',
     'userCache',

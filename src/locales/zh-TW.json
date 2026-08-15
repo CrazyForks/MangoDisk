@@ -235,6 +235,7 @@
     "document": "檔案",
     "archive": "壓縮檔",
     "image": "圖片",
+    "aiModel": "AI 模型",
     "other": "其他"
   },
   "duplicateFiles": {

@@ -235,6 +235,7 @@
     "document": "文档",
     "archive": "压缩包",
     "image": "图片",
+    "aiModel": "AI 模型",
     "other": "其他"
   },
   "duplicateFiles": {

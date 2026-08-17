@@ -9,6 +9,7 @@ import MdOperationWorkspace from '@/components/custom/md-operation-workspace.vue
 import MdPageShell from '@/components/custom/md-page-shell.vue';
 import MdResultCheckbox from '@/components/custom/md-result-checkbox.vue';
 import MdResultFilterToolbar from '@/components/custom/md-result-filter-toolbar.vue';
+import MdResultSearch from '@/components/custom/md-result-search.vue';
 import MdResultSummary from '@/components/custom/md-result-summary.vue';
 import MdResultTable from '@/components/custom/md-result-table.vue';
 import MdResultWorkspace from '@/components/custom/md-result-workspace.vue';
@@ -519,10 +520,7 @@ function confirmCancelExecution() {
             </button>
           </div>
           <template #aside>
-            <label class="catalog-search">
-              <MdIcon :name="ICON_NAMES.search" :size="18" />
-              <input v-model="query" type="search" :placeholder="t('applicationUninstall.searchPlaceholder')" />
-            </label>
+            <MdResultSearch v-model="query" :placeholder="t('applicationUninstall.searchPlaceholder')" />
           </template>
         </MdResultFilterToolbar>
       </template>

@@ -35,6 +35,7 @@ import { useDuplicateFilesStore } from '@/stores/duplicate-files-store';
 import { useHistoryStore } from '@/stores/history-store';
 import { useLargeFilesStore } from '@/stores/large-files-store';
 import { useStorageScopeStore } from '@/stores/storage-scope-store';
+import { useStartupStore } from '@/stores/startup-store';
 
 import CleanupPage from '@/pages/cleanup/index.vue';
 
@@ -50,6 +51,7 @@ const loadDuplicateFilesPage = () => import('@/pages/duplicate-files/index.vue')
 const loadHistoryPage = () => import('@/pages/history/index.vue');
 const loadLargeFilesPage = () => import('@/pages/large-files/index.vue');
 const loadSettingsPage = () => import('@/pages/settings/index.vue');
+const loadStartupPage = () => import('@/pages/startup/index.vue');
 const pageLoaders: Partial<Record<PageId, () => Promise<unknown>>> = {
   [PAGE_IDS.analysis]: loadAnalysisPage,
   [PAGE_IDS.applicationUninstall]: loadApplicationUninstallPage,
@@ -57,6 +59,7 @@ const pageLoaders: Partial<Record<PageId, () => Promise<unknown>>> = {
   [PAGE_IDS.history]: loadHistoryPage,
   [PAGE_IDS.largeFiles]: loadLargeFilesPage,
   [PAGE_IDS.settings]: loadSettingsPage,
+  [PAGE_IDS.startup]: loadStartupPage,
 };
 const AnalysisPage = defineAsyncComponent(loadAnalysisPage);
 const ApplicationUninstallPage = defineAsyncComponent(loadApplicationUninstallPage);
@@ -64,6 +67,7 @@ const DuplicateFilesPage = defineAsyncComponent(loadDuplicateFilesPage);
 const HistoryPage = defineAsyncComponent(loadHistoryPage);
 const LargeFilesPage = defineAsyncComponent(loadLargeFilesPage);
 const SettingsPage = defineAsyncComponent(loadSettingsPage);
+const StartupPage = defineAsyncComponent(loadStartupPage);
 const MdAboutDialog = defineAsyncComponent(() => import('./components/md-about-dialog.vue'));
 
 const { rt, t, te, tm } = useI18n({ useScope: 'global' });
@@ -97,6 +101,7 @@ const historyStore = useHistoryStore();
 const largeFilesStore = useLargeFilesStore();
 const duplicateFilesStore = useDuplicateFilesStore();
 const storageScopeStore = useStorageScopeStore();
+const startupStore = useStartupStore();
 // WebKit can leave range-based media-query utilities in their collapsed state
 // after a native window is narrowed and widened again. Drive the shell from
 // the actual viewport width so every resize can restore the expanded sidebar.
@@ -130,7 +135,10 @@ const exclusiveOperationBusy = computed(
     duplicateFilesStore.deleting ||
     applicationStore.scanningUninstallCatalog ||
     applicationStore.preparingUninstall ||
-    applicationStore.executingUninstall
+    applicationStore.executingUninstall ||
+    startupStore.scanning ||
+    startupStore.preparingChange ||
+    startupStore.executingChange
 );
 // Custom title bars keep the application chrome visually continuous. macOS
 // only needs a drag region beneath the native traffic lights, while Windows
@@ -384,6 +392,7 @@ const busyPages = computed<PageId[]>(() => [
   applicationStore.executingUninstall
     ? [PAGE_IDS.applicationUninstall]
     : []),
+  ...(startupStore.scanning || startupStore.preparingChange || startupStore.executingChange ? [PAGE_IDS.startup] : []),
   ...(historyStore.loading ? [PAGE_IDS.history] : []),
 ]);
 const noticePages = computed<PageId[]>(() => (appUpdateStore.updateNoticeUnread ? [PAGE_IDS.settings] : []));
@@ -505,6 +514,21 @@ function ensureOperationAvailable(): boolean {
   if (!exclusiveOperationBusy.value) return true;
   store.reportOperationBusy();
   return false;
+}
+
+function scanStartupCatalog() {
+  if (startupStore.scanning) return;
+  if (!ensureOperationAvailable()) return;
+  return startupStore.scan();
+}
+
+async function executeStartupChange() {
+  await startupStore.executeChange(t('startup.change.authorizationPromptMacos'));
+  if (startupStore.lastChangeResult) await historyStore.load({ reportError: false });
+}
+
+async function clearHistoryData() {
+  await historyStore.clear();
 }
 
 function analyze(path?: string, refresh = false, setHome = false) {
@@ -827,11 +851,30 @@ function requestCancelDeepCleanup() {
           @cancel-execution="applicationStore.cancelUninstallExecution()"
           @open="openPath"
         />
+        <StartupPage
+          v-else-if="store.currentPage === PAGE_IDS.startup"
+          :catalog="startupStore.catalog"
+          :scanning="startupStore.scanning"
+          :cancelling="startupStore.cancelling"
+          :preparing-change="startupStore.preparingChange"
+          :executing-change="startupStore.executingChange"
+          :cancelling-change="startupStore.cancellingChange"
+          :pending-plan="startupStore.pendingPlan"
+          :last-change-result="startupStore.lastChangeResult"
+          @scan="scanStartupCatalog"
+          @cancel="startupStore.cancelScan()"
+          @prepare-change="startupStore.prepareChange($event.itemIds, $event.desiredState)"
+          @cancel-change="startupStore.clearPendingPlan()"
+          @cancel-change-execution="startupStore.cancelChange()"
+          @execute-change="executeStartupChange"
+          @open="openPath"
+          @error="store.reportError"
+        />
         <HistoryPage
           v-else-if="store.currentPage === PAGE_IDS.history"
           :history="localizedHistory"
           :busy="historyStore.loading"
-          @clear="historyStore.clear()"
+          @clear="clearHistoryData"
         />
         <SettingsPage
           v-else-if="store.currentPage === PAGE_IDS.settings"

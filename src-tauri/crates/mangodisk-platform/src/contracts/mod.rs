@@ -4,6 +4,7 @@ mod disk_cleanup;
 mod error;
 mod platform;
 mod scan;
+mod startup;
 mod volumes;
 
 pub use applications::{
@@ -35,6 +36,15 @@ pub use scan::{
     FilesystemChangeStatus, FilesystemChangeToken, LargeFileCandidateScanError,
     LargeFileCandidateSummary, ProjectMarkerCandidateProgress, ProjectMarkerCandidateQuery,
     ProjectMarkerCandidateScanError, ProjectMarkerCandidateSummary, ScanPurpose, SkipReason,
+};
+pub use startup::{
+    PlatformStartupArtifact, PlatformStartupChangeRequest, PlatformStartupChangeResult,
+    PlatformStartupConfiguredState, PlatformStartupControlCapability,
+    PlatformStartupCoverageReason, PlatformStartupCoverageStatus, PlatformStartupDesiredState,
+    PlatformStartupDiagnosticCode, PlatformStartupIdentityConfidence, PlatformStartupOwner,
+    PlatformStartupRuntimeState, PlatformStartupScope, PlatformStartupSourceKind,
+    PlatformStartupSourceResult, PlatformStartupSummarySource, PlatformStartupTarget,
+    PlatformStartupTargetKind, PlatformStartupTrigger, PlatformStartupTrustState, StartupPlatform,
 };
 pub use volumes::{
     ApplicationDirectories, ScanConcurrency, ScanDeviceClass, UserDirectories, VolumeInfo,

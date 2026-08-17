@@ -6,6 +6,7 @@ mod directory_aggregate;
 mod inventory;
 mod privileged_uninstall;
 mod project_markers;
+mod startup;
 mod volumes;
 
 use std::{
@@ -34,7 +35,7 @@ use crate::{
     LargeFileCandidateScanError, LargeFileCandidateSummary, Platform, PlatformCancellation,
     PlatformError, PlatformResult, ProjectMarkerCandidateProgress, ProjectMarkerCandidateQuery,
     ProjectMarkerCandidateScanError, ProjectMarkerCandidateSummary, ScanPurpose, SkipReason,
-    SystemInventory, UserDirectories, VolumeInfo,
+    StartupPlatform, SystemInventory, UserDirectories, VolumeInfo,
 };
 
 const SPOTLIGHT_CANDIDATE_CHANNEL_CAPACITY: usize = 128;
@@ -42,6 +43,47 @@ const SPOTLIGHT_MAX_PATH_BYTES: u64 = 16 * 1024;
 const COMMAND_DIAGNOSTIC_LIMIT_BYTES: usize = 64 * 1024;
 
 pub struct MacOsPlatform;
+
+impl StartupPlatform for MacOsPlatform {
+    fn scan_startup_sources(
+        &self,
+        cancellation: &PlatformCancellation,
+    ) -> PlatformResult<Vec<crate::PlatformStartupSourceResult>> {
+        startup::scan(cancellation)
+    }
+
+    fn change_startup_item(
+        &self,
+        request: &crate::PlatformStartupChangeRequest,
+        authorization_prompt: Option<&str>,
+    ) -> PlatformResult<crate::PlatformStartupChangeResult> {
+        startup::change(request, authorization_prompt)
+    }
+
+    fn change_startup_items(
+        &self,
+        requests: &[crate::PlatformStartupChangeRequest],
+        authorization_prompt: Option<&str>,
+    ) -> PlatformResult<Vec<PlatformResult<crate::PlatformStartupChangeResult>>> {
+        startup::change_many(requests, authorization_prompt)
+    }
+}
+
+pub(crate) fn startup_helper_change(
+    source_id: &str,
+    provider_item_id: &str,
+    expected_artifact_digest: &str,
+    desired_state: crate::PlatformStartupDesiredState,
+    interactive_user_id: u32,
+) -> PlatformResult<crate::PlatformStartupChangeResult> {
+    startup::helper_change(
+        source_id,
+        provider_item_id,
+        expected_artifact_digest,
+        desired_state,
+        interactive_user_id,
+    )
+}
 
 // Darwin exposes cloud placeholders through `SF_DATALESS` in `st_flags`. The value is part of
 // the macOS `sys/stat.h` ABI but is not currently exported by the Rust libc crate.

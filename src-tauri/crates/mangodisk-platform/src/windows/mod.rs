@@ -12,6 +12,7 @@ mod package_locations;
 mod package_reconciliation;
 mod package_sources;
 mod project_markers;
+mod startup;
 mod volumes;
 
 use std::{
@@ -32,11 +33,50 @@ use crate::{
     LargeFileCandidateScanError, LargeFileCandidateSummary, Platform, PlatformCancellation,
     PlatformError, PlatformResult, ProjectMarkerCandidateProgress, ProjectMarkerCandidateQuery,
     ProjectMarkerCandidateScanError, ProjectMarkerCandidateSummary, ScanPurpose, SkipReason,
-    SystemInventory, UserDirectories, VolumeInfo, WindowsDiskCleanupEstimate,
+    StartupPlatform, SystemInventory, UserDirectories, VolumeInfo, WindowsDiskCleanupEstimate,
     WindowsDiskCleanupExecution, WindowsDiskCleanupKind,
 };
 
 pub struct WindowsPlatform;
+
+impl StartupPlatform for WindowsPlatform {
+    fn scan_startup_sources(
+        &self,
+        cancellation: &PlatformCancellation,
+    ) -> PlatformResult<Vec<crate::PlatformStartupSourceResult>> {
+        startup::scan(cancellation)
+    }
+
+    fn change_startup_item(
+        &self,
+        request: &crate::PlatformStartupChangeRequest,
+        _authorization_prompt: Option<&str>,
+    ) -> PlatformResult<crate::PlatformStartupChangeResult> {
+        startup::change(request)
+    }
+
+    fn change_startup_items(
+        &self,
+        requests: &[crate::PlatformStartupChangeRequest],
+        _authorization_prompt: Option<&str>,
+    ) -> PlatformResult<Vec<PlatformResult<crate::PlatformStartupChangeResult>>> {
+        startup::change_many(requests)
+    }
+}
+
+pub(crate) fn startup_helper_change(
+    source_id: &str,
+    provider_item_id: &str,
+    expected_artifact_digest: &str,
+    desired_state: crate::PlatformStartupDesiredState,
+) -> PlatformResult<crate::PlatformStartupChangeResult> {
+    startup::helper_change(
+        source_id,
+        provider_item_id,
+        expected_artifact_digest,
+        desired_state,
+    )
+}
 
 const FILE_ATTRIBUTE_REPARSE_POINT_VALUE: u32 = 0x0000_0400;
 const FILE_ATTRIBUTE_OFFLINE_VALUE: u32 = 0x0000_1000;

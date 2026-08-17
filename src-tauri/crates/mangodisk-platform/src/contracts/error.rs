@@ -7,11 +7,19 @@ use std::{error::Error, fmt};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlatformErrorCode {
     AccessDenied,
+    UserCancelled,
+    ItemChanged,
     InvalidData,
     InvalidPath,
     Io,
     OperationFailed,
     Unsupported,
+}
+
+impl PlatformError {
+    pub fn item_changed(diagnostic: impl Into<String>) -> Self {
+        Self::new(PlatformErrorCode::ItemChanged, diagnostic)
+    }
 }
 
 #[derive(Debug)]

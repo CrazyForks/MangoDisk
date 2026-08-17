@@ -198,6 +198,11 @@ pub fn run() {
             commands::duplicate_files::delete_duplicate_files_permanently,
             commands::permanent_delete::delete_files_permanently,
             commands::permanent_delete::delete_analysis_entry_permanently,
+            commands::startup::scan_startup_catalog,
+            commands::startup::cancel_startup_catalog_scan,
+            commands::startup::cancel_startup_change,
+            commands::startup::prepare_startup_change,
+            commands::startup::execute_startup_change,
             commands::file_manager::open_analysis_entry,
             commands::file_manager::open_large_file_entry,
             commands::file_manager::open_duplicate_file_entry,
@@ -207,6 +212,7 @@ pub fn run() {
             commands::history::list_history,
             commands::history::clear_history,
             commands::system_settings::open_privacy_settings,
+            commands::system_settings::open_macos_login_items_settings,
         ])
         .setup(|app| {
             configure_core_storage(app)?;

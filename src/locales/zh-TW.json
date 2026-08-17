@@ -9,6 +9,18 @@
     "history": "操作紀錄",
     "settings": "設定"
   },
+  "applicationClose": {
+    "title": "關閉執行中的應用程式（可選）",
+    "selectAll": "全選",
+    "clearAll": "取消全選",
+    "processCount": "{count} 個相關處理程序",
+    "closing": "正在等待所選應用程式關閉…",
+    "closeSelectedAndContinue": "關閉 {count} 個應用程式並繼續",
+    "skipAndContinue": "略過並繼續",
+    "normalCloseFailed": "部分應用程式在等待後仍然執行",
+    "forceWarning": "強制結束可能導致未儲存的文件或編輯內容遺失。請確認相關工作已經儲存",
+    "forceAndContinue": "強制結束並繼續"
+  },
   "startup": {
     "title": "啟動項目管理",
     "scan": "掃描啟動項目",
@@ -294,8 +306,7 @@
     "noCleanableInGroup": "此群組已檢查完成，沒有找到可清理內容",
     "selectedItemCount": "已選取 {count} 項",
     "appsToCloseCount": "需要關閉 {count} 個應用程式",
-    "closeAppsBeforeCleanup": "請先儲存工作並關閉：{processes}。未關閉應用程式對應的項目會被安全跳過",
-    "closeAppsBeforeCleanupGeneric": "請先儲存工作並關閉相關應用程式。未關閉應用程式對應的項目會被安全跳過",
+    "closeAppsBeforeCleanup": "請先儲存工作。選取的應用程式會在清理前關閉；仍被佔用的清理項目會自動略過",
     "requiresCloseProcesses": "需要關閉：{processes}",
     "applicationComponentCount": "沒有可最佳化的項目 | {count} 項可最佳化內容 | {count} 項可最佳化內容",
     "sourceRequiresClose": "清理前需關閉應用程式",
@@ -497,6 +508,8 @@
     "viewOnlyTitle": "目前系統無法解除安裝應用程式",
     "viewOnlyDescription": "你可以查看已安裝應用程式，但 MangoDisk 暫時無法解除安裝",
     "applicationRunning": "需關閉應用程式",
+    "closeBeforeUninstallTitle": "關閉應用程式後解除安裝",
+    "closeBeforeUninstallDescription": "以下應用程式正在執行。請選取要由 MangoDisk 正常關閉的應用程式；未選取的應用程式將從本次解除安裝中略過",
     "requiresElevation": "需管理員權限",
     "requiresElevationDescriptionMacos": "解除安裝此應用程式時，macOS 將要求管理員授權。取消授權不會刪除應用程式",
     "authorizationPromptMacos": "MangoDisk 需要管理員權限來解除安裝此應用程式",

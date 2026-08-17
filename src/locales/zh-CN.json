@@ -9,6 +9,18 @@
     "history": "操作历史",
     "settings": "设置"
   },
+  "applicationClose": {
+    "title": "关闭运行中的应用（可选）",
+    "selectAll": "全选",
+    "clearAll": "取消全选",
+    "processCount": "{count} 个相关进程",
+    "closing": "正在等待所选应用关闭…",
+    "closeSelectedAndContinue": "关闭 {count} 个应用并继续",
+    "skipAndContinue": "跳过并继续",
+    "normalCloseFailed": "部分应用在等待后仍然运行",
+    "forceWarning": "强制结束可能导致未保存的文档或编辑内容丢失。请确认相关工作已经保存",
+    "forceAndContinue": "强制结束并继续"
+  },
   "startup": {
     "title": "启动项管理",
     "scan": "扫描启动项",
@@ -298,8 +310,7 @@
     "noCleanableInGroup": "该分组已检查完成，暂未发现可清理内容",
     "selectedItemCount": "已选择 {count} 项",
     "appsToCloseCount": "需要关闭 {count} 个应用",
-    "closeAppsBeforeCleanup": "请先保存工作并关闭：{processes}。未关闭应用对应的项目会被安全跳过",
-    "closeAppsBeforeCleanupGeneric": "请先保存工作并关闭相关应用。未关闭应用对应的项目会被安全跳过",
+    "closeAppsBeforeCleanup": "请先保存工作。选中的应用将在清理前关闭；仍被占用的清理项会自动跳过",
     "requiresCloseProcesses": "需要关闭：{processes}",
     "applicationComponentCount": "{count} 项可优化内容",
     "sourceRequiresClose": "清理前需关闭应用",
@@ -501,6 +512,8 @@
     "viewOnlyTitle": "当前系统无法卸载应用",
     "viewOnlyDescription": "你可以查看已安装应用，但 MangoDisk 暂时无法卸载",
     "applicationRunning": "需关闭应用",
+    "closeBeforeUninstallTitle": "关闭应用后卸载",
+    "closeBeforeUninstallDescription": "以下应用正在运行。选择要由 MangoDisk 正常关闭的应用；未选择的应用将从本次卸载中跳过",
     "requiresElevation": "需管理员权限",
     "requiresElevationDescriptionMacos": "卸载此应用时，macOS 将请求管理员授权。取消授权不会删除应用",
     "authorizationPromptMacos": "MangoDisk 需要管理员权限来卸载此应用",

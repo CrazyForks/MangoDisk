@@ -9,6 +9,18 @@
     "history": "Operation History",
     "settings": "Settings"
   },
+  "applicationClose": {
+    "title": "Close running apps (optional)",
+    "selectAll": "Select all",
+    "clearAll": "Clear all",
+    "processCount": "{count} related process | {count} related processes",
+    "closing": "Waiting for the selected apps to close…",
+    "closeSelectedAndContinue": "Close {count} app and continue | Close {count} apps and continue",
+    "skipAndContinue": "Skip and continue",
+    "normalCloseFailed": "Some apps are still running after waiting",
+    "forceWarning": "Force quitting may discard unsaved documents or edits. Confirm that your work is saved before continuing",
+    "forceAndContinue": "Force quit and continue"
+  },
   "startup": {
     "title": "Startup Items",
     "scan": "Scan Startup Items",
@@ -294,8 +306,7 @@
     "noCleanableInGroup": "This group was checked and no cleanable content was found",
     "selectedItemCount": "{count} item selected | {count} items selected",
     "appsToCloseCount": "{count} app to close | {count} apps to close",
-    "closeAppsBeforeCleanup": "Save your work and close: {processes}. Items for apps that remain open will be safely skipped",
-    "closeAppsBeforeCleanupGeneric": "Save your work and close the related apps. Items for apps that remain open will be safely skipped",
+    "closeAppsBeforeCleanup": "Save your work first. Selected apps close before cleanup; items still in use are skipped",
     "requiresCloseProcesses": "Apps to close: {processes}",
     "applicationComponentCount": "No items available to optimize | {count} item available to optimize | {count} items available to optimize",
     "sourceRequiresClose": "Close the app before cleanup",
@@ -497,6 +508,8 @@
     "viewOnlyTitle": "Uninstall is unavailable on this system",
     "viewOnlyDescription": "You can review installed apps, but MangoDisk cannot uninstall them here",
     "applicationRunning": "Close app",
+    "closeBeforeUninstallTitle": "Close apps before uninstalling",
+    "closeBeforeUninstallDescription": "These apps are running. Select the apps MangoDisk should close normally; unselected apps will be skipped in this uninstall",
     "requiresElevation": "Admin required",
     "requiresElevationDescriptionMacos": "macOS will request administrator approval when this app is uninstalled. Cancelling approval will leave the app installed",
     "authorizationPromptMacos": "MangoDisk needs administrator permission to uninstall this app",

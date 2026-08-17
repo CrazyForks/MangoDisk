@@ -3,6 +3,7 @@ mod directory_aggregate;
 mod disk_cleanup;
 mod error;
 mod platform;
+mod processes;
 mod scan;
 mod startup;
 mod volumes;
@@ -28,6 +29,10 @@ pub use disk_cleanup::{
 };
 pub use error::{PlatformError, PlatformErrorCode, PlatformResult};
 pub use platform::Platform;
+pub use processes::{
+    ApplicationProcessCloseMode, ApplicationProcessCloseResult, ApplicationProcessTarget,
+    RunningProcessIdentity,
+};
 pub(crate) use scan::FilesystemChangeMonitorBackend;
 pub use scan::{
     FastAnalysisQuery, FastAnalysisRecord, FastAnalysisScanError, FastAnalysisSummary,

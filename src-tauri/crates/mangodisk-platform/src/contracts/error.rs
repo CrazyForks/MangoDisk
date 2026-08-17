@@ -22,7 +22,7 @@ impl PlatformError {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PlatformError {
     code: PlatformErrorCode,
     diagnostic: String,

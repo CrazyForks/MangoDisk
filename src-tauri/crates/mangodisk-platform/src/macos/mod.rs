@@ -5,6 +5,7 @@ mod directories;
 mod directory_aggregate;
 mod inventory;
 mod privileged_uninstall;
+mod process_control;
 mod project_markers;
 mod startup;
 mod volumes;
@@ -29,6 +30,7 @@ use std::{
 
 use crate::{
     ApplicationComponentAggregate, ApplicationComponentAggregateError, ApplicationDirectories,
+    ApplicationProcessCloseMode, ApplicationProcessCloseResult, ApplicationProcessTarget,
     DirectoryTreeAggregate, DirectoryTreeAggregateError, FastAnalysisQuery, FastAnalysisRecord,
     FastAnalysisScanError, FastAnalysisSummary, FilesystemChangeImpactError,
     FilesystemChangeImpactOutcome, FilesystemChangeMonitor, FilesystemChangeToken,
@@ -157,6 +159,22 @@ impl Platform for MacOsPlatform {
         cancellation: &PlatformCancellation,
     ) -> PlatformResult<Vec<String>> {
         inventory::running_process_names(cancellation).map_err(Into::into)
+    }
+
+    fn close_application_processes(
+        &self,
+        target: &ApplicationProcessTarget,
+        mode: ApplicationProcessCloseMode,
+    ) -> PlatformResult<ApplicationProcessCloseResult> {
+        process_control::close(target, mode)
+    }
+
+    fn close_application_processes_many(
+        &self,
+        targets: &[ApplicationProcessTarget],
+        mode: ApplicationProcessCloseMode,
+    ) -> Vec<PlatformResult<ApplicationProcessCloseResult>> {
+        process_control::close_many(targets, mode)
     }
 
     fn is_link_like(&self, metadata: &fs::Metadata) -> bool {

@@ -9,6 +9,18 @@
     "history": "操作履歴",
     "settings": "設定"
   },
+  "applicationClose": {
+    "title": "実行中のアプリを終了（任意）",
+    "selectAll": "すべて選択",
+    "clearAll": "選択を解除",
+    "processCount": "関連プロセス {count} 件",
+    "closing": "選択したアプリの終了を待っています…",
+    "closeSelectedAndContinue": "{count} 個のアプリを終了して続行",
+    "skipAndContinue": "スキップして続行",
+    "normalCloseFailed": "待機後も一部のアプリが実行中です",
+    "forceWarning": "強制終了すると、保存していない書類や編集内容が失われる可能性があります。作業が保存済みであることを確認してください",
+    "forceAndContinue": "強制終了して続行"
+  },
   "startup": {
     "title": "スタートアップ項目",
     "scan": "スタートアップ項目をスキャン",
@@ -294,8 +306,7 @@
     "noCleanableInGroup": "このグループはチェックされ、削除可能な内容は見つかりませんでした",
     "selectedItemCount": "{count} 項目を選択中 | {count} 項目を選択中",
     "appsToCloseCount": "終了が必要なアプリ：{count} 件 | 終了が必要なアプリ：{count} 件",
-    "closeAppsBeforeCleanup": "作業内容を保存し、次のアプリを終了してください：{processes}。終了していないアプリの項目は安全のためスキップされます",
-    "closeAppsBeforeCleanupGeneric": "作業を保存して関連するアプリを閉じます。開いたままのアプリの項目は安全にスキップされます",
+    "closeAppsBeforeCleanup": "先に作業内容を保存してください。選択したアプリはクリーンアップ前に終了し、使用中の項目はスキップされます",
     "requiresCloseProcesses": "閉じるアプリ: {processes}",
     "applicationComponentCount": "最適化できる項目はありません | {count} 項目を最適化できます | {count} 項目を最適化できます",
     "sourceRequiresClose": "クリーンアップ前にアプリを閉じてください",
@@ -497,6 +508,8 @@
     "viewOnlyTitle": "このシステムではアンインストールは利用できません",
     "viewOnlyDescription": "インストール済みアプリを確認できますが、MangoDisk ではここでアンインストールできません",
     "applicationRunning": "アプリを終了",
+    "closeBeforeUninstallTitle": "アプリを終了してからアンインストール",
+    "closeBeforeUninstallDescription": "以下のアプリは実行中です。MangoDisk で通常終了するアプリを選択してください。選択しなかったアプリは今回のアンインストールから除外されます",
     "requiresElevation": "管理者権限",
     "requiresElevationDescriptionMacos": "このアプリをアンインストールするときに、macOS が管理者の承認を求めます。承認をキャンセルしてもアプリは削除されません",
     "authorizationPromptMacos": "MangoDisk がこのアプリを削除するには管理者権限が必要です",

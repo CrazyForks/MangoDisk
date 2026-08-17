@@ -16,25 +16,30 @@ pub use applications::leftovers::{
     ApplicationLeftoverResult, ApplicationLeftoverScanResult, ApplicationLeftoverService,
     ApplicationLeftoverSource,
 };
+pub use applications::process_control::{
+    ApplicationCloseBatchResult, ApplicationCloseMode, ApplicationCloseTargetResult,
+    ApplicationCloseTargetStatus,
+};
 pub use applications::uninstall::{
     ApplicationUninstallActionReason, ApplicationUninstallActionResult,
     ApplicationUninstallActionStatus, ApplicationUninstallBatchPlan,
     ApplicationUninstallBatchPreparation, ApplicationUninstallBatchResult,
     ApplicationUninstallBatchSelection, ApplicationUninstallCandidate,
-    ApplicationUninstallCapability, ApplicationUninstallComponent,
-    ApplicationUninstallComponentKind, ApplicationUninstallComponentSummary,
-    ApplicationUninstallExecutionItemResult, ApplicationUninstallExecutionItemStatus,
-    ApplicationUninstallExecutionProgress, ApplicationUninstallExecutionStage,
-    ApplicationUninstallInspection, ApplicationUninstallInstallerKind, ApplicationUninstallPlan,
-    ApplicationUninstallPlanItem, ApplicationUninstallPlatform, ApplicationUninstallRecordState,
-    ApplicationUninstallResult, ApplicationUninstallRisk, ApplicationUninstallScanResult,
-    ApplicationUninstallService,
+    ApplicationUninstallCapability, ApplicationUninstallCloseRequest,
+    ApplicationUninstallComponent, ApplicationUninstallComponentKind,
+    ApplicationUninstallComponentSummary, ApplicationUninstallExecutionItemResult,
+    ApplicationUninstallExecutionItemStatus, ApplicationUninstallExecutionProgress,
+    ApplicationUninstallExecutionStage, ApplicationUninstallInspection,
+    ApplicationUninstallInstallerKind, ApplicationUninstallPlan, ApplicationUninstallPlanItem,
+    ApplicationUninstallPlatform, ApplicationUninstallRecordState, ApplicationUninstallResult,
+    ApplicationUninstallRisk, ApplicationUninstallScanResult, ApplicationUninstallService,
 };
 pub use cleanup::{
     CleanupActionKind, CleanupActionReason, CleanupActionResult, CleanupActionStatus,
-    CleanupAutomationProfile, CleanupCategory, CleanupExecutionProgress, CleanupExecutionStage,
-    CleanupGroup, CleanupPlan, CleanupRequest, CleanupResult, CleanupScanEngineInfo,
-    CleanupScanResult, CleanupSourceBlockReason, CleanupSourceDetail, CleanupSourceSelection,
+    CleanupApplicationCloseRequest, CleanupApplicationIcon, CleanupAutomationProfile,
+    CleanupCategory, CleanupExecutionProgress, CleanupExecutionStage, CleanupGroup, CleanupPlan,
+    CleanupRequest, CleanupResult, CleanupScanEngineInfo, CleanupScanResult,
+    CleanupSourceBlockReason, CleanupSourceDetail, CleanupSourceSelection,
     CleanupSourceSelectionMode, RiskLevel, ScanItemStatus, ScanRuleResult,
     CLEANUP_AUTOMATION_PROFILE_SCHEMA_VERSION, CLEANUP_PLAN_SCHEMA_VERSION,
 };

@@ -1,4 +1,13 @@
 @reference "@assets/main.css";
+
+.uninstall-force-close-warning {
+  margin: 0 0 8px;
+  border-radius: 8px;
+  padding: 8px 10px;
+  @apply bg-destructive/10 text-destructive;
+  font-size: var(--font-content-secondary);
+  line-height: 1.55;
+}
 .capability-notice p {
   margin: 5px 0 0;
   @apply text-muted-foreground;

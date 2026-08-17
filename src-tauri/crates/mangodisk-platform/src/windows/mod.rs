@@ -11,6 +11,7 @@ mod package_evidence;
 mod package_locations;
 mod package_reconciliation;
 mod package_sources;
+mod process_control;
 mod project_markers;
 mod startup;
 mod volumes;
@@ -24,7 +25,8 @@ use std::{
 };
 
 use crate::{
-    ApplicationDirectories, ApplicationUninstallExecutionOutcome,
+    ApplicationDirectories, ApplicationProcessCloseMode, ApplicationProcessCloseResult,
+    ApplicationProcessTarget, ApplicationUninstallExecutionOutcome,
     ApplicationUninstallPlatformError, ApplicationUninstallRegistration,
     ApplicationUninstallRegistrationState, DirectPhysicalDirectoryEnumeration,
     DirectoryTreeAggregate, DirectoryTreeAggregateError, FastAnalysisQuery, FastAnalysisRecord,
@@ -32,9 +34,9 @@ use crate::{
     FilesystemChangeImpactOutcome, FilesystemChangeMonitor, FilesystemChangeToken,
     LargeFileCandidateScanError, LargeFileCandidateSummary, Platform, PlatformCancellation,
     PlatformError, PlatformResult, ProjectMarkerCandidateProgress, ProjectMarkerCandidateQuery,
-    ProjectMarkerCandidateScanError, ProjectMarkerCandidateSummary, ScanPurpose, SkipReason,
-    StartupPlatform, SystemInventory, UserDirectories, VolumeInfo, WindowsDiskCleanupEstimate,
-    WindowsDiskCleanupExecution, WindowsDiskCleanupKind,
+    ProjectMarkerCandidateScanError, ProjectMarkerCandidateSummary, RunningProcessIdentity,
+    ScanPurpose, SkipReason, StartupPlatform, SystemInventory, UserDirectories, VolumeInfo,
+    WindowsDiskCleanupEstimate, WindowsDiskCleanupExecution, WindowsDiskCleanupKind,
 };
 
 pub struct WindowsPlatform;
@@ -191,6 +193,29 @@ impl Platform for WindowsPlatform {
         cancellation: &PlatformCancellation,
     ) -> PlatformResult<Vec<String>> {
         inventory::running_process_names(cancellation).map_err(Into::into)
+    }
+
+    fn running_process_identities_with_cancellation(
+        &self,
+        cancellation: &PlatformCancellation,
+    ) -> PlatformResult<Vec<RunningProcessIdentity>> {
+        process_control::running_process_identities(cancellation)
+    }
+
+    fn close_application_processes(
+        &self,
+        target: &ApplicationProcessTarget,
+        mode: ApplicationProcessCloseMode,
+    ) -> PlatformResult<ApplicationProcessCloseResult> {
+        process_control::close(target, mode)
+    }
+
+    fn close_application_processes_many(
+        &self,
+        targets: &[ApplicationProcessTarget],
+        mode: ApplicationProcessCloseMode,
+    ) -> Vec<PlatformResult<ApplicationProcessCloseResult>> {
+        process_control::close_many(targets, mode)
     }
 
     fn is_link_like(&self, metadata: &fs::Metadata) -> bool {

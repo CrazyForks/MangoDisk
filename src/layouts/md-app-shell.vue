@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { APP_UPDATE_AUTOMATIC_CHECK_DELAY_MS, APP_UPDATE_STATUS_IDS } from '@/lib/models/app-update';
 import type { ApplicationLeftoverCandidate, ApplicationUninstallBatchSelection } from '@/lib/models/application';
+import type { ApplicationCloseMode } from '@/lib/models/application-close';
 import type { DirectoryEntryInfo } from '@/lib/models/analysis';
 import type { DuplicateFileEntry } from '@/lib/models/duplicate-file';
 import type { LargeFileEntry } from '@/lib/models/large-file';
@@ -121,6 +122,7 @@ const cleanupBusy = computed(
   () =>
     cleanupOrchestrating.value ||
     cleanupStore.loading ||
+    cleanupStore.closingApplications ||
     applicationStore.scanningLeftovers ||
     applicationStore.deletingLeftovers
 );
@@ -134,6 +136,7 @@ const exclusiveOperationBusy = computed(
     duplicateFilesStore.loading ||
     duplicateFilesStore.deleting ||
     applicationStore.scanningUninstallCatalog ||
+    applicationStore.closingUninstallApplications ||
     applicationStore.preparingUninstall ||
     applicationStore.executingUninstall ||
     startupStore.scanning ||
@@ -616,6 +619,16 @@ function prepareApplicationUninstall(selections: ApplicationUninstallBatchSelect
   return applicationStore.prepareUninstall(selections);
 }
 
+function closeApplicationsBeforeCleanup(ruleIds: string[], mode: ApplicationCloseMode) {
+  if (!ensureOperationAvailable()) return;
+  return cleanupStore.closeApplications(ruleIds, mode);
+}
+
+function closeApplicationsBeforeUninstall(applicationIds: string[], mode: ApplicationCloseMode) {
+  if (!ensureOperationAvailable()) return;
+  return applicationStore.closeUninstallApplications(applicationIds, mode);
+}
+
 function executeApplicationUninstall() {
   if (!ensureOperationAvailable()) return;
   return applicationStore.executePreparedUninstall(t('applicationUninstall.authorizationPromptMacos'));
@@ -763,11 +776,14 @@ function requestCancelDeepCleanup() {
           :loading-message="cleanupLoadingMessage"
           :operation="cleanupStore.operation"
           :busy="cleanupBusy"
+          :closing-applications="cleanupStore.closingApplications"
+          :close-result="cleanupStore.applicationCloseResult"
           @scan="scanCleanup"
           @toggle-source="cleanupStore.toggleSource"
           @select-all="cleanupStore.setRulesSelected"
           @execute="executeCleanup"
           @cancel="cleanupStore.cancelScan()"
+          @close-applications="closeApplicationsBeforeCleanup"
           @open="openPath"
         />
         <AnalysisPage
@@ -843,12 +859,15 @@ function requestCancelDeepCleanup() {
           :executing="applicationStore.executingUninstall"
           :cancelling-execution="applicationStore.cancellingUninstall"
           :cancellation-revision="applicationStore.uninstallCancellationRevision"
+          :closing-applications="applicationStore.closingUninstallApplications"
+          :close-result="applicationStore.uninstallCloseResult"
           @scan="scanApplications"
           @cancel-scan="applicationStore.cancelUninstallCatalogScan()"
           @prepare="prepareApplicationUninstall"
           @cancel-plan="applicationStore.clearPreparedUninstall()"
           @execute="executeApplicationUninstall"
           @cancel-execution="applicationStore.cancelUninstallExecution()"
+          @close-applications="closeApplicationsBeforeUninstall"
           @open="openPath"
         />
         <StartupPage

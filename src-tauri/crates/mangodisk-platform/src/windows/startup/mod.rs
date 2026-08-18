@@ -112,6 +112,11 @@ pub(super) fn change_many(
 fn requires_privileges(request: &PlatformStartupChangeRequest) -> bool {
     request.expected_artifact.control_capability
         == PlatformStartupControlCapability::ElevationRequired
+        || (request.desired_state == PlatformStartupDesiredState::Removed
+            && matches!(
+                request.expected_artifact.scope,
+                crate::PlatformStartupScope::AllUsers | crate::PlatformStartupScope::Machine
+            ))
 }
 
 fn change_direct(
@@ -130,6 +135,7 @@ fn change_direct(
     }
 }
 
+#[cfg(test)]
 pub(super) fn helper_change(
     source_id: &str,
     provider_item_id: &str,
@@ -138,6 +144,62 @@ pub(super) fn helper_change(
 ) -> PlatformResult<PlatformStartupChangeResult> {
     let cancellation = PlatformCancellation::new(|| false);
     let results = scan(&cancellation)?;
+    helper_change_from_snapshot(
+        source_id,
+        provider_item_id,
+        expected_artifact_digest,
+        desired_state,
+        &results,
+    )
+}
+
+pub(super) fn helper_change_many(
+    requests: &[crate::startup_helper::StartupHelperChangeRequest],
+) -> Vec<PlatformResult<PlatformStartupChangeResult>> {
+    let cancellation = PlatformCancellation::new(|| false);
+    let mut results = Vec::new();
+    if requests
+        .iter()
+        .any(|request| request.source_id == "windows.registry.run")
+    {
+        results.push(registry::scan(&cancellation));
+    }
+    if requests
+        .iter()
+        .any(|request| request.source_id.starts_with("windows.startup_folder."))
+    {
+        results.extend(startup_folder::scan(&cancellation));
+    }
+    requests
+        .iter()
+        .map(|request| {
+            helper_change_from_snapshot(
+                &request.source_id,
+                &request.provider_item_id,
+                &request.expected_artifact_digest,
+                request.desired_state,
+                &results,
+            )
+        })
+        .collect()
+}
+
+fn helper_change_from_snapshot(
+    source_id: &str,
+    provider_item_id: &str,
+    expected_artifact_digest: &str,
+    desired_state: PlatformStartupDesiredState,
+    results: &[PlatformStartupSourceResult],
+) -> PlatformResult<PlatformStartupChangeResult> {
+    if !matches!(
+        source_id,
+        "windows.registry.run" | "windows.startup_folder.user" | "windows.startup_folder.common"
+    ) {
+        return Err(PlatformError::new(
+            PlatformErrorCode::Unsupported,
+            "startup helper source is not allowlisted",
+        ));
+    }
     let artifact = results
         .iter()
         .find(|source| source.source_id == source_id)
@@ -149,8 +211,11 @@ pub(super) fn helper_change(
         })
         .cloned()
         .ok_or_else(|| PlatformError::item_changed("startup helper target no longer exists"))?;
-    let authorized =
-        artifact.control_capability == PlatformStartupControlCapability::ElevationRequired;
+    let authorized = artifact.control_capability
+        == PlatformStartupControlCapability::ElevationRequired
+        || (desired_state == PlatformStartupDesiredState::Removed
+            && artifact.control_capability == PlatformStartupControlCapability::RemoveOnly
+            && matches!(artifact.scope, crate::PlatformStartupScope::Machine));
     if !authorized || crate::startup_helper::artifact_digest(&artifact) != expected_artifact_digest
     {
         return Err(PlatformError::item_changed(

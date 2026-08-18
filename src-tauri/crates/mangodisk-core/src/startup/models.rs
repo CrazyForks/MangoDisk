@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
-pub const STARTUP_CATALOG_SCHEMA_VERSION: u32 = 1;
-pub const STARTUP_CHANGE_PLAN_SCHEMA_VERSION: u32 = 1;
+pub const STARTUP_CATALOG_SCHEMA_VERSION: u32 = 2;
+pub const STARTUP_CHANGE_PLAN_SCHEMA_VERSION: u32 = 2;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -199,6 +199,7 @@ pub struct StartupArtifact {
     pub trust: StartupTrustState,
     pub modified_at_ms: Option<u64>,
     pub diagnostics: Vec<StartupDiagnosticCode>,
+    pub removable_orphan: bool,
     #[serde(skip)]
     pub(crate) group_identity_key: String,
     #[serde(skip)]
@@ -268,6 +269,7 @@ pub struct StartupCatalog {
 pub enum StartupDesiredState {
     Enabled,
     Disabled,
+    Removed,
 }
 
 #[derive(Debug, Clone, Deserialize)]

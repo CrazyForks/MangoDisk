@@ -20,6 +20,13 @@ use crate::PlatformStartupTrustState;
 
 const MAX_VERSION_RESOURCE_BYTES: u32 = 16 * 1024 * 1024;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum FilesystemTargetState {
+    Present,
+    Missing,
+    Unknown,
+}
+
 #[derive(Debug, Default)]
 pub(super) struct FileVersionMetadata {
     pub product_name: Option<String>,
@@ -99,6 +106,32 @@ pub(super) fn startup_trust(
     }
 }
 
+/// Distinguishes a missing local target from an unavailable filesystem boundary.
+///
+/// Remote paths are intentionally never classified as missing because a disconnected share is
+/// indistinguishable from a deleted target without performing network I/O. Local drive roots must
+/// also be available before absence can become evidence for destructive orphan cleanup.
+pub(super) fn filesystem_target_state(path: &Path) -> FilesystemTargetState {
+    if !path.is_absolute() || path.to_string_lossy().starts_with(r"\\") {
+        return FilesystemTargetState::Unknown;
+    }
+    let Some(root) = path
+        .ancestors()
+        .last()
+        .filter(|root| !root.as_os_str().is_empty())
+    else {
+        return FilesystemTargetState::Unknown;
+    };
+    if !matches!(root.try_exists(), Ok(true)) {
+        return FilesystemTargetState::Unknown;
+    }
+    match path.try_exists() {
+        Ok(true) => FilesystemTargetState::Present,
+        Ok(false) => FilesystemTargetState::Missing,
+        Err(_) => FilesystemTargetState::Unknown,
+    }
+}
+
 fn version_translations(buffer: &[u8]) -> Vec<(u16, u16)> {
     let query = HSTRING::from(r"\VarFileInfo\Translation");
     let mut pointer = std::ptr::null_mut::<c_void>();
@@ -162,6 +195,14 @@ mod tests {
     #[test]
     fn missing_file_has_no_version_metadata() {
         assert!(file_version_metadata(Path::new(r"C:\missing\fixture.exe")).is_none());
+    }
+
+    #[test]
+    fn remote_target_is_never_claimed_as_missing() {
+        assert_eq!(
+            filesystem_target_state(Path::new(r"\\unavailable\share\agent.exe")),
+            FilesystemTargetState::Unknown
+        );
     }
 
     #[test]

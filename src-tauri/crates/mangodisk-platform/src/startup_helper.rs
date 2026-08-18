@@ -15,8 +15,8 @@ use crate::{
     PlatformStartupDesiredState,
 };
 
-const HELPER_FLAG: &str = "--mangodisk-startup-helper-v1";
-const PROTOCOL: &str = "mangodisk-startup-helper-v1";
+const HELPER_FLAG: &str = "--mangodisk-startup-helper-v2";
+const PROTOCOL: &str = "mangodisk-startup-helper-v2";
 const MAX_MESSAGE_BYTES: u64 = 1024 * 1024;
 const MAX_BATCH_ITEMS: usize = 128;
 const HELPER_SUCCESS_EXIT_CODE: i32 = 0;
@@ -42,6 +42,14 @@ struct HelperRequestItem {
     desired_state: WireState,
 }
 
+#[derive(Debug, Clone)]
+pub(crate) struct StartupHelperChangeRequest {
+    pub(crate) source_id: String,
+    pub(crate) provider_item_id: String,
+    pub(crate) expected_artifact_digest: String,
+    pub(crate) desired_state: PlatformStartupDesiredState,
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct HelperResponse {
@@ -57,11 +65,12 @@ struct HelperResponseItem {
     error_code: Option<WireErrorCode>,
 }
 
-#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 enum WireState {
     Enabled,
     Disabled,
+    Removed,
     Unknown,
     NotApplicable,
 }
@@ -271,10 +280,12 @@ fn execute_helper_request(
             "startup helper message names do not match the request nonce",
         ));
     }
-    let has_invalid_state = request
-        .items
-        .iter()
-        .any(|item| !matches!(item.desired_state, WireState::Enabled | WireState::Disabled));
+    let has_invalid_state = request.items.iter().any(|item| {
+        !matches!(
+            item.desired_state,
+            WireState::Enabled | WireState::Disabled | WireState::Removed
+        )
+    });
     if request.items.is_empty() || request.items.len() > MAX_BATCH_ITEMS || has_invalid_state {
         return Err(PlatformError::new(
             PlatformErrorCode::InvalidData,
@@ -283,9 +294,17 @@ fn execute_helper_request(
     }
     #[cfg(target_os = "macos")]
     validate_macos_request_owner(request_path, request.interactive_user_id)?;
-    let mut items = Vec::with_capacity(request.items.len());
-    for item in &request.items {
-        let response = match platform_helper_change(item, interactive_user_id(&request)) {
+    let dispatch_items = helper_dispatch_items(&request.items);
+    let outcomes = platform_helper_change_many(&dispatch_items, interactive_user_id(&request));
+    if outcomes.len() != dispatch_items.len() {
+        return Err(PlatformError::new(
+            PlatformErrorCode::InvalidData,
+            "startup helper platform batch result count is invalid",
+        ));
+    }
+    let items = outcomes
+        .into_iter()
+        .map(|outcome| match outcome {
             Ok(outcome) => HelperResponseItem {
                 outcome: Some(WireOutcome {
                     previous_state: outcome.previous_state.into(),
@@ -298,14 +317,25 @@ fn execute_helper_request(
                 outcome: None,
                 error_code: Some(error.code().into()),
             },
-        };
-        items.push(response);
-    }
+        })
+        .collect();
     Ok(HelperResponse {
         protocol: PROTOCOL.to_owned(),
         nonce: request.nonce,
         items,
     })
+}
+
+fn helper_dispatch_items(items: &[HelperRequestItem]) -> Vec<StartupHelperChangeRequest> {
+    items
+        .iter()
+        .map(|item| StartupHelperChangeRequest {
+            source_id: item.source_id.clone(),
+            provider_item_id: item.provider_item_id.clone(),
+            expected_artifact_digest: item.expected_artifact_digest.clone(),
+            desired_state: item.desired_state.into(),
+        })
+        .collect()
 }
 
 #[cfg(target_os = "macos")]
@@ -318,30 +348,24 @@ fn interactive_user_id(_request: &HelperRequest) -> u32 {
     0
 }
 
-fn platform_helper_change(
-    request: &HelperRequestItem,
+fn platform_helper_change_many(
+    requests: &[StartupHelperChangeRequest],
     _interactive_user_id: u32,
-) -> PlatformResult<PlatformStartupChangeResult> {
+) -> Vec<PlatformResult<PlatformStartupChangeResult>> {
     #[cfg(windows)]
-    return crate::windows::startup_helper_change(
-        &request.source_id,
-        &request.provider_item_id,
-        &request.expected_artifact_digest,
-        request.desired_state.into(),
-    );
+    return crate::windows::startup_helper_change_many(requests);
     #[cfg(target_os = "macos")]
-    return crate::macos::startup_helper_change(
-        &request.source_id,
-        &request.provider_item_id,
-        &request.expected_artifact_digest,
-        request.desired_state.into(),
-        _interactive_user_id,
-    );
+    return crate::macos::startup_helper_change_many(requests, _interactive_user_id);
     #[cfg(not(any(windows, target_os = "macos")))]
-    Err(PlatformError::new(
-        PlatformErrorCode::Unsupported,
-        "startup helper is unavailable on this platform",
-    ))
+    requests
+        .iter()
+        .map(|_| {
+            Err(PlatformError::new(
+                PlatformErrorCode::Unsupported,
+                "startup helper is unavailable on this platform",
+            ))
+        })
+        .collect()
 }
 
 pub(crate) fn artifact_digest(artifact: &PlatformStartupArtifact) -> String {
@@ -514,6 +538,7 @@ impl From<PlatformStartupDesiredState> for WireState {
         match value {
             PlatformStartupDesiredState::Enabled => Self::Enabled,
             PlatformStartupDesiredState::Disabled => Self::Disabled,
+            PlatformStartupDesiredState::Removed => Self::Removed,
         }
     }
 }
@@ -523,6 +548,7 @@ impl From<WireState> for PlatformStartupDesiredState {
         match value {
             WireState::Enabled => Self::Enabled,
             WireState::Disabled => Self::Disabled,
+            WireState::Removed => Self::Removed,
             WireState::Unknown | WireState::NotApplicable => Self::Disabled,
         }
     }
@@ -544,6 +570,7 @@ impl From<WireState> for PlatformStartupConfiguredState {
         match value {
             WireState::Enabled => Self::Enabled,
             WireState::Disabled => Self::Disabled,
+            WireState::Removed => Self::NotApplicable,
             WireState::Unknown => Self::Unknown,
             WireState::NotApplicable => Self::NotApplicable,
         }
@@ -899,6 +926,48 @@ mod tests {
         assert_eq!(
             result.expect_err("an empty helper batch must fail").code(),
             PlatformErrorCode::InvalidData
+        );
+    }
+
+    #[test]
+    fn helper_v2_batch_preserves_removed_state_and_item_order() {
+        let request = HelperRequest {
+            protocol: PROTOCOL.to_owned(),
+            nonce: "0123456789abcdef0123456789abcdef".to_owned(),
+            items: vec![
+                HelperRequestItem {
+                    source_id: "test.first".to_owned(),
+                    provider_item_id: "first".to_owned(),
+                    expected_artifact_digest: "first-digest".to_owned(),
+                    desired_state: WireState::Removed,
+                },
+                HelperRequestItem {
+                    source_id: "test.second".to_owned(),
+                    provider_item_id: "second".to_owned(),
+                    expected_artifact_digest: "second-digest".to_owned(),
+                    desired_state: WireState::Disabled,
+                },
+            ],
+            #[cfg(target_os = "macos")]
+            interactive_user_id: unsafe { libc::geteuid() },
+        };
+
+        let encoded = serde_json::to_vec(&request).expect("helper request must serialize");
+        let decoded: HelperRequest =
+            serde_json::from_slice(&encoded).expect("helper request must deserialize");
+        let dispatch = helper_dispatch_items(&decoded.items);
+
+        assert_eq!(decoded.protocol, "mangodisk-startup-helper-v2");
+        assert_eq!(dispatch.len(), 2);
+        assert_eq!(dispatch[0].provider_item_id, "first");
+        assert_eq!(
+            dispatch[0].desired_state,
+            PlatformStartupDesiredState::Removed
+        );
+        assert_eq!(dispatch[1].provider_item_id, "second");
+        assert_eq!(
+            PlatformStartupConfiguredState::from(WireState::Removed),
+            PlatformStartupConfiguredState::NotApplicable
         );
     }
 }

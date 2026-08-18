@@ -71,20 +71,11 @@ impl StartupPlatform for MacOsPlatform {
     }
 }
 
-pub(crate) fn startup_helper_change(
-    source_id: &str,
-    provider_item_id: &str,
-    expected_artifact_digest: &str,
-    desired_state: crate::PlatformStartupDesiredState,
+pub(crate) fn startup_helper_change_many(
+    requests: &[crate::startup_helper::StartupHelperChangeRequest],
     interactive_user_id: u32,
-) -> PlatformResult<crate::PlatformStartupChangeResult> {
-    startup::helper_change(
-        source_id,
-        provider_item_id,
-        expected_artifact_digest,
-        desired_state,
-        interactive_user_id,
-    )
+) -> Vec<PlatformResult<crate::PlatformStartupChangeResult>> {
+    startup::helper_change_many(requests, interactive_user_id)
 }
 
 // Darwin exposes cloud placeholders through `SF_DATALESS` in `st_flags`. The value is part of

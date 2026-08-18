@@ -23,13 +23,16 @@ use crate::{
     PlatformCancellation, PlatformError, PlatformErrorCode, PlatformResult,
     PlatformStartupArtifact, PlatformStartupChangeRequest, PlatformStartupChangeResult,
     PlatformStartupConfiguredState, PlatformStartupControlCapability,
-    PlatformStartupCoverageReason, PlatformStartupCoverageStatus, PlatformStartupDiagnosticCode,
-    PlatformStartupIdentityConfidence, PlatformStartupOwner, PlatformStartupRuntimeState,
-    PlatformStartupScope, PlatformStartupSourceKind, PlatformStartupSourceResult,
-    PlatformStartupSummarySource, PlatformStartupTarget, PlatformStartupTrigger,
+    PlatformStartupCoverageReason, PlatformStartupCoverageStatus, PlatformStartupDesiredState,
+    PlatformStartupDiagnosticCode, PlatformStartupIdentityConfidence, PlatformStartupOwner,
+    PlatformStartupRuntimeState, PlatformStartupScope, PlatformStartupSourceKind,
+    PlatformStartupSourceResult, PlatformStartupSummarySource, PlatformStartupTarget,
+    PlatformStartupTrigger,
 };
 
-use super::metadata::{file_version_metadata, startup_trust};
+use super::metadata::{
+    file_version_metadata, filesystem_target_state, startup_trust, FilesystemTargetState,
+};
 use super::registry::{
     changed_startup_approved_bytes, desired_configured_state, modified_at_ms, normalized_path,
     split_command_line, startup_approved_state, target_kind,
@@ -199,6 +202,9 @@ pub(super) fn change(
             "startup folder item changed after preflight",
         ));
     }
+    if request.desired_state == PlatformStartupDesiredState::Removed {
+        return remove_orphaned_shortcut(source, &source_path, &current);
+    }
     if !matches!(
         current.control_capability,
         PlatformStartupControlCapability::Toggleable
@@ -236,6 +242,62 @@ pub(super) fn change(
         previous_state: current.configured_state,
         configured_state: verified.configured_state,
         verified: verified.configured_state == desired,
+    })
+}
+
+fn remove_orphaned_shortcut(
+    source: FolderSource,
+    source_path: &Path,
+    current: &PlatformStartupArtifact,
+) -> PlatformResult<PlatformStartupChangeResult> {
+    if !current
+        .diagnostics
+        .contains(&PlatformStartupDiagnosticCode::MissingTarget)
+    {
+        return Err(PlatformError::item_changed(
+            "startup folder item is no longer orphaned",
+        ));
+    }
+    let expected_folder = known_folder_path(source.folder_id).map_err(|error| {
+        PlatformError::new(
+            PlatformErrorCode::OperationFailed,
+            format!("resolve startup folder: {error}"),
+        )
+    })?;
+    let is_shortcut = source_path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("lnk"));
+    let metadata = fs::symlink_metadata(source_path)
+        .map_err(|error| PlatformError::io("inspect orphaned startup shortcut", &error))?;
+    if source_path.parent() != Some(expected_folder.as_path())
+        || !is_shortcut
+        || !metadata.is_file()
+        || metadata.file_type().is_symlink()
+    {
+        return Err(PlatformError::invalid_path(
+            "startup shortcut is outside the removable source boundary",
+        ));
+    }
+
+    fs::remove_file(source_path)
+        .map_err(|error| PlatformError::io("remove orphaned startup shortcut", &error))?;
+    if let Some(file_name) = source_path.file_name().and_then(|name| name.to_str()) {
+        let root = RegKey::predef(source.approval_root);
+        if let Ok(approval) =
+            root.open_subkey_with_flags(STARTUP_APPROVED_FOLDER_PATH, KEY_SET_VALUE)
+        {
+            let _ = approval.delete_value(file_name);
+        }
+    }
+    let verified = matches!(
+        fs::symlink_metadata(source_path),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound
+    );
+    Ok(PlatformStartupChangeResult {
+        previous_state: current.configured_state,
+        configured_state: PlatformStartupConfiguredState::NotApplicable,
+        verified,
     })
 }
 
@@ -344,7 +406,7 @@ fn folder_artifact(
             vec![PlatformStartupDiagnosticCode::UnsupportedFormat],
         ),
     };
-    if !target_path.exists() {
+    if filesystem_target_state(&target_path) == FilesystemTargetState::Missing {
         diagnostics.push(PlatformStartupDiagnosticCode::MissingTarget);
     }
     let configured_state = approval
@@ -479,9 +541,21 @@ fn result(
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
+    use std::{fs, path::Path};
 
-    use super::{is_startup_folder_metadata, wide_buffer_string};
+    use super::{
+        change, folder_artifact, folder_sources, is_startup_folder_metadata, known_folder_path,
+        wide_buffer_string, ComGuard,
+    };
+    use crate::{
+        PlatformStartupChangeRequest, PlatformStartupConfiguredState, PlatformStartupDesiredState,
+        PlatformStartupDiagnosticCode,
+    };
+    use windows::Win32::{
+        System::Com::{CoCreateInstance, IPersistFile, CLSCTX_INPROC_SERVER},
+        UI::Shell::{IShellLinkW, ShellLink},
+    };
+    use windows_core::{Interface, HSTRING};
 
     #[test]
     fn desktop_ini_is_excluded_case_insensitively() {
@@ -501,5 +575,63 @@ mod tests {
         let buffer = [b'a' as u16, b'b' as u16, 0, b'c' as u16];
 
         assert_eq!(wide_buffer_string(&buffer).as_deref(), Some("ab"));
+    }
+
+    #[test]
+    #[ignore = "creates and removes an isolated shortcut in the current user's Startup folder"]
+    fn actual_orphan_shortcut_removal_deletes_only_the_fixture() {
+        let _com = ComGuard::initialize().expect("COM must initialize for the shortcut fixture");
+        let source = folder_sources()[0];
+        let folder = known_folder_path(source.folder_id)
+            .expect("the current user's Startup folder must be available");
+        let suffix = format!("{}", std::process::id());
+        let link_path = folder.join(format!("MangoDiskOrphanFixture{suffix}.lnk"));
+        let target_path = folder.join(format!("MangoDiskMissingTarget{suffix}.exe"));
+        assert!(!target_path.exists());
+        let _cleanup = ShortcutFixtureGuard(link_path.clone());
+
+        let link: IShellLinkW = unsafe {
+            CoCreateInstance(&ShellLink, None, CLSCTX_INPROC_SERVER)
+                .expect("the ShellLink fixture must be created")
+        };
+        unsafe {
+            link.SetPath(&HSTRING::from(target_path.as_os_str()))
+                .expect("the shortcut target must be configured");
+        }
+        let persist: IPersistFile = link
+            .cast()
+            .expect("the shortcut fixture must support persistence");
+        unsafe {
+            persist
+                .Save(&HSTRING::from(link_path.as_os_str()), true)
+                .expect("the shortcut fixture must be written");
+        }
+
+        let orphan = folder_artifact(source, &link_path, None);
+        assert!(orphan
+            .diagnostics
+            .contains(&PlatformStartupDiagnosticCode::MissingTarget));
+        let removed = change(&PlatformStartupChangeRequest {
+            provider_item_id: orphan.provider_item_id.clone(),
+            source_id: source.source_id.to_owned(),
+            expected_artifact: orphan,
+            desired_state: PlatformStartupDesiredState::Removed,
+        })
+        .expect("the orphaned shortcut fixture must be removed");
+
+        assert!(removed.verified);
+        assert_eq!(
+            removed.configured_state,
+            PlatformStartupConfiguredState::NotApplicable
+        );
+        assert!(!link_path.exists());
+    }
+
+    struct ShortcutFixtureGuard(std::path::PathBuf);
+
+    impl Drop for ShortcutFixtureGuard {
+        fn drop(&mut self) {
+            let _ = fs::remove_file(&self.0);
+        }
     }
 }

@@ -362,6 +362,12 @@ pub(super) fn change(
             "background login item is not toggleable",
         ));
     }
+    if request.desired_state == PlatformStartupDesiredState::Removed {
+        return Err(PlatformError::new(
+            crate::PlatformErrorCode::Unsupported,
+            "background login items cannot be removed by startup management",
+        ));
+    }
     let path =
         current.target.path.as_deref().ok_or_else(|| {
             PlatformError::invalid_path("background login item path is unavailable")

@@ -209,8 +209,9 @@ impl StartupService {
             targets,
         })?;
         log::info!(
-            "startup_change_prepared operation_id={} target_count={} skipped_count={} expires_in_ms={}",
+            "startup_change_prepared operation_id={} desired_state={:?} target_count={} skipped_count={} expires_in_ms={}",
             operation.id(),
+            public_plan.desired_state,
             public_plan.items.len(),
             public_plan.skipped_items.len(),
             CHANGE_PLAN_TTL_MS
@@ -314,8 +315,9 @@ impl StartupService {
         // its verified result or invite the UI to retry a consumed plan.
         let catalog = refresh_catalog_after_change(&platform, operation.id());
         log::info!(
-            "startup_change_completed operation_id={} changed_count={} failed_count={} verified_count={} catalog_refreshed={}",
+            "startup_change_completed operation_id={} desired_state={:?} changed_count={} failed_count={} verified_count={} catalog_refreshed={}",
             operation.id(),
+            pending.public_plan.desired_state,
             changed_count,
             failed_count,
             results.iter().filter(|item| item.verified).count(),
@@ -535,6 +537,7 @@ fn history_state_from_desired(state: StartupDesiredState) -> StartupHistoryState
     match state {
         StartupDesiredState::Enabled => StartupHistoryState::Enabled,
         StartupDesiredState::Disabled => StartupHistoryState::Disabled,
+        StartupDesiredState::Removed => StartupHistoryState::Removed,
     }
 }
 
@@ -608,6 +611,10 @@ fn preflight_skip_reason(
     artifact: &PlatformStartupArtifact,
     desired_state: StartupDesiredState,
 ) -> Option<StartupChangeSkipReason> {
+    if desired_state == StartupDesiredState::Removed {
+        return (!super::policy::is_removable_orphan(artifact))
+            .then_some(StartupChangeSkipReason::UnsupportedCapability);
+    }
     match artifact.control_capability {
         PlatformStartupControlCapability::ElevationRequired
         | PlatformStartupControlCapability::Toggleable => {}
@@ -627,6 +634,9 @@ fn preflight_skip_reason(
     let desired = match desired_state {
         StartupDesiredState::Enabled => PlatformStartupConfiguredState::Enabled,
         StartupDesiredState::Disabled => PlatformStartupConfiguredState::Disabled,
+        StartupDesiredState::Removed => {
+            unreachable!("removed startup items return before state comparison")
+        }
     };
     match artifact.configured_state {
         PlatformStartupConfiguredState::Unknown | PlatformStartupConfiguredState::NotApplicable => {
@@ -827,6 +837,7 @@ impl From<StartupDesiredState> for PlatformStartupDesiredState {
         match value {
             StartupDesiredState::Enabled => Self::Enabled,
             StartupDesiredState::Disabled => Self::Disabled,
+            StartupDesiredState::Removed => Self::Removed,
         }
     }
 }
@@ -925,6 +936,37 @@ mod tests {
         assert_eq!(
             preflight_skip_reason(&artifact, StartupDesiredState::Disabled),
             None
+        );
+    }
+
+    #[test]
+    fn preflight_only_removes_allowlisted_orphaned_configurations() {
+        let mut launch_agent = test_artifact(
+            PlatformStartupControlCapability::Toggleable,
+            PlatformStartupConfiguredState::Disabled,
+        );
+        launch_agent.configuration_path = Some(std::path::PathBuf::from(
+            "/Users/fixture/Library/LaunchAgents/com.example.fixture.plist",
+        ));
+
+        assert_eq!(
+            preflight_skip_reason(&launch_agent, StartupDesiredState::Removed),
+            Some(StartupChangeSkipReason::UnsupportedCapability)
+        );
+
+        launch_agent
+            .diagnostics
+            .push(PlatformStartupDiagnosticCode::MissingTarget);
+
+        assert_eq!(
+            preflight_skip_reason(&launch_agent, StartupDesiredState::Removed),
+            None
+        );
+
+        launch_agent.source_kind = mangodisk_platform::PlatformStartupSourceKind::Service;
+        assert_eq!(
+            preflight_skip_reason(&launch_agent, StartupDesiredState::Removed),
+            Some(StartupChangeSkipReason::UnsupportedCapability)
         );
     }
 

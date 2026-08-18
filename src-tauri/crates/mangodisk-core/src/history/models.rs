@@ -118,6 +118,7 @@ pub struct ApplicationUninstallOperationDetails {
 pub enum StartupHistoryState {
     Enabled,
     Disabled,
+    Removed,
     Unknown,
 }
 

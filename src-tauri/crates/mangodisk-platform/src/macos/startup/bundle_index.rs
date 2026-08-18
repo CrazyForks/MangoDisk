@@ -1,4 +1,4 @@
-use std::{fs, path::PathBuf, sync::OnceLock};
+use std::{fs, path::PathBuf};
 
 use plist::Dictionary;
 
@@ -16,25 +16,13 @@ struct InstalledApplication {
     version: Option<String>,
 }
 
-pub(super) fn resolve_owner(
-    label: Option<&str>,
-    _target_team_id: Option<&str>,
-) -> Option<PlatformStartupOwner> {
-    let applications = installed_applications();
-    let candidates: Vec<_> = applications.iter().collect();
-    let label = label?;
-    let (application, score) = unique_best_match(label, &candidates)?;
-    let confidence = if score >= 100 {
-        PlatformStartupIdentityConfidence::Exact
-    } else {
-        PlatformStartupIdentityConfidence::Strong
-    };
-    Some(owner(application, confidence))
+#[derive(Default)]
+pub(super) struct BundleIndex {
+    applications: Vec<InstalledApplication>,
 }
 
-fn installed_applications() -> &'static Vec<InstalledApplication> {
-    static APPLICATIONS: OnceLock<Vec<InstalledApplication>> = OnceLock::new();
-    APPLICATIONS.get_or_init(|| {
+impl BundleIndex {
+    pub(super) fn discover() -> Self {
         let mut applications = Vec::new();
         for (root, system_owned) in application_roots() {
             if system_owned {
@@ -66,8 +54,26 @@ fn installed_applications() -> &'static Vec<InstalledApplication> {
             "startup_bundle_index_ready application_count={}",
             applications.len()
         );
-        applications
-    })
+        Self { applications }
+    }
+
+    pub(super) fn resolve_owner(
+        &self,
+        label: Option<&str>,
+        _target_team_id: Option<&str>,
+    ) -> Option<PlatformStartupOwner> {
+        let label = label?;
+        // Discovery already creates a scan-scoped snapshot from live directory entries. Avoid
+        // re-reading every bundle for every launchd job; the next scan will reflect later changes.
+        let candidates: Vec<_> = self.applications.iter().collect();
+        let (application, score) = unique_best_match(label, &candidates)?;
+        let confidence = if score >= 100 {
+            PlatformStartupIdentityConfidence::Exact
+        } else {
+            PlatformStartupIdentityConfidence::Strong
+        };
+        Some(owner(application, confidence))
+    }
 }
 
 fn application_from_metadata(path: PathBuf, metadata: &Dictionary) -> Option<InstalledApplication> {
@@ -112,11 +118,6 @@ fn match_score(label: &str, application: &InstalledApplication) -> u16 {
     application
         .bundle_identifier
         .split(|character: char| !character.is_ascii_alphanumeric())
-        .chain(
-            application
-                .name
-                .split(|character: char| !character.is_ascii_alphanumeric()),
-        )
         .map(normalize)
         .filter(|token| token.len() >= 5 && normalized_label.contains(token))
         .map(|_| 70)
@@ -183,5 +184,15 @@ mod tests {
         let application = application("com.example.Open", "Open");
 
         assert_eq!(match_score("homebrew.mxcl.openresty", &application), 0);
+    }
+
+    #[test]
+    fn display_name_words_do_not_associate_unrelated_applications() {
+        let application = application("com.tencent.cleanwechat", "Clean My WeChat");
+
+        assert_eq!(
+            match_score("com.macpaw.CleanMyMac5.Updater", &application),
+            0
+        );
     }
 }

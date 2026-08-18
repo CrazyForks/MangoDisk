@@ -27,7 +27,9 @@ use crate::{
     PlatformStartupTargetKind, PlatformStartupTrigger,
 };
 
-use super::metadata::{file_version_metadata, startup_trust};
+use super::metadata::{
+    file_version_metadata, filesystem_target_state, startup_trust, FilesystemTargetState,
+};
 
 const RUN_PATH: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
 const RUN_ONCE_PATH: &str = r"Software\Microsoft\Windows\CurrentVersion\RunOnce";
@@ -209,6 +211,9 @@ pub(super) fn change(
             "registry startup item changed after preflight",
         ));
     }
+    if request.desired_state == PlatformStartupDesiredState::Removed {
+        return remove_orphaned_value(source, &value_name, &current);
+    }
     if !matches!(
         current.control_capability,
         PlatformStartupControlCapability::Toggleable
@@ -242,16 +247,36 @@ pub(super) fn change(
     }
     let desired = desired_configured_state(request.desired_state);
     if current.configured_state != desired {
-        let bytes = changed_startup_approved_bytes(existing.as_ref(), request.desired_state)?;
-        approval_key
-            .set_raw_value(
-                &value_name,
-                &RegValue {
-                    bytes,
-                    vtype: REG_BINARY,
-                },
-            )
-            .map_err(|error| PlatformError::io("write startup approval state", &error))?;
+        match request.desired_state {
+            PlatformStartupDesiredState::Enabled => {
+                // Absence is Windows' native enabled state for Run entries. Removing the disabled
+                // override restores that state without leaving MangoDisk-owned registry residue.
+                if let Err(error) = approval_key.delete_value(&value_name) {
+                    if error.kind() != std::io::ErrorKind::NotFound {
+                        return Err(PlatformError::io("remove startup approval state", &error));
+                    }
+                }
+            }
+            PlatformStartupDesiredState::Disabled => {
+                let bytes =
+                    changed_startup_approved_bytes(existing.as_ref(), request.desired_state)?;
+                approval_key
+                    .set_raw_value(
+                        &value_name,
+                        &RegValue {
+                            bytes,
+                            vtype: REG_BINARY,
+                        },
+                    )
+                    .map_err(|error| PlatformError::io("write startup approval state", &error))?;
+            }
+            PlatformStartupDesiredState::Removed => {
+                return Err(PlatformError::new(
+                    PlatformErrorCode::Unsupported,
+                    "removed startup items do not use approval state bytes",
+                ));
+            }
+        }
     }
     let command_key = root
         .open_subkey_with_flags(source.key_path, KEY_READ | source.view)
@@ -266,6 +291,51 @@ pub(super) fn change(
         previous_state: current.configured_state,
         configured_state: verified.configured_state,
         verified: verified.configured_state == desired,
+    })
+}
+
+fn remove_orphaned_value(
+    source: RegistrySource,
+    value_name: &str,
+    current: &PlatformStartupArtifact,
+) -> PlatformResult<PlatformStartupChangeResult> {
+    if !current
+        .diagnostics
+        .contains(&PlatformStartupDiagnosticCode::MissingTarget)
+        || !matches!(
+            current.control_capability,
+            PlatformStartupControlCapability::Toggleable
+                | PlatformStartupControlCapability::ElevationRequired
+                | PlatformStartupControlCapability::RemoveOnly
+        )
+    {
+        return Err(PlatformError::item_changed(
+            "registry startup item is no longer safely removable",
+        ));
+    }
+
+    let root = RegKey::predef(source.root);
+    let key = root
+        .open_subkey_with_flags(source.key_path, KEY_READ | KEY_SET_VALUE | source.view)
+        .map_err(|error| PlatformError::io("open orphaned registry startup item", &error))?;
+    key.delete_value(value_name)
+        .map_err(|error| PlatformError::io("remove orphaned registry startup item", &error))?;
+    if let Some(bucket) = source.approval_bucket {
+        if let Ok(approval) = root.open_subkey_with_flags(
+            format!(r"{STARTUP_APPROVED_PATH}\{bucket}"),
+            KEY_SET_VALUE | source.view,
+        ) {
+            let _ = approval.delete_value(value_name);
+        }
+    }
+    let verified = matches!(
+        key.get_raw_value(value_name),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound
+    );
+    Ok(PlatformStartupChangeResult {
+        previous_state: current.configured_state,
+        configured_state: PlatformStartupConfiguredState::NotApplicable,
+        verified,
     })
 }
 
@@ -310,6 +380,7 @@ pub(super) fn desired_configured_state(
     match desired {
         PlatformStartupDesiredState::Enabled => PlatformStartupConfiguredState::Enabled,
         PlatformStartupDesiredState::Disabled => PlatformStartupConfiguredState::Disabled,
+        PlatformStartupDesiredState::Removed => PlatformStartupConfiguredState::NotApplicable,
     }
 }
 
@@ -331,6 +402,12 @@ pub(super) fn changed_startup_approved_bytes(
         (0x06 | 0x07, PlatformStartupDesiredState::Disabled) => 0x07,
         (_, PlatformStartupDesiredState::Enabled) => 0x02,
         (_, PlatformStartupDesiredState::Disabled) => 0x03,
+        (_, PlatformStartupDesiredState::Removed) => {
+            return Err(PlatformError::new(
+                PlatformErrorCode::Unsupported,
+                "removed startup items do not use approval state bytes",
+            ));
+        }
     };
     Ok(bytes)
 }
@@ -347,8 +424,10 @@ fn artifact_from_value(
         .as_deref()
         .map(expand_environment_variables)
         .map(PathBuf::from);
-    let target_exists = target_path.as_deref().is_some_and(Path::exists);
-    let diagnostics = if target_path.is_some() && !target_exists {
+    let diagnostics = if target_path.as_deref().is_some_and(|path| {
+        is_definitive_filesystem_target(path)
+            && filesystem_target_state(path) == FilesystemTargetState::Missing
+    }) {
         vec![PlatformStartupDiagnosticCode::MissingTarget]
     } else if target_path.is_none() {
         vec![PlatformStartupDiagnosticCode::InvalidData]
@@ -434,6 +513,14 @@ fn artifact_from_value(
         modified_at_ms: target_path.as_deref().and_then(modified_at_ms),
         diagnostics,
     }
+}
+
+fn is_definitive_filesystem_target(path: &Path) -> bool {
+    path.is_absolute()
+        && matches!(
+            target_kind(Some(path)),
+            PlatformStartupTargetKind::Executable | PlatformStartupTargetKind::Script
+        )
 }
 
 pub(super) fn startup_approved_state(bytes: &[u8]) -> PlatformStartupConfiguredState {
@@ -538,10 +625,13 @@ pub(super) fn modified_at_ms(path: &Path) -> Option<u64> {
 #[cfg(test)]
 mod tests {
     use super::{
-        change, changed_startup_approved_bytes, expand_environment_variables, find_item, scan,
-        split_command_line, startup_approved_state, RUN_PATH, STARTUP_APPROVED_PATH,
+        artifact_from_value, change, changed_startup_approved_bytes, expand_environment_variables,
+        find_item, registry_sources, scan, split_command_line, startup_approved_state, RUN_PATH,
+        STARTUP_APPROVED_PATH,
     };
-    use crate::{PlatformStartupConfiguredState, PlatformStartupDesiredState};
+    use crate::{
+        PlatformStartupConfiguredState, PlatformStartupDesiredState, PlatformStartupDiagnosticCode,
+    };
     use winreg::{enums::REG_BINARY, RegKey, RegValue};
 
     #[test]
@@ -570,6 +660,55 @@ mod tests {
         let value = expand_environment_variables(r"%MANGODISK_TEST_UNKNOWN%\agent.exe");
 
         assert_eq!(value, r"%MANGODISK_TEST_UNKNOWN%\agent.exe");
+    }
+
+    #[test]
+    fn bare_executable_is_not_reported_as_a_missing_target() {
+        let source = registry_sources()
+            .into_iter()
+            .next()
+            .expect("at least one registry source must exist");
+        let artifact = artifact_from_value(source, "Fixture", "cmd.exe /c exit", None);
+
+        assert!(!artifact
+            .diagnostics
+            .contains(&PlatformStartupDiagnosticCode::MissingTarget));
+    }
+
+    #[test]
+    fn relative_and_unresolved_targets_fail_closed() {
+        let source = registry_sources()
+            .into_iter()
+            .next()
+            .expect("at least one registry source must exist");
+        for command in [
+            r"tools\agent.exe --silent",
+            r"%MANGODISK_UNKNOWN_STARTUP_ROOT%\agent.exe --silent",
+            r"C:\Program Files\Example\agent.exe --silent",
+        ] {
+            let artifact = artifact_from_value(source, "Fixture", command, None);
+            assert!(!artifact
+                .diagnostics
+                .contains(&PlatformStartupDiagnosticCode::MissingTarget));
+        }
+    }
+
+    #[test]
+    fn absent_absolute_target_is_reported_as_missing() {
+        let source = registry_sources()
+            .into_iter()
+            .next()
+            .expect("at least one registry source must exist");
+        let artifact = artifact_from_value(
+            source,
+            "Fixture",
+            r#""C:\MangoDiskMissingFixture\agent.exe" --silent"#,
+            None,
+        );
+
+        assert!(artifact
+            .diagnostics
+            .contains(&PlatformStartupDiagnosticCode::MissingTarget));
     }
 
     #[test]
@@ -686,6 +825,77 @@ mod tests {
             ),
             PlatformStartupConfiguredState::Enabled
         );
+    }
+
+    #[test]
+    #[ignore = "removes an isolated orphaned HKCU startup fixture and restores prior values"]
+    fn actual_hkcu_orphan_removal_deletes_only_the_fixture() {
+        use std::process;
+
+        use crate::{PlatformStartupChangeRequest, PlatformStartupControlCapability};
+        use winreg::enums::{HKEY_CURRENT_USER, KEY_READ, KEY_SET_VALUE, KEY_WOW64_64KEY};
+
+        let value_name = format!("MangoDiskOrphanFixture{}", process::id());
+        let root = RegKey::predef(HKEY_CURRENT_USER);
+        let (run_key, _) = root
+            .create_subkey_with_flags(RUN_PATH, KEY_READ | KEY_SET_VALUE | KEY_WOW64_64KEY)
+            .expect("the HKCU Run fixture key must be writable");
+        let (approval_key, _) = root
+            .create_subkey_with_flags(
+                format!(r"{STARTUP_APPROVED_PATH}\Run"),
+                KEY_READ | KEY_SET_VALUE | KEY_WOW64_64KEY,
+            )
+            .expect("the HKCU approval fixture key must be writable");
+        let _cleanup = RegistryFixtureGuard {
+            value_name: value_name.clone(),
+            previous_run: run_key.get_raw_value(&value_name).ok(),
+            previous_approval: approval_key.get_raw_value(&value_name).ok(),
+        };
+        run_key
+            .set_value(
+                &value_name,
+                &r#""C:\MangoDiskMissingFixture\agent.exe" --silent"#,
+            )
+            .expect("the orphaned Run fixture must be created");
+        approval_key
+            .set_raw_value(
+                &value_name,
+                &RegValue {
+                    bytes: vec![0x02; 12],
+                    vtype: REG_BINARY,
+                },
+            )
+            .expect("the orphaned approval fixture must be created");
+
+        let cancellation = crate::PlatformCancellation::new(|| false);
+        let orphan = scan(&cancellation)
+            .items
+            .into_iter()
+            .find(|item| item.display_name == value_name)
+            .expect("the orphaned Run fixture must be discovered");
+        assert_eq!(
+            orphan.control_capability,
+            PlatformStartupControlCapability::Toggleable
+        );
+        assert!(orphan
+            .diagnostics
+            .contains(&PlatformStartupDiagnosticCode::MissingTarget));
+
+        let removed = change(&PlatformStartupChangeRequest {
+            provider_item_id: orphan.provider_item_id.clone(),
+            source_id: "windows.registry.run".to_owned(),
+            expected_artifact: orphan,
+            desired_state: PlatformStartupDesiredState::Removed,
+        })
+        .expect("the orphaned Run fixture must be removed");
+
+        assert!(removed.verified);
+        assert_eq!(
+            removed.configured_state,
+            PlatformStartupConfiguredState::NotApplicable
+        );
+        assert!(run_key.get_raw_value(&value_name).is_err());
+        assert!(approval_key.get_raw_value(&value_name).is_err());
     }
 
     #[test]

@@ -66,18 +66,10 @@ impl StartupPlatform for WindowsPlatform {
     }
 }
 
-pub(crate) fn startup_helper_change(
-    source_id: &str,
-    provider_item_id: &str,
-    expected_artifact_digest: &str,
-    desired_state: crate::PlatformStartupDesiredState,
-) -> PlatformResult<crate::PlatformStartupChangeResult> {
-    startup::helper_change(
-        source_id,
-        provider_item_id,
-        expected_artifact_digest,
-        desired_state,
-    )
+pub(crate) fn startup_helper_change_many(
+    requests: &[crate::startup_helper::StartupHelperChangeRequest],
+) -> Vec<PlatformResult<crate::PlatformStartupChangeResult>> {
+    startup::helper_change_many(requests)
 }
 
 const FILE_ATTRIBUTE_REPARSE_POINT_VALUE: u32 = 0x0000_0400;

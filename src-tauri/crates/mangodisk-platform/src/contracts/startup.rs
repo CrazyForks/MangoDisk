@@ -45,6 +45,7 @@ pub trait StartupPlatform: Send + Sync {
 pub enum PlatformStartupDesiredState {
     Enabled,
     Disabled,
+    Removed,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

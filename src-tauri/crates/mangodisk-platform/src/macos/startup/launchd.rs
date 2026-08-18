@@ -19,7 +19,7 @@ use crate::{
     PlatformStartupTargetKind, PlatformStartupTrigger, PlatformStartupTrustState,
 };
 
-use super::metadata::code_signature_metadata;
+use super::{bundle_index::BundleIndex, metadata::code_signature_metadata};
 
 struct LaunchdSource {
     source_id: &'static str,
@@ -44,7 +44,24 @@ enum ScanIssue {
     StateUnavailable,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TargetPresence {
+    Present,
+    Missing,
+    Unknown,
+}
+
 pub(super) fn scan(cancellation: &PlatformCancellation) -> Vec<PlatformStartupSourceResult> {
+    // Rebuild the application index for every scan so uninstalling or installing an application
+    // is reflected without restarting MangoDisk.
+    let bundle_index = BundleIndex::discover();
+    scan_with_bundle_index(cancellation, &bundle_index)
+}
+
+pub(super) fn scan_with_bundle_index(
+    cancellation: &PlatformCancellation,
+    bundle_index: &BundleIndex,
+) -> Vec<PlatformStartupSourceResult> {
     let sources = launchd_sources();
     let gui_overrides = disabled_overrides(LaunchdDomain::Gui, None);
     let system_overrides = disabled_overrides(LaunchdDomain::System, None);
@@ -66,7 +83,7 @@ pub(super) fn scan(cancellation: &PlatformCancellation) -> Vec<PlatformStartupSo
                 LaunchdDomain::Gui => gui_overrides.as_ref(),
                 LaunchdDomain::System => system_overrides.as_ref(),
             };
-            scan_source(source, overrides, cancellation)
+            scan_source(source, overrides, cancellation, bundle_index)
         })
         .collect()
 }
@@ -133,20 +150,23 @@ fn launchd_sources() -> Vec<LaunchdSource> {
 pub(super) fn change(
     request: &PlatformStartupChangeRequest,
 ) -> PlatformResult<PlatformStartupChangeResult> {
-    change_with_context(request, None, false)
+    let bundle_index = BundleIndex::discover();
+    change_with_context(request, None, false, &bundle_index)
 }
 
-pub(super) fn privileged_change(
+pub(super) fn privileged_change_with_bundle_index(
     request: &PlatformStartupChangeRequest,
     interactive_user_id: u32,
+    bundle_index: &BundleIndex,
 ) -> PlatformResult<PlatformStartupChangeResult> {
-    change_with_context(request, Some(interactive_user_id), true)
+    change_with_context(request, Some(interactive_user_id), true, bundle_index)
 }
 
 fn change_with_context(
     request: &PlatformStartupChangeRequest,
     interactive_user_id: Option<u32>,
     privileged: bool,
+    bundle_index: &BundleIndex,
 ) -> PlatformResult<PlatformStartupChangeResult> {
     let source = launchd_sources()
         .into_iter()
@@ -175,7 +195,7 @@ fn change_with_context(
             "launchd disabled state is unavailable",
         )
     })?;
-    let (label, current) = find_item(&source, &overrides, &request.provider_item_id)?
+    let (label, current) = find_item(&source, &overrides, &request.provider_item_id, bundle_index)?
         .ok_or_else(|| PlatformError::item_changed("launchd item no longer exists"))?;
     if current != request.expected_artifact {
         return Err(PlatformError::item_changed(
@@ -193,14 +213,23 @@ fn change_with_context(
             "launchd item is not toggleable",
         ));
     }
+    if request.desired_state == PlatformStartupDesiredState::Removed {
+        return remove_orphaned_item(&source, &current);
+    }
     let desired = match request.desired_state {
         PlatformStartupDesiredState::Enabled => PlatformStartupConfiguredState::Enabled,
         PlatformStartupDesiredState::Disabled => PlatformStartupConfiguredState::Disabled,
+        PlatformStartupDesiredState::Removed => {
+            unreachable!("removed launchd items return before state changes")
+        }
     };
     if current.configured_state != desired {
         let action = match request.desired_state {
             PlatformStartupDesiredState::Enabled => "enable",
             PlatformStartupDesiredState::Disabled => "disable",
+            PlatformStartupDesiredState::Removed => {
+                unreachable!("removed launchd items return before launchctl changes")
+            }
         };
         let target = match source.domain {
             LaunchdDomain::Gui => format!(
@@ -228,10 +257,13 @@ fn change_with_context(
                 "launchd state verification is unavailable",
             )
         })?;
-    let (_, verified) = find_item(&source, &verified_overrides, &request.provider_item_id)?
-        .ok_or_else(|| {
-            PlatformError::item_changed("launchd item disappeared during verification")
-        })?;
+    let (_, verified) = find_item(
+        &source,
+        &verified_overrides,
+        &request.provider_item_id,
+        bundle_index,
+    )?
+    .ok_or_else(|| PlatformError::item_changed("launchd item disappeared during verification"))?;
     Ok(PlatformStartupChangeResult {
         previous_state: current.configured_state,
         configured_state: verified.configured_state,
@@ -239,10 +271,62 @@ fn change_with_context(
     })
 }
 
+fn remove_orphaned_item(
+    source: &LaunchdSource,
+    current: &PlatformStartupArtifact,
+) -> PlatformResult<PlatformStartupChangeResult> {
+    if !current
+        .diagnostics
+        .contains(&PlatformStartupDiagnosticCode::MissingTarget)
+    {
+        return Err(PlatformError::item_changed(
+            "launchd item is no longer an orphaned startup configuration",
+        ));
+    }
+    let configuration_path = current.configuration_path.as_deref().ok_or_else(|| {
+        PlatformError::new(
+            PlatformErrorCode::InvalidData,
+            "launchd item has no configuration path",
+        )
+    })?;
+    let parent_is_allowlisted = source
+        .paths
+        .iter()
+        .any(|directory| configuration_path.parent() == Some(directory.as_path()));
+    let is_property_list = configuration_path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("plist"));
+    let metadata = fs::symlink_metadata(configuration_path)
+        .map_err(|error| PlatformError::io("inspect orphaned launchd item", &error))?;
+    if !parent_is_allowlisted
+        || !is_property_list
+        || !metadata.is_file()
+        || metadata.file_type().is_symlink()
+    {
+        return Err(PlatformError::invalid_path(
+            "launchd configuration is outside the removable source boundary",
+        ));
+    }
+
+    fs::remove_file(configuration_path)
+        .map_err(|error| PlatformError::io("remove orphaned launchd item", &error))?;
+    let verified = matches!(
+        fs::symlink_metadata(configuration_path),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound
+    );
+    Ok(PlatformStartupChangeResult {
+        previous_state: current.configured_state,
+        configured_state: PlatformStartupConfiguredState::NotApplicable,
+        verified,
+    })
+}
+
 fn find_item(
     source: &LaunchdSource,
     overrides: &BTreeMap<String, bool>,
     provider_item_id: &str,
+    bundle_index: &BundleIndex,
 ) -> PlatformResult<Option<(String, PlatformStartupArtifact)>> {
     for directory in &source.paths {
         let entries = match fs::read_dir(directory) {
@@ -279,6 +363,7 @@ fn find_item(
                 metadata.modified().ok(),
                 source,
                 Some(overrides),
+                bundle_index,
             );
             if artifact.provider_item_id == provider_item_id {
                 let label = string_value(dictionary, "Label").ok_or_else(|| {
@@ -298,6 +383,7 @@ fn scan_source(
     source: &LaunchdSource,
     overrides: Option<&BTreeMap<String, bool>>,
     cancellation: &PlatformCancellation,
+    bundle_index: &BundleIndex,
 ) -> PlatformStartupSourceResult {
     let started = Instant::now();
     let mut items = Vec::new();
@@ -386,6 +472,7 @@ fn scan_source(
                 metadata.modified().ok(),
                 source,
                 overrides,
+                bundle_index,
             ));
         }
     }
@@ -417,14 +504,29 @@ fn artifact_from_dictionary(
     modified: Option<SystemTime>,
     source: &LaunchdSource,
     overrides: Option<&BTreeMap<String, bool>>,
+    bundle_index: &BundleIndex,
 ) -> PlatformStartupArtifact {
     let label = string_value(dictionary, "Label");
     let arguments = string_array(dictionary, "ProgramArguments");
     let program = string_value(dictionary, "Program").or_else(|| arguments.first().cloned());
     let target_path = program.as_deref().map(PathBuf::from);
-    let (owner, trust) = target_path
+    let target_presence = target_path
         .as_deref()
-        .map(|target| owner_from_target(target, label.as_deref(), source.system_owned))
+        .map(target_presence)
+        .unwrap_or(TargetPresence::Missing);
+    let target_exists = target_presence == TargetPresence::Present;
+    let target_is_missing = target_presence == TargetPresence::Missing;
+    let (mut owner, trust) = target_path
+        .as_deref()
+        .map(|target| {
+            owner_from_target(
+                target,
+                target_exists,
+                label.as_deref(),
+                source.system_owned,
+                bundle_index,
+            )
+        })
         .unwrap_or_else(|| {
             (
                 unresolved_owner(),
@@ -435,6 +537,14 @@ fn artifact_from_dictionary(
                 },
             )
         });
+    let mut diagnostics = Vec::new();
+    if let Some(bundle_identifier) = associated_bundle_identifier(dictionary) {
+        // Launchd jobs can outlive their main application bundle. The explicit association keeps
+        // that residual job grouped with the matching macOS background-task record, allowing the
+        // surviving property list to remain discoverable after the application is uninstalled.
+        owner.identity_key = Some(format!("bundle:{bundle_identifier}"));
+        owner.confidence = PlatformStartupIdentityConfidence::Exact;
+    }
     let display_name = owner
         .name
         .clone()
@@ -445,11 +555,10 @@ fn artifact_from_dictionary(
                 .map(|value| value.to_string_lossy().into_owned())
         })
         .unwrap_or_else(|| "launchd item".to_owned());
-    let mut diagnostics = Vec::new();
     if label.is_none() {
         diagnostics.push(PlatformStartupDiagnosticCode::MissingIdentity);
     }
-    if target_path.is_none() {
+    if target_is_missing {
         diagnostics.push(PlatformStartupDiagnosticCode::MissingTarget);
     }
     if overrides.is_none() {
@@ -504,6 +613,28 @@ fn artifact_from_dictionary(
     }
 }
 
+fn target_presence(path: &Path) -> TargetPresence {
+    if !path.is_absolute() || external_volume_is_unavailable(path) {
+        return TargetPresence::Unknown;
+    }
+    match path.try_exists() {
+        Ok(true) => TargetPresence::Present,
+        Ok(false) => TargetPresence::Missing,
+        Err(_) => TargetPresence::Unknown,
+    }
+}
+
+fn external_volume_is_unavailable(path: &Path) -> bool {
+    let Ok(relative) = path.strip_prefix("/Volumes") else {
+        return false;
+    };
+    let Some(volume_name) = relative.components().next() else {
+        return false;
+    };
+    let volume_root = Path::new("/Volumes").join(volume_name.as_os_str());
+    !matches!(volume_root.try_exists(), Ok(true))
+}
+
 fn configured_state(
     dictionary: &Dictionary,
     label: Option<&str>,
@@ -524,6 +655,25 @@ fn configured_state(
         None if overrides.is_some() => PlatformStartupConfiguredState::Enabled,
         None => PlatformStartupConfiguredState::Unknown,
     }
+}
+
+fn associated_bundle_identifier(dictionary: &Dictionary) -> Option<String> {
+    let value = dictionary.get("AssociatedBundleIdentifiers")?;
+    if let Some(identifier) = value.as_string() {
+        return non_empty_string(identifier);
+    }
+    let identifiers = value
+        .as_array()?
+        .iter()
+        .filter_map(Value::as_string)
+        .filter_map(non_empty_string)
+        .collect::<Vec<_>>();
+    (identifiers.len() == 1).then(|| identifiers[0].clone())
+}
+
+fn non_empty_string(value: &str) -> Option<String> {
+    let value = value.trim();
+    (!value.is_empty()).then(|| value.to_owned())
 }
 
 fn launchd_triggers(
@@ -571,11 +721,13 @@ fn launchd_triggers(
 
 fn owner_from_target(
     target: &Path,
+    target_exists: bool,
     label: Option<&str>,
     system_candidate: bool,
+    bundle_index: &BundleIndex,
 ) -> (PlatformStartupOwner, PlatformStartupTrustState) {
     let signature = code_signature_metadata(target, system_candidate);
-    if let Some(owner) = super::bundle_index::resolve_owner(label, signature.team_id.as_deref()) {
+    if let Some(owner) = bundle_index.resolve_owner(label, signature.team_id.as_deref()) {
         return (owner, signature.trust);
     }
     let Some(bundle) = target.ancestors().find(|candidate| {
@@ -595,7 +747,7 @@ fn owner_from_target(
             summary: None,
             summary_source: PlatformStartupSummarySource::Unavailable,
             version: None,
-            icon_path: target.exists().then(|| target.to_path_buf()),
+            icon_path: target_exists.then(|| target.to_path_buf()),
             confidence: if signature.team_id.is_some() {
                 PlatformStartupIdentityConfidence::Strong
             } else {
@@ -877,6 +1029,7 @@ disabled services = {
             None,
             &source(PlatformStartupSourceKind::LaunchAgent),
             Some(&BTreeMap::new()),
+            &BundleIndex::default(),
         );
 
         assert_eq!(artifact.display_name, "com.example.missing");
@@ -904,6 +1057,7 @@ disabled services = {
             None,
             &source(PlatformStartupSourceKind::LaunchAgent),
             Some(&BTreeMap::new()),
+            &BundleIndex::default(),
         );
 
         assert!(artifact
@@ -913,6 +1067,172 @@ disabled services = {
             artifact.control_capability,
             PlatformStartupControlCapability::ViewOnly
         );
+    }
+
+    #[test]
+    fn explicit_bundle_association_groups_a_residual_launchd_item() {
+        let mut dictionary = Dictionary::new();
+        dictionary.insert(
+            "Label".to_owned(),
+            Value::String("com.macpaw.CleanMyMac5.Updater".to_owned()),
+        );
+        dictionary.insert(
+            "Program".to_owned(),
+            Value::String("/Applications/CleanMyMac_5.app/Contents/MacOS/CleanMyMac_5".to_owned()),
+        );
+        dictionary.insert(
+            "AssociatedBundleIdentifiers".to_owned(),
+            Value::String("com.macpaw.CleanMyMac5".to_owned()),
+        );
+
+        let artifact = artifact_from_dictionary(
+            &dictionary,
+            Path::new("/Library/LaunchAgents/com.macpaw.CleanMyMac5.Updater.plist"),
+            None,
+            &source(PlatformStartupSourceKind::LaunchAgent),
+            Some(&BTreeMap::new()),
+            &BundleIndex::default(),
+        );
+
+        assert_eq!(
+            artifact.owner.identity_key.as_deref(),
+            Some("bundle:com.macpaw.CleanMyMac5")
+        );
+        assert!(artifact
+            .diagnostics
+            .contains(&PlatformStartupDiagnosticCode::MissingTarget));
+        assert_eq!(
+            artifact.owner.confidence,
+            PlatformStartupIdentityConfidence::Exact
+        );
+    }
+
+    #[test]
+    fn unresolved_bundle_association_keeps_an_existing_target_safe() {
+        let mut dictionary = Dictionary::new();
+        dictionary.insert(
+            "Label".to_owned(),
+            Value::String("com.example.external.helper".to_owned()),
+        );
+        dictionary.insert("Program".to_owned(), Value::String("/bin/sh".to_owned()));
+        dictionary.insert(
+            "AssociatedBundleIdentifiers".to_owned(),
+            Value::String("com.example.ExternalApplication".to_owned()),
+        );
+
+        let artifact = artifact_from_dictionary(
+            &dictionary,
+            Path::new("/Library/LaunchAgents/com.example.external.helper.plist"),
+            None,
+            &source(PlatformStartupSourceKind::LaunchAgent),
+            Some(&BTreeMap::new()),
+            &BundleIndex::default(),
+        );
+
+        assert!(!artifact
+            .diagnostics
+            .contains(&PlatformStartupDiagnosticCode::MissingTarget));
+        assert_eq!(
+            artifact.owner.identity_key.as_deref(),
+            Some("bundle:com.example.ExternalApplication")
+        );
+    }
+
+    #[test]
+    fn relative_program_target_is_not_claimed_as_missing() {
+        let mut dictionary = Dictionary::new();
+        dictionary.insert(
+            "Label".to_owned(),
+            Value::String("com.example.relative.helper".to_owned()),
+        );
+        dictionary.insert(
+            "ProgramArguments".to_owned(),
+            Value::Array(vec![
+                Value::String("sh".to_owned()),
+                Value::String("-c".to_owned()),
+                Value::String("true".to_owned()),
+            ]),
+        );
+
+        let artifact = artifact_from_dictionary(
+            &dictionary,
+            Path::new("/Library/LaunchAgents/com.example.relative.helper.plist"),
+            None,
+            &source(PlatformStartupSourceKind::LaunchAgent),
+            Some(&BTreeMap::new()),
+            &BundleIndex::default(),
+        );
+
+        assert!(!artifact
+            .diagnostics
+            .contains(&PlatformStartupDiagnosticCode::MissingTarget));
+    }
+
+    #[test]
+    fn unavailable_external_volume_is_not_claimed_as_a_missing_target() {
+        let path = PathBuf::from(format!(
+            "/Volumes/MangoDiskUnavailableVolume{}/agent",
+            std::process::id()
+        ));
+
+        assert_eq!(target_presence(&path), TargetPresence::Unknown);
+    }
+
+    #[test]
+    fn orphan_removal_deletes_only_the_preflighted_property_list() {
+        let directory = std::env::temp_dir().join(format!(
+            "mangodisk-startup-orphan-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("system time must be available")
+                .as_nanos()
+        ));
+        fs::create_dir(&directory).expect("fixture directory must be created");
+        let configuration_path = directory.join("com.example.removed.plist");
+        let mut dictionary = Dictionary::new();
+        dictionary.insert(
+            "Label".to_owned(),
+            Value::String("com.example.removed".to_owned()),
+        );
+        Value::Dictionary(dictionary.clone())
+            .to_file_xml(&configuration_path)
+            .expect("fixture property list must be written");
+        let mut launchd_source = source(PlatformStartupSourceKind::LaunchAgent);
+        launchd_source.paths = vec![directory.clone()];
+        let artifact = artifact_from_dictionary(
+            &dictionary,
+            &configuration_path,
+            None,
+            &launchd_source,
+            Some(&BTreeMap::new()),
+            &BundleIndex::default(),
+        );
+
+        let result = remove_orphaned_item(&launchd_source, &artifact)
+            .expect("the orphaned property list should be removed");
+
+        assert!(result.verified);
+        assert_eq!(
+            result.configured_state,
+            PlatformStartupConfiguredState::NotApplicable
+        );
+        assert!(!configuration_path.exists());
+        fs::remove_dir(directory).expect("fixture directory must be removed");
+    }
+
+    #[test]
+    fn ambiguous_bundle_associations_do_not_merge_unrelated_items() {
+        let mut dictionary = Dictionary::new();
+        dictionary.insert(
+            "AssociatedBundleIdentifiers".to_owned(),
+            Value::Array(vec![
+                Value::String("com.example.First".to_owned()),
+                Value::String("com.example.Second".to_owned()),
+            ]),
+        );
+
+        assert_eq!(associated_bundle_identifier(&dictionary), None);
     }
 
     #[test]

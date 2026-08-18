@@ -8,7 +8,7 @@ mod metadata;
 use crate::{
     PlatformCancellation, PlatformError, PlatformErrorCode, PlatformResult,
     PlatformStartupChangeRequest, PlatformStartupChangeResult, PlatformStartupControlCapability,
-    PlatformStartupCoverageReason, PlatformStartupDesiredState, PlatformStartupSourceResult,
+    PlatformStartupCoverageReason, PlatformStartupSourceResult,
 };
 
 pub(super) fn scan(
@@ -123,15 +123,29 @@ fn change_direct(
     }
 }
 
-pub(super) fn helper_change(
-    source_id: &str,
-    provider_item_id: &str,
-    expected_artifact_digest: &str,
-    desired_state: PlatformStartupDesiredState,
+pub(super) fn helper_change_many(
+    requests: &[crate::startup_helper::StartupHelperChangeRequest],
     interactive_user_id: u32,
+) -> Vec<PlatformResult<PlatformStartupChangeResult>> {
+    let cancellation = PlatformCancellation::new(|| false);
+    let bundle_index = bundle_index::BundleIndex::discover();
+    let results = launchd::scan_with_bundle_index(&cancellation, &bundle_index);
+    requests
+        .iter()
+        .map(|request| {
+            helper_change_from_snapshot(request, &results, interactive_user_id, &bundle_index)
+        })
+        .collect()
+}
+
+fn helper_change_from_snapshot(
+    request: &crate::startup_helper::StartupHelperChangeRequest,
+    results: &[PlatformStartupSourceResult],
+    interactive_user_id: u32,
+    bundle_index: &bundle_index::BundleIndex,
 ) -> PlatformResult<PlatformStartupChangeResult> {
     if !matches!(
-        source_id,
+        request.source_id.as_str(),
         "macos.launchd.local_agents" | "macos.launchd.local_daemons"
     ) {
         return Err(PlatformError::new(
@@ -139,33 +153,32 @@ pub(super) fn helper_change(
             "startup helper source is not allowlisted",
         ));
     }
-    let cancellation = PlatformCancellation::new(|| false);
-    let results = scan(&cancellation)?;
     let artifact = results
         .iter()
-        .find(|source| source.source_id == source_id)
+        .find(|source| source.source_id == request.source_id)
         .and_then(|source| {
             source
                 .items
                 .iter()
-                .find(|artifact| artifact.provider_item_id == provider_item_id)
+                .find(|artifact| artifact.provider_item_id == request.provider_item_id)
         })
         .cloned()
         .ok_or_else(|| PlatformError::item_changed("startup helper target no longer exists"))?;
     if artifact.control_capability != PlatformStartupControlCapability::ElevationRequired
-        || crate::startup_helper::artifact_digest(&artifact) != expected_artifact_digest
+        || crate::startup_helper::artifact_digest(&artifact) != request.expected_artifact_digest
     {
         return Err(PlatformError::item_changed(
             "startup helper target changed after preflight",
         ));
     }
-    launchd::privileged_change(
+    launchd::privileged_change_with_bundle_index(
         &PlatformStartupChangeRequest {
-            provider_item_id: provider_item_id.to_owned(),
-            source_id: source_id.to_owned(),
+            provider_item_id: request.provider_item_id.clone(),
+            source_id: request.source_id.clone(),
             expected_artifact: artifact,
-            desired_state,
+            desired_state: request.desired_state,
         },
         interactive_user_id,
+        bundle_index,
     )
 }

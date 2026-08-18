@@ -112,6 +112,12 @@ pub(super) fn change(
             "scheduled task is not available for current-user control",
         ));
     }
+    if request.desired_state == PlatformStartupDesiredState::Removed {
+        return Err(PlatformError::new(
+            PlatformErrorCode::Unsupported,
+            "scheduled tasks cannot be removed by startup management",
+        ));
+    }
     let desired_enabled = request.desired_state == PlatformStartupDesiredState::Enabled;
     if (current.configured_state == PlatformStartupConfiguredState::Enabled) != desired_enabled {
         unsafe { task.SetEnabled(desired_enabled.into()) }.map_err(task_platform_error)?;

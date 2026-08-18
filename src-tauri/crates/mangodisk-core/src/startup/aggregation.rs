@@ -15,6 +15,7 @@ use super::models::{
     StartupRuntimeState, StartupScope, StartupSourceCoverage, StartupSourceKind,
     StartupSummarySource, StartupTarget, StartupTargetKind, StartupTrigger, StartupTrustState,
 };
+use super::policy::is_removable_orphan;
 
 pub(super) struct AggregatedCatalog {
     pub artifacts: Vec<StartupArtifact>,
@@ -80,6 +81,7 @@ fn artifact_from_platform(source_id: &str, item: PlatformStartupArtifact) -> Sta
         digest_id("unresolved", &[item_id.as_bytes()])
     };
     let fingerprint = artifact_fingerprint(source_id, &item);
+    let removable_orphan = is_removable_orphan(&item);
 
     StartupArtifact {
         item_id,
@@ -122,6 +124,7 @@ fn artifact_from_platform(source_id: &str, item: PlatformStartupArtifact) -> Sta
         trust: item.trust.into(),
         modified_at_ms: item.modified_at_ms,
         diagnostics: item.diagnostics.into_iter().map(Into::into).collect(),
+        removable_orphan,
         group_identity_key,
         fingerprint,
     }
@@ -522,6 +525,35 @@ mod tests {
         ])]);
 
         assert_eq!(result.groups.len(), 2);
+    }
+
+    #[test]
+    fn catalog_exposes_core_verified_orphan_removal_capability() {
+        let mut removable = artifact(
+            "orphan",
+            "Orphan",
+            "/Applications/Missing/Contents/MacOS/Missing",
+        );
+        removable.configuration_path = Some(PathBuf::from(
+            "/Users/fixture/Library/LaunchAgents/com.example.orphan.plist",
+        ));
+        removable
+            .diagnostics
+            .push(PlatformStartupDiagnosticCode::MissingTarget);
+        let safe = artifact("safe", "Safe", "/Applications/Safe/Contents/MacOS/Safe");
+
+        let result = aggregate(vec![source(vec![removable, safe])]);
+
+        assert!(result
+            .artifacts
+            .iter()
+            .find(|item| item.display_name == "Orphan")
+            .is_some_and(|item| item.removable_orphan));
+        assert!(result
+            .artifacts
+            .iter()
+            .find(|item| item.display_name == "Safe")
+            .is_some_and(|item| !item.removable_orphan));
     }
 
     #[test]

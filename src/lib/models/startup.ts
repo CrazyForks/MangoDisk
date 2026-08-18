@@ -72,6 +72,7 @@ export interface StartupArtifact {
   trust: StartupTrustState;
   modifiedAtMs: number | null;
   diagnostics: StartupDiagnosticCode[];
+  removableOrphan: boolean;
 }
 
 export interface StartupOwnerGroup {
@@ -124,7 +125,7 @@ export interface StartupCatalog {
   elapsedMs: number;
 }
 
-export type StartupDesiredState = 'enabled' | 'disabled';
+export type StartupDesiredState = 'enabled' | 'disabled' | 'removed';
 export type StartupChangeWarning = 'affectsOtherTriggers' | 'itemCurrentlyRunning';
 export type StartupChangeSkipReason =
   | 'alreadyInDesiredState'

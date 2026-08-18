@@ -77,6 +77,7 @@
       "mixed": "Partially enabled",
       "enabled": "Enabled",
       "disabled": "Disabled",
+      "removed": "Removed",
       "unknown": "State unknown",
       "notApplicable": "Not applicable"
     },
@@ -114,7 +115,8 @@
       "checking": "Checking startup items…",
       "descriptions": {
         "enabled": "Turn on {count} startup items",
-        "disabled": "Turn off {count} startup items"
+        "disabled": "Turn off {count} startup items",
+        "removed": "Remove {count} leftover startup items"
       },
       "enableNamedGroup": "Enable {name}",
       "disableNamedGroup": "Disable {name}",
@@ -142,6 +144,14 @@
         "requiresElevation": "Administrator access is required",
         "targetUnavailable": "The program is missing or its startup configuration is invalid"
       }
+    },
+    "cleanup": {
+      "action": "Remove Leftover",
+      "title": "Remove Leftover Startup Items",
+      "guidance": "Only obsolete startup settings will be removed; other program files will not be deleted",
+      "confirm": "Remove",
+      "successResult": "Removed leftover startup items for “{name}”",
+      "partialResult": "Removed {changed} items for “{name}”; {failed} failed"
     },
     "detail": {
       "timing": "When it starts",

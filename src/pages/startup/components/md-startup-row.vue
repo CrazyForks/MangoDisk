@@ -15,6 +15,7 @@ import { StartupCommandUtils } from '@/lib/utils/startup-command';
 
 import {
   canManageStartupArtifact,
+  isRemovableOrphanStartupArtifact,
   nextStartupDesiredState,
   startupArtifactRevealPath,
   type StartupManageableState,
@@ -42,6 +43,7 @@ const emit = defineEmits<{
   reveal: [path: string];
   copy: [request: { actionKey: string; value: string }];
   openSystemSettings: [];
+  removeOrphans: [];
 }>();
 const { locale, t } = useI18n({ useScope: 'global' });
 
@@ -49,6 +51,7 @@ const manageableArtifacts = computed(() => props.artifacts.filter(canManageStart
 const groupManageable = computed(() => manageableArtifacts.value.length > 0);
 const systemManaged = computed(() => props.artifacts.some(artifact => artifact.controlCapability === 'systemManaged'));
 const hasMultipleArtifacts = computed(() => props.artifacts.length > 1);
+const removableOrphans = computed(() => props.artifacts.filter(isRemovableOrphanStartupArtifact));
 
 function targetCommand(artifact: StartupArtifact): string {
   return StartupCommandUtils.display(artifact, false);
@@ -91,12 +94,28 @@ function localizedDiagnostics(artifact: StartupArtifact): string {
           </span>
         </button>
 
-        <span v-if="revealPath" class="startup-actions">
+        <span
+          v-if="revealPath || removableOrphans.length"
+          class="startup-actions"
+          :class="{ 'has-cleanup': removableOrphans.length }"
+        >
+          <button
+            v-if="removableOrphans.length"
+            class="startup-cleanup-action"
+            type="button"
+            :disabled="busy"
+            @click.stop="emit('removeOrphans')"
+          >
+            <MdIcon :name="ICON_NAMES.trash" :size="14" />
+            {{ t('startup.cleanup.action') }}
+          </button>
           <MdResultRowAction
+            v-if="revealPath"
+            class="startup-location-action"
             variant="ghost"
             :title="t('startup.showLocation')"
             :aria-label="t('startup.showNamedLocation', { name: group.name })"
-            @click.stop="emit('reveal', revealPath)"
+            @click.stop="emit('reveal', revealPath!)"
           >
             <MdIcon :name="ICON_NAMES.folder" :size="16" />
           </MdResultRowAction>
@@ -141,7 +160,7 @@ function localizedDiagnostics(artifact: StartupArtifact): string {
     </MdResultTableRow>
 
     <div v-if="expanded" class="startup-details">
-      <div v-if="!groupManageable" class="startup-management-note">
+      <div v-if="!groupManageable && !removableOrphans.length" class="startup-management-note">
         <span>
           <MdIcon :name="ICON_NAMES.info" :size="15" />
           {{ isMacOs && systemManaged ? t('startup.detail.systemManaged') : t('startup.detail.viewOnly') }}
@@ -271,11 +290,11 @@ function localizedDiagnostics(artifact: StartupArtifact): string {
                 </span>
                 <span v-if="targetCommand(artifact)" class="startup-target-actions">
                   <MdResultRowAction
-                    v-if="!hasMultipleArtifacts && artifact.target.path && !artifact.configurationPath"
+                    v-if="!hasMultipleArtifacts && startupArtifactRevealPath(artifact) && !artifact.configurationPath"
                     variant="ghost"
                     :title="t('startup.showLocation')"
                     :aria-label="t('startup.showNamedLocation', { name: artifact.displayName })"
-                    @click="emit('reveal', artifact.target.path)"
+                    @click="emit('reveal', startupArtifactRevealPath(artifact)!)"
                   >
                     <MdIcon :name="ICON_NAMES.folder" :size="13" />
                   </MdResultRowAction>

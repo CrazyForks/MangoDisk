@@ -11,8 +11,10 @@ import {
   indexStartupArtifacts,
   isDefaultStartupGroup,
   isInformativeReadOnlyStartupArtifact,
+  isRemovableOrphanStartupArtifact,
   manageableArtifactsForGroup,
   manageableState,
+  removableOrphanArtifactsForGroup,
   needsBackgroundTaskPermission,
   nextStartupDesiredState,
   startupArtifactRevealPath,
@@ -47,6 +49,7 @@ function artifact(overrides: Partial<StartupArtifact> = {}): StartupArtifact {
     trust: 'unknown',
     modifiedAtMs: null,
     diagnostics: [],
+    removableOrphan: false,
     ...overrides,
   };
 }
@@ -135,6 +138,7 @@ describe('startup default view', () => {
 
     expect(isInformativeReadOnlyStartupArtifact(backgroundApp)).toBe(true);
     expect(isInformativeReadOnlyStartupArtifact({ ...backgroundApp, configuredState: 'unknown' })).toBe(false);
+    expect(isInformativeReadOnlyStartupArtifact({ ...backgroundApp, diagnostics: ['missingTarget'] })).toBe(false);
     expect(
       isInformativeReadOnlyStartupArtifact({ ...backgroundApp, target: { ...backgroundApp.target, kind: 'service' } })
     ).toBe(false);
@@ -157,6 +161,40 @@ describe('startup default view', () => {
     ]);
 
     expect(manageableArtifactsForGroup(group({ itemIds: [...artifacts.keys()] }), artifacts)).toEqual([manageable]);
+  });
+
+  it('shows and selects only allowlisted orphan startup configurations', () => {
+    const orphan = artifact({
+      configurationPath: '/Users/fixture/Library/LaunchAgents/com.example.fixture.plist',
+      diagnostics: ['missingTarget'],
+      removableOrphan: true,
+    });
+    const service = artifact({
+      itemId: 'b'.repeat(64),
+      sourceKind: 'service',
+      diagnostics: ['missingTarget'],
+      controlCapability: 'elevationRequired',
+    });
+    const artifacts = indexStartupArtifacts([orphan, service]);
+    const owner = group({ itemIds: [orphan.itemId, service.itemId] });
+
+    expect(isRemovableOrphanStartupArtifact(orphan)).toBe(true);
+    expect(isRemovableOrphanStartupArtifact({ ...orphan, removableOrphan: false })).toBe(false);
+    expect(isRemovableOrphanStartupArtifact(service)).toBe(false);
+    expect(removableOrphanArtifactsForGroup(owner, artifacts)).toEqual([orphan]);
+  });
+
+  it('keeps an orphan with unavailable state out of enabled and disabled counts', () => {
+    const orphan = artifact({
+      configuredState: 'unknown',
+      diagnostics: ['missingTarget'],
+      removableOrphan: true,
+    });
+    const artifacts = indexStartupArtifacts([orphan]);
+    const owner = group({ itemIds: [orphan.itemId] });
+
+    expect(startupGroupManageableState(owner, artifacts)).toBe('unknown');
+    expect(startupFilterCounts([owner], artifacts)).toEqual({ all: 1, enabled: 0, disabled: 0 });
   });
 
   it('keeps an app-backed background item beside a manageable artifact for display', () => {
@@ -230,17 +268,38 @@ describe('startup default view', () => {
     expect(startupGroupStartTiming(group({ triggers: ['keepAlive'] }))).toBe('background');
   });
 
-  it('prefers the associated application when revealing a startup group', () => {
+  it('prefers the startup configuration when revealing a startup group', () => {
     const item = artifact({
+      configurationPath: '/Library/LaunchAgents/fixture.plist',
       target: { kind: 'executable', path: '/Library/Helper', executableName: 'Helper', arguments: [] },
     });
     const artifacts = new Map([[item.itemId, item]]);
 
     expect(startupRevealPath(group({ iconPath: '/Applications/Fixture.app' }), artifacts)).toBe(
+      '/Library/LaunchAgents/fixture.plist'
+    );
+    const withoutConfiguration = new Map([[item.itemId, { ...item, configurationPath: null }]]);
+    expect(startupRevealPath(group({ iconPath: '/Applications/Fixture.app' }), withoutConfiguration)).toBe(
       '/Applications/Fixture.app'
     );
-    expect(startupRevealPath(group(), artifacts)).toBe('/Library/Helper');
+    expect(startupRevealPath(group(), withoutConfiguration)).toBe('/Library/Helper');
     expect(startupRevealPath(group(), new Map())).toBeNull();
+  });
+
+  it('does not offer a missing target as a reveal destination', () => {
+    const missing = artifact({
+      target: {
+        kind: 'application',
+        path: '/Applications/Removed.app',
+        executableName: null,
+        arguments: [],
+      },
+      diagnostics: ['missingTarget'],
+    });
+    const artifacts = indexStartupArtifacts([missing]);
+
+    expect(startupArtifactRevealPath(missing)).toBeNull();
+    expect(startupRevealPath(group({ iconPath: '/Applications/Removed.app' }), artifacts)).toBeNull();
   });
 
   it('executes a single ordinary or currently running item without another confirmation', () => {
@@ -260,6 +319,18 @@ describe('startup default view', () => {
     ).toBe(true);
     expect(
       startupPlanRequiresReview(plan({ items: [{ ...plan().items[0]!, warnings: ['affectsOtherTriggers'] }] }), 1)
+    ).toBe(true);
+  });
+
+  it('always requires confirmation before removing orphaned startup settings', () => {
+    expect(
+      startupPlanRequiresReview(
+        plan({
+          desiredState: 'removed',
+          items: [{ ...plan().items[0]!, desiredState: 'removed' }],
+        }),
+        1
+      )
     ).toBe(true);
   });
 

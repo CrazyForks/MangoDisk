@@ -121,7 +121,7 @@ const dynamicKeyGroups = {
     'embeddedItem',
     'advancedAutoRun',
   ],
-  'startup.configuredStates': ['mixed', 'enabled', 'disabled', 'unknown', 'notApplicable'],
+  'startup.configuredStates': ['mixed', 'enabled', 'disabled', 'removed', 'unknown', 'notApplicable'],
   'startup.runtimeStates': ['running', 'stopped', 'loaded', 'unloaded', 'unknown'],
   'startup.trustStates': ['system', 'verified', 'invalid', 'unsigned', 'unknown'],
   'startup.scopes': ['currentUser', 'user', 'allUsers', 'machine', 'system'],
@@ -133,7 +133,7 @@ const dynamicKeyGroups = {
     'stateUnavailable',
     'unsupportedFormat',
   ],
-  'startup.change.descriptions': ['enabled', 'disabled'],
+  'startup.change.descriptions': ['enabled', 'disabled', 'removed'],
   'startup.change.warnings': ['affectsOtherTriggers', 'itemCurrentlyRunning'],
   'startup.detail.startTiming': ['boot', 'userLogon', 'background', 'automatic'],
   'startup.change.skipReasons': [

@@ -111,7 +111,7 @@ export interface StartupManagementOperationRecord extends OperationRecordBase {
         itemId: string;
         displayName: string;
         previousState: 'enabled' | 'disabled' | 'unknown';
-        desiredState: 'enabled' | 'disabled' | 'unknown';
+        desiredState: 'enabled' | 'disabled' | 'removed' | 'unknown';
         status: 'changed' | 'unchanged' | 'failed';
         failureReason: string | null;
       }>;

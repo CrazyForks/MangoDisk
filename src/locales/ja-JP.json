@@ -77,6 +77,7 @@
       "mixed": "一部有効",
       "enabled": "有効",
       "disabled": "無効",
+      "removed": "削除済み",
       "unknown": "状態不明",
       "notApplicable": "該当なし"
     },
@@ -114,7 +115,8 @@
       "checking": "スタートアップ項目を確認しています…",
       "descriptions": {
         "enabled": "{count} 件のスタートアップ項目を有効化します",
-        "disabled": "{count} 件のスタートアップ項目を無効化します"
+        "disabled": "{count} 件のスタートアップ項目を無効化します",
+        "removed": "{count} 件の残存スタートアップ項目を削除します"
       },
       "enableNamedGroup": "{name} を有効化",
       "disableNamedGroup": "{name} を無効化",
@@ -142,6 +144,14 @@
         "requiresElevation": "管理者権限が必要です",
         "targetUnavailable": "プログラムが見つからないか、起動設定が無効です"
       }
+    },
+    "cleanup": {
+      "action": "残存項目を削除",
+      "title": "残存スタートアップ項目を削除",
+      "guidance": "不要になった起動設定のみを削除し、その他のプログラムファイルは削除しません",
+      "confirm": "削除",
+      "successResult": "「{name}」の残存スタートアップ項目を削除しました",
+      "partialResult": "「{name}」は {changed} 件を削除し、{failed} 件が失敗しました"
     },
     "detail": {
       "timing": "起動するタイミング",

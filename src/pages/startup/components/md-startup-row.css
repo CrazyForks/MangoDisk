@@ -68,6 +68,46 @@
   transition: opacity 0.14s ease;
 }
 
+.startup-actions.has-cleanup {
+  gap: 2px;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.startup-cleanup-action {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  border-radius: 8px;
+  padding: 4px 7px;
+  background: transparent;
+  @apply text-muted-foreground transition-colors;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.startup-cleanup-action:not(:disabled):hover {
+  @apply bg-destructive/8 text-destructive;
+}
+
+.startup-cleanup-action:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.startup-actions.has-cleanup .startup-location-action {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.startup-row-line:is(:hover, :has(:focus-visible)) .startup-actions.has-cleanup .startup-location-action {
+  opacity: 1;
+  pointer-events: auto;
+}
+
 .startup-row-line:is(:hover, :has(:focus-visible)) .startup-actions {
   opacity: 1;
   pointer-events: auto;
@@ -75,6 +115,10 @@
 
 .startup-row-line:is(:hover, :has(:focus-visible)) .startup-identity {
   padding-right: 34px;
+}
+
+.startup-row-line:has(.startup-cleanup-action) .startup-identity {
+  padding-right: 112px;
 }
 
 .startup-item-count,

@@ -27,6 +27,7 @@ function artifact(arguments_: string[]): StartupArtifact {
     trust: 'unknown',
     modifiedAtMs: null,
     diagnostics: [],
+    removableOrphan: false,
   };
 }
 

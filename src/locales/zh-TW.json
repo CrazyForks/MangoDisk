@@ -77,6 +77,7 @@
       "mixed": "部分啟用",
       "enabled": "已啟用",
       "disabled": "已停用",
+      "removed": "已清除",
       "unknown": "狀態未知",
       "notApplicable": "不適用"
     },
@@ -114,7 +115,8 @@
       "checking": "正在檢查啟動項目…",
       "descriptions": {
         "enabled": "將開啟 {count} 個啟動項目",
-        "disabled": "將關閉 {count} 個啟動項目"
+        "disabled": "將關閉 {count} 個啟動項目",
+        "removed": "將清除 {count} 個殘留啟動項目"
       },
       "enableNamedGroup": "啟用 {name}",
       "disableNamedGroup": "停用 {name}",
@@ -142,6 +144,14 @@
         "requiresElevation": "需要系統管理員權限",
         "targetUnavailable": "程式檔案遺失或啟動設定無效"
       }
+    },
+    "cleanup": {
+      "action": "清除殘留項目",
+      "title": "清除殘留啟動項目",
+      "guidance": "僅刪除已失效的啟動設定，不會刪除其他程式檔案",
+      "confirm": "清除",
+      "successResult": "已清除「{name}」的殘留啟動項目",
+      "partialResult": "「{name}」已清除 {changed} 項，{failed} 項清除失敗"
     },
     "detail": {
       "timing": "何時啟動",

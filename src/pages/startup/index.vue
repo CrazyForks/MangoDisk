@@ -36,6 +36,7 @@ import { FormatUtils } from '@/lib/utils/format';
 import { RenderBatchUtils } from '@/lib/utils/render-batch';
 
 import MdStartupRow from './components/md-startup-row.vue';
+import { startupGroupIconUrl } from './startup-brand-icon';
 
 import {
   defaultStartupGroups,
@@ -45,6 +46,7 @@ import {
   manageableArtifactsForGroup,
   needsBackgroundTaskPermission,
   nextStartupDesiredState,
+  removableOrphanArtifactsForGroup,
   startupFilterCounts,
   startupGroupManageableState,
   startupGroupStartTiming,
@@ -116,6 +118,7 @@ const pendingPlanRequiresElevation = computed(() =>
 const pendingPlanOnlyAffectsFutureLaunches = computed(
   () => props.pendingPlan?.desiredState === 'disabled' && Boolean(props.pendingPlan.items.length)
 );
+const pendingPlanRemovesOrphans = computed(() => props.pendingPlan?.desiredState === 'removed');
 watch(
   backgroundTasksNeedPermission,
   needsPermission => {
@@ -194,7 +197,9 @@ watch(
         t(
           feedback?.desiredState === 'enabled'
             ? 'startup.change.partialEnableResult'
-            : 'startup.change.partialDisableResult',
+            : feedback?.desiredState === 'removed'
+              ? 'startup.cleanup.partialResult'
+              : 'startup.change.partialDisableResult',
           {
             name: feedback?.displayName ?? t('startup.title'),
             changed: result.changedCount,
@@ -203,14 +208,13 @@ watch(
         )
       );
     } else {
-      toast.success(
-        t(
-          feedback?.desiredState === 'enabled'
-            ? 'startup.change.enableSuccessResult'
-            : 'startup.change.disableSuccessResult',
-          { name: feedback?.displayName ?? t('startup.title') }
-        )
-      );
+      const messageKey =
+        feedback?.desiredState === 'enabled'
+          ? 'startup.change.enableSuccessResult'
+          : feedback?.desiredState === 'removed'
+            ? 'startup.cleanup.successResult'
+            : 'startup.change.disableSuccessResult';
+      toast.success(t(messageKey, { name: feedback?.displayName ?? t('startup.title') }));
     }
     changeFeedback.value = null;
     changeOpen.value = false;
@@ -246,8 +250,12 @@ function groupStartTiming(group: StartupOwnerGroup): string {
   return t(`startup.detail.startTiming.${startupGroupStartTiming(group)}`);
 }
 
-function iconUrl(path: string | null): string {
+function nativeIconUrl(path: string | null): string {
   return path ? (iconUrls.value.get(path) ?? '') : '';
+}
+
+function groupIconUrl(group: StartupOwnerGroup): string {
+  return startupGroupIconUrl(group, displayedArtifacts(group), nativeIconUrl(group.iconPath));
 }
 
 function loadMoreResults() {
@@ -259,7 +267,16 @@ function loadMoreResults() {
 }
 
 function isChanging(group: StartupOwnerGroup): boolean {
+  if (changeFeedback.value?.desiredState === 'removed') return false;
   return manageableArtifacts(group).some(artifact => activeChangeItemIds.value.has(artifact.itemId));
+}
+
+function requestOrphanRemoval(group: StartupOwnerGroup) {
+  requestChange(
+    removableOrphanArtifactsForGroup(group, artifactsById.value).map(artifact => artifact.itemId),
+    'removed',
+    group.name
+  );
 }
 
 function requestGroupChange(group: StartupOwnerGroup) {
@@ -452,7 +469,7 @@ function updateChangeOpen(open: boolean) {
           :key="group.groupId"
           :group="group"
           :artifacts="displayedArtifacts(group)"
-          :icon-src="iconUrl(group.iconPath)"
+          :icon-src="groupIconUrl(group)"
           :subtitle="groupSubtitle(group)"
           :start-timing="groupStartTiming(group)"
           :state="groupDisplayState(group)"
@@ -466,6 +483,7 @@ function updateChangeOpen(open: boolean) {
           @toggle-expanded="expandedGroupId = expandedGroupId === group.groupId ? null : group.groupId"
           @toggle-group="requestGroupChange(group)"
           @toggle-artifact="requestArtifactChange"
+          @remove-orphans="requestOrphanRemoval(group)"
           @reveal="emit('open', $event)"
           @copy="copyStartupValue"
           @open-system-settings="openLoginItemsSettings"
@@ -504,7 +522,9 @@ function updateChangeOpen(open: boolean) {
     <Dialog :open="changeOpen" @update:open="updateChangeOpen">
       <MdDialogContent class="startup-change-dialog max-h-[78vh] overflow-hidden p-0 sm:max-w-lg">
         <DialogHeader class="px-5 pt-5 pr-14 pb-3">
-          <DialogTitle>{{ t('startup.change.title') }}</DialogTitle>
+          <DialogTitle>{{
+            t(pendingPlanRemovesOrphans ? 'startup.cleanup.title' : 'startup.change.title')
+          }}</DialogTitle>
           <DialogDescription :class="{ 'sr-only': !pendingPlan }">
             {{
               pendingPlan
@@ -522,7 +542,10 @@ function updateChangeOpen(open: boolean) {
             {{ t('startup.change.checking') }}
           </div>
           <template v-else-if="pendingPlan">
-            <div v-if="pendingPlanRequiresElevation || pendingPlanOnlyAffectsFutureLaunches" class="change-guidance">
+            <div
+              v-if="pendingPlanRequiresElevation || pendingPlanOnlyAffectsFutureLaunches || pendingPlanRemovesOrphans"
+              class="change-guidance"
+            >
               <p v-if="pendingPlanRequiresElevation">
                 <MdIcon :name="ICON_NAMES.shield" :size="15" />
                 {{ t('startup.change.requiresElevation') }}
@@ -530,6 +553,10 @@ function updateChangeOpen(open: boolean) {
               <p v-if="pendingPlanOnlyAffectsFutureLaunches">
                 <MdIcon :name="ICON_NAMES.info" :size="15" />
                 {{ t('startup.change.futureOnly') }}
+              </p>
+              <p v-if="pendingPlanRemovesOrphans">
+                <MdIcon :name="ICON_NAMES.info" :size="15" />
+                {{ t('startup.cleanup.guidance') }}
               </p>
             </div>
             <article v-for="item in pendingPlan.items" :key="item.itemId" class="change-item">
@@ -564,6 +591,7 @@ function updateChangeOpen(open: boolean) {
             {{ cancellingChange ? t('startup.cancelling') : t('common.cancel') }}
           </Button>
           <Button
+            :variant="pendingPlanRemovesOrphans ? 'destructive' : 'default'"
             type="button"
             :disabled="!pendingPlan?.items.length || preparingChange || executingChange"
             :aria-busy="executingChange"
@@ -574,7 +602,11 @@ function updateChangeOpen(open: boolean) {
               class="change-action-spinner change-spinner md-operational-motion"
               aria-hidden="true"
             />
-            {{ executingChange ? t('startup.change.applying') : t('startup.change.confirm') }}
+            {{
+              executingChange
+                ? t('startup.change.applying')
+                : t(pendingPlanRemovesOrphans ? 'startup.cleanup.confirm' : 'startup.change.confirm')
+            }}
           </Button>
         </DialogFooter>
       </MdDialogContent>

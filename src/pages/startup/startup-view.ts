@@ -6,7 +6,7 @@ import type {
   StartupSourceCoverage,
 } from '@/lib/models/startup';
 
-export type StartupManageableState = 'enabled' | 'disabled' | 'mixed';
+export type StartupManageableState = 'enabled' | 'disabled' | 'mixed' | 'unknown';
 export type StartupStateFilter = 'all' | 'enabled' | 'disabled';
 export type StartupStartTiming = 'boot' | 'userLogon' | 'background' | 'automatic';
 
@@ -44,10 +44,22 @@ export function manageableArtifactsForGroup(
   return artifactsForStartupGroup(group, artifactsById).filter(canManageStartupArtifact);
 }
 
+export function isRemovableOrphanStartupArtifact(artifact: StartupArtifact): boolean {
+  return artifact.removableOrphan;
+}
+
+export function removableOrphanArtifactsForGroup(
+  group: StartupOwnerGroup,
+  artifactsById: ReadonlyMap<string, StartupArtifact>
+): StartupArtifact[] {
+  return artifactsForStartupGroup(group, artifactsById).filter(isRemovableOrphanStartupArtifact);
+}
+
 export function isInformativeReadOnlyStartupArtifact(artifact: StartupArtifact): boolean {
   return (
     artifact.sourceKind === 'backgroundTask' &&
     artifact.target.kind === 'application' &&
+    !artifact.diagnostics.includes('missingTarget') &&
     (artifact.configuredState === 'enabled' || artifact.configuredState === 'disabled')
   );
 }
@@ -57,7 +69,10 @@ export function displayedArtifactsForGroup(
   artifactsById: ReadonlyMap<string, StartupArtifact>
 ): StartupArtifact[] {
   return artifactsForStartupGroup(group, artifactsById).filter(
-    artifact => canManageStartupArtifact(artifact) || isInformativeReadOnlyStartupArtifact(artifact)
+    artifact =>
+      canManageStartupArtifact(artifact) ||
+      isRemovableOrphanStartupArtifact(artifact) ||
+      isInformativeReadOnlyStartupArtifact(artifact)
   );
 }
 
@@ -65,8 +80,13 @@ export function startupRevealPath(
   group: StartupOwnerGroup,
   artifactsById: ReadonlyMap<string, StartupArtifact>
 ): string | null {
-  if (group.iconPath) return group.iconPath;
-  for (const artifact of displayedArtifactsForGroup(group, artifactsById)) {
+  const artifacts = displayedArtifactsForGroup(group, artifactsById);
+  for (const artifact of artifacts) {
+    if (artifact.configurationPath) return artifact.configurationPath;
+  }
+  const artifactsWithTargets = artifacts.filter(artifact => !artifact.diagnostics.includes('missingTarget'));
+  if (group.iconPath && artifactsWithTargets.length) return group.iconPath;
+  for (const artifact of artifactsWithTargets) {
     if (artifact.target.path) return artifact.target.path;
   }
   return null;
@@ -87,9 +107,13 @@ export function defaultStartupGroups(
 }
 
 export function manageableState(artifacts: readonly StartupArtifact[]): StartupManageableState {
-  const enabled = artifacts.filter(artifact => artifact.configuredState === 'enabled').length;
+  const known = artifacts.filter(
+    artifact => artifact.configuredState === 'enabled' || artifact.configuredState === 'disabled'
+  );
+  if (!known.length || known.length !== artifacts.length) return 'unknown';
+  const enabled = known.filter(artifact => artifact.configuredState === 'enabled').length;
   if (enabled === 0) return 'disabled';
-  if (enabled === artifacts.length) return 'enabled';
+  if (enabled === known.length) return 'enabled';
   return 'mixed';
 }
 
@@ -146,7 +170,8 @@ export function nextStartupDesiredState(
 }
 
 export function startupArtifactRevealPath(artifact: StartupArtifact): string | null {
-  return artifact.configurationPath ?? artifact.target.path;
+  if (artifact.configurationPath) return artifact.configurationPath;
+  return artifact.diagnostics.includes('missingTarget') ? null : artifact.target.path;
 }
 
 export function startupGroupSubtitle(group: StartupOwnerGroup): string | null {
@@ -163,6 +188,7 @@ export function startupGroupStartTiming(group: StartupOwnerGroup): StartupStartT
 }
 
 export function startupPlanRequiresReview(plan: StartupChangePlan, requestedItemCount: number): boolean {
+  if (plan.desiredState === 'removed') return true;
   if (requestedItemCount !== 1 || plan.items.length !== 1 || plan.skippedItems.length > 0) return true;
   return plan.items.some(item => item.warnings.includes('affectsOtherTriggers'));
 }

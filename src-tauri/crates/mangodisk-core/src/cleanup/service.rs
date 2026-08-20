@@ -42,8 +42,15 @@ use std::fs;
 use crate::cleanup::{
     rule_execution::{
         delete_root_contents, delete_root_contents_with_progress, validate_rule_root,
+        DeleteRootContentsPolicy,
     },
     rules::{CompiledRule, MatcherSpec},
+};
+
+#[cfg(test)]
+use crate::filesystem::permanent_delete::{
+    delete_directory_contents_permanently_with_cancellation_serial,
+    physical_path_identity_snapshot, prepare_path_for_permanent_delete,
 };
 
 pub struct CleanupService;
@@ -827,7 +834,7 @@ mod cleanup_matcher_tests {
     }
 
     #[test]
-    fn whole_root_cleanup_reduces_per_file_deletion_transactions() {
+    fn complete_root_cleanup_reduces_per_file_deletion_transactions() {
         let _operation_lock = crate::shared::operation::test_operation_lock();
         let sandbox = std::env::temp_dir().join(format!(
             "mangodisk-cleanup-whole-root-test-{}-{}",
@@ -839,8 +846,17 @@ mod cleanup_matcher_tests {
         let nested = cleanup_root.join("many-small-files");
         let generic_root = sandbox.join("generic-cache");
         let generic_nested = generic_root.join("many-small-files");
+        let generic_empty = generic_root.join("empty-scaffold/nested");
         fs::create_dir_all(&nested).expect("the isolated cleanup root must be created");
         fs::create_dir_all(&generic_nested).expect("the generic comparison root must be created");
+        fs::create_dir_all(&generic_empty).expect("create the empty comparison directory");
+        let generic_root_identity = physical_path_identity_snapshot(&generic_root)
+            .expect("capture the comparison root identity");
+        let generic_root_permissions = fs::metadata(&generic_root)
+            .expect("read the comparison root metadata")
+            .permissions();
+        let generic_empty_identity = physical_path_identity_snapshot(&generic_empty)
+            .expect("capture the empty comparison directory identity");
         let file_count = 128_u64;
         for index in 0..file_count {
             fs::write(nested.join(format!("{index}.cache")), b"cache")
@@ -861,7 +877,7 @@ mod cleanup_matcher_tests {
         let generic_plan = compile_scan_plan(
             vec![CompiledRule::fixture(
                 "development.generic-fixture",
-                generic_root,
+                generic_root.clone(),
                 crate::cleanup::CleanupCategory::Development,
                 MatcherSpec::All,
             )],
@@ -908,7 +924,36 @@ mod cleanup_matcher_tests {
             generic_action.status,
             crate::cleanup::CleanupActionStatus::Completed
         );
-        assert_eq!(generic_report_count, file_count);
+        assert_eq!(generic_report_count, 1);
+        assert!(
+            generic_root.exists(),
+            "content cleanup must retain its root"
+        );
+        assert_eq!(
+            physical_path_identity_snapshot(&generic_root)
+                .expect("read the retained comparison root identity"),
+            generic_root_identity,
+            "content cleanup must retain the physical root directory"
+        );
+        assert_eq!(
+            fs::metadata(&generic_root)
+                .expect("read the retained root metadata")
+                .permissions(),
+            generic_root_permissions,
+            "content cleanup must retain the root permissions"
+        );
+        assert_eq!(
+            fs::read_dir(&generic_root)
+                .expect("read the retained cache root")
+                .count(),
+            1,
+            "content cleanup must retain only the preexisting empty scaffold"
+        );
+        assert_eq!(
+            physical_path_identity_snapshot(&generic_empty)
+                .expect("read the retained empty directory identity"),
+            generic_empty_identity
+        );
         assert_eq!(
             action.status,
             crate::cleanup::CleanupActionStatus::Completed
@@ -923,54 +968,159 @@ mod cleanup_matcher_tests {
         );
     }
 
-    /// Compares per-file and whole-root strategies through production boundaries.
-    ///
-    /// The benchmark is ignored by default to keep normal tests independent of
-    /// disk variance. `MANGODISK_CLEANUP_BENCHMARK_FILE_COUNT` controls the
-    /// workload; output contains only counts and timings, never private paths.
     #[test]
-    #[ignore = "filesystem performance benchmark"]
-    fn benchmark_whole_root_cleanup_against_per_file_cleanup() {
+    fn source_scoped_cleanup_keeps_unselected_complete_root_content() {
         let _operation_lock = crate::shared::operation::test_operation_lock();
-        let file_count = std::env::var("MANGODISK_CLEANUP_BENCHMARK_FILE_COUNT")
-            .ok()
-            .and_then(|value| value.parse::<u64>().ok())
-            .filter(|count| *count > 0)
-            .unwrap_or(5_000);
         let sandbox = std::env::temp_dir().join(format!(
-            "mangodisk-cleanup-whole-root-benchmark-{}-{}",
+            "mangodisk-cleanup-scoped-root-test-{}-{}",
             std::process::id(),
             now_ms()
         ));
         let _sandbox_cleanup = DirectoryCleanup(sandbox.clone());
-        let generic_root = sandbox.join("generic-cache");
-        let whole_root = sandbox.join("whole-root-cache");
-        fs::create_dir_all(&generic_root).expect("create the generic benchmark root");
-        fs::create_dir_all(&whole_root).expect("create the whole-root benchmark root");
-        let payload = [b'x'; 64];
-        for index in 0..file_count {
-            let bucket = format!("{:03}", index % 128);
-            let generic_bucket = generic_root.join(&bucket);
-            let whole_bucket = whole_root.join(&bucket);
-            fs::create_dir_all(&generic_bucket).expect("create the generic benchmark bucket");
-            fs::create_dir_all(&whole_bucket).expect("create the whole-root benchmark bucket");
-            let name = format!("{index:08}.cache");
-            fs::write(generic_bucket.join(&name), payload)
-                .expect("write the generic benchmark file");
-            fs::write(whole_bucket.join(name), payload)
-                .expect("write the whole-root benchmark file");
-        }
-        let generic_plan = compile_scan_plan(
+        let cleanup_root = sandbox.join("cache");
+        let selected_source = cleanup_root.join("selected");
+        let retained_source = cleanup_root.join("retained");
+        let selected_file = selected_source.join("selected.cache");
+        let retained_file = retained_source.join("retained.cache");
+        fs::create_dir_all(&selected_source).expect("create the selected cache source");
+        fs::create_dir_all(&retained_source).expect("create the retained cache source");
+        fs::write(&selected_file, b"selected").expect("write the selected cache fixture");
+        fs::write(&retained_file, b"retained").expect("write the retained cache fixture");
+        let rule_id = "development.scoped-complete-root";
+        let plan = compile_scan_plan(
             vec![CompiledRule::fixture(
-                "development.generic-benchmark",
-                generic_root,
+                rule_id,
+                cleanup_root.clone(),
                 crate::cleanup::CleanupCategory::Development,
                 MatcherSpec::All,
             )],
             &[true],
             &[],
         )
-        .expect("compile the generic benchmark plan");
+        .expect("compile the source-scoped cleanup plan");
+        let policy = SourceSelectionPolicy::from_request(
+            &HashSet::from([rule_id.to_string()]),
+            &[crate::cleanup::CleanupSourceSelection {
+                rule_id: rule_id.to_string(),
+                mode: crate::cleanup::CleanupSourceSelectionMode::Include,
+                paths: vec![selected_source.to_string_lossy().into_owned()],
+            }],
+        )
+        .expect("compile the source selection");
+        let process_snapshot = ProcessSnapshot::default();
+        let operation = OperationGuard::start(CoordinatedOperationKind::Cleanup)
+            .expect("start the isolated cleanup operation");
+
+        let action = execute_rule(
+            &plan.rules[0],
+            0,
+            None,
+            &RuleExecutionContext {
+                ownership_plan: &plan,
+                process_snapshot: &process_snapshot,
+                source_scope: policy.scope(rule_id),
+                operation: &operation,
+                dry_run: false,
+            },
+            &mut |_, _| {},
+        );
+
+        operation.complete();
+        assert_eq!(
+            action.status,
+            crate::cleanup::CleanupActionStatus::Completed
+        );
+        assert!(!selected_file.exists());
+        assert!(retained_file.exists());
+        assert!(cleanup_root.exists());
+    }
+
+    /// Compares the previous per-entry traversal with both bulk strategies.
+    ///
+    /// The benchmark is ignored by default to keep normal tests independent of
+    /// disk variance. The file and bucket environment variables shape the
+    /// workload, while `MANGODISK_CLEANUP_BENCHMARK_PARALLEL_FIRST=1` reverses
+    /// the bulk-strategy order to expose cache bias. Output contains only
+    /// counts and timings, never private paths.
+    #[test]
+    #[ignore = "filesystem performance benchmark"]
+    fn benchmark_complete_root_cleanup_strategies() {
+        let _operation_lock = crate::shared::operation::test_operation_lock();
+        let file_count = std::env::var("MANGODISK_CLEANUP_BENCHMARK_FILE_COUNT")
+            .ok()
+            .and_then(|value| value.parse::<u64>().ok())
+            .filter(|count| *count > 0)
+            .unwrap_or(5_000);
+        let bucket_count = std::env::var("MANGODISK_CLEANUP_BENCHMARK_BUCKET_COUNT")
+            .ok()
+            .and_then(|value| value.parse::<u64>().ok())
+            .filter(|count| *count > 0)
+            .unwrap_or(128)
+            .min(file_count);
+        let available_parallelism = std::thread::available_parallelism().map_or(1, usize::from);
+        let parallel_first =
+            std::env::var("MANGODISK_CLEANUP_BENCHMARK_PARALLEL_FIRST").as_deref() == Ok("1");
+        let sandbox = std::env::temp_dir().join(format!(
+            "mangodisk-cleanup-whole-root-benchmark-{}-{}",
+            std::process::id(),
+            now_ms()
+        ));
+        let _sandbox_cleanup = DirectoryCleanup(sandbox.clone());
+        let per_entry_root = sandbox.join("per-entry-cache");
+        let serial_contents_root = sandbox.join("serial-contents-cache");
+        let parallel_contents_root = sandbox.join("parallel-contents-cache");
+        let whole_root = sandbox.join("whole-root-cache");
+        fs::create_dir_all(&per_entry_root).expect("create the per-entry benchmark root");
+        fs::create_dir_all(&serial_contents_root)
+            .expect("create the serial contents benchmark root");
+        fs::create_dir_all(&parallel_contents_root)
+            .expect("create the parallel contents benchmark root");
+        fs::create_dir_all(&whole_root).expect("create the whole-root benchmark root");
+        let payload = [b'x'; 64];
+        for index in 0..file_count {
+            let bucket = format!("{:03}", index % bucket_count);
+            let per_entry_bucket = per_entry_root.join(&bucket);
+            let serial_contents_bucket = serial_contents_root.join(&bucket);
+            let parallel_contents_bucket = parallel_contents_root.join(&bucket);
+            let whole_bucket = whole_root.join(&bucket);
+            fs::create_dir_all(&per_entry_bucket).expect("create the per-entry benchmark bucket");
+            fs::create_dir_all(&serial_contents_bucket)
+                .expect("create the serial contents benchmark bucket");
+            fs::create_dir_all(&parallel_contents_bucket)
+                .expect("create the parallel contents benchmark bucket");
+            fs::create_dir_all(&whole_bucket).expect("create the whole-root benchmark bucket");
+            let name = format!("{index:08}.cache");
+            fs::write(per_entry_bucket.join(&name), payload)
+                .expect("write the per-entry benchmark file");
+            fs::write(serial_contents_bucket.join(&name), payload)
+                .expect("write the serial contents benchmark file");
+            fs::write(parallel_contents_bucket.join(&name), payload)
+                .expect("write the parallel contents benchmark file");
+            fs::write(whole_bucket.join(name), payload)
+                .expect("write the whole-root benchmark file");
+        }
+        for bucket in 0..bucket_count {
+            let bucket = format!("{bucket:03}");
+            fs::create_dir_all(per_entry_root.join(&bucket).join("empty-scaffold"))
+                .expect("create the per-entry empty scaffold");
+            fs::create_dir_all(serial_contents_root.join(&bucket).join("empty-scaffold"))
+                .expect("create the serial contents empty scaffold");
+            fs::create_dir_all(parallel_contents_root.join(&bucket).join("empty-scaffold"))
+                .expect("create the parallel contents empty scaffold");
+            fs::create_dir_all(whole_root.join(&bucket).join("empty-scaffold"))
+                .expect("create the whole-root empty scaffold");
+        }
+        let parallel_contents_plan = compile_scan_plan(
+            vec![CompiledRule::fixture(
+                "development.parallel-contents-benchmark",
+                parallel_contents_root,
+                crate::cleanup::CleanupCategory::Development,
+                MatcherSpec::All,
+            )],
+            &[true],
+            &[],
+        )
+        .expect("compile the parallel contents benchmark plan");
         let whole_root_plan = compile_scan_plan(
             vec![CompiledRule::whole_root_fixture(
                 "development.whole-root-benchmark",
@@ -985,21 +1135,71 @@ mod cleanup_matcher_tests {
         let operation = OperationGuard::start(CoordinatedOperationKind::Cleanup)
             .expect("start the benchmark cleanup operation");
 
-        let generic_started = Instant::now();
-        let generic_action = execute_rule(
-            &generic_plan.rules[0],
-            0,
-            None,
-            &RuleExecutionContext {
-                ownership_plan: &generic_plan,
-                process_snapshot: &process_snapshot,
-                source_scope: None,
-                operation: &operation,
-                dry_run: false,
+        let per_entry_canonical = validate_rule_root(&per_entry_root, &MatcherSpec::All)
+            .expect("validate the per-entry benchmark root");
+        let mut per_entry_stats = DeleteStats::default();
+        let per_entry_started = Instant::now();
+        delete_root_contents_with_progress(
+            &per_entry_root,
+            &per_entry_canonical,
+            &MatcherSpec::All,
+            DeleteRootContentsPolicy {
+                owns_path: &|_, _| true,
+                is_cancelled: &|| false,
+                bulk_complete_directories: false,
             },
+            &mut per_entry_stats,
             &mut |_, _| {},
         );
-        let generic_ms = generic_started.elapsed().as_secs_f64() * 1_000.0;
+        let per_entry_ms = per_entry_started.elapsed().as_secs_f64() * 1_000.0;
+
+        let run_serial_contents = || {
+            let started = Instant::now();
+            let mut file_count = 0_u64;
+            for entry in fs::read_dir(&serial_contents_root)
+                .expect("read the serial contents benchmark root")
+            {
+                let path = entry
+                    .expect("read a serial contents benchmark entry")
+                    .path();
+                let prepared = prepare_path_for_permanent_delete(&path)
+                    .expect("prepare a serial contents benchmark directory");
+                let outcome = delete_directory_contents_permanently_with_cancellation_serial(
+                    prepared,
+                    &|| false,
+                )
+                .expect("delete a serial contents benchmark directory");
+                file_count = file_count.saturating_add(outcome.affected_item_count());
+            }
+            (file_count, started.elapsed().as_secs_f64() * 1_000.0)
+        };
+        let run_parallel_contents = || {
+            let started = Instant::now();
+            let action = execute_rule(
+                &parallel_contents_plan.rules[0],
+                0,
+                None,
+                &RuleExecutionContext {
+                    ownership_plan: &parallel_contents_plan,
+                    process_snapshot: &process_snapshot,
+                    source_scope: None,
+                    operation: &operation,
+                    dry_run: false,
+                },
+                &mut |_, _| {},
+            );
+            (action, started.elapsed().as_secs_f64() * 1_000.0)
+        };
+        let (
+            (serial_contents_file_count, serial_contents_ms),
+            (parallel_contents_action, parallel_contents_ms),
+        ) = if parallel_first {
+            let parallel = run_parallel_contents();
+            let serial = run_serial_contents();
+            (serial, parallel)
+        } else {
+            (run_serial_contents(), run_parallel_contents())
+        };
 
         let whole_started = Instant::now();
         let whole_action = execute_rule(
@@ -1019,23 +1219,27 @@ mod cleanup_matcher_tests {
         operation.complete();
 
         assert_eq!(
-            generic_action.status,
+            parallel_contents_action.status,
             crate::cleanup::CleanupActionStatus::Completed
         );
         assert_eq!(
             whole_action.status,
             crate::cleanup::CleanupActionStatus::Completed
         );
-        assert_eq!(generic_action.affected_item_count, file_count);
+        assert_eq!(per_entry_stats.affected_item_count, file_count);
+        assert_eq!(serial_contents_file_count, file_count);
+        assert_eq!(parallel_contents_action.affected_item_count, file_count);
         assert_eq!(whole_action.affected_item_count, file_count);
         println!(
-            "cleanup_whole_root_benchmark file_count={file_count} generic_ms={generic_ms:.2} whole_root_ms={whole_ms:.2} speedup={:.2}",
-            generic_ms / whole_ms.max(0.01)
+            "cleanup_complete_root_benchmark file_count={file_count} bucket_count={bucket_count} available_parallelism={available_parallelism} parallel_first={parallel_first} per_entry_ms={per_entry_ms:.2} serial_contents_ms={serial_contents_ms:.2} parallel_contents_ms={parallel_contents_ms:.2} whole_root_ms={whole_ms:.2} serial_speedup={:.2} parallel_speedup={:.2} incremental_speedup={:.2}",
+            per_entry_ms / serial_contents_ms.max(0.01),
+            per_entry_ms / parallel_contents_ms.max(0.01),
+            serial_contents_ms / parallel_contents_ms.max(0.01)
         );
     }
 
     #[test]
-    fn whole_root_cleanup_falls_back_for_nested_rule_ownership() {
+    fn complete_root_cleanup_falls_back_for_nested_rule_ownership() {
         let _operation_lock = crate::shared::operation::test_operation_lock();
         let sandbox = std::env::temp_dir().join(format!(
             "mangodisk-cleanup-whole-root-fallback-test-{}-{}",
@@ -1052,10 +1256,11 @@ mod cleanup_matcher_tests {
         fs::write(&child_file, b"child cache").expect("the child fixture must be written");
         let plan = compile_scan_plan(
             vec![
-                CompiledRule::whole_root_fixture(
+                CompiledRule::fixture(
                     "development.parent-fixture",
                     cleanup_root,
                     crate::cleanup::CleanupCategory::Development,
+                    MatcherSpec::All,
                 ),
                 CompiledRule::fixture(
                     "development.child-fixture",
@@ -1139,8 +1344,11 @@ mod cleanup_matcher_tests {
             &cleanup_root,
             &canonical_root,
             &MatcherSpec::ExtensionIn(vec!["tmp".to_string()]),
-            &|_, _| true,
-            &|| false,
+            DeleteRootContentsPolicy {
+                owns_path: &|_, _| true,
+                is_cancelled: &|| false,
+                bulk_complete_directories: false,
+            },
             &mut stats,
             &mut |path, stats| {
                 item_progress.push((

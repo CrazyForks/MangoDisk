@@ -414,6 +414,7 @@ function loadMoreGroups() {
 }
 
 .group-header:has(.group-disclosure:focus-visible)::before {
+  box-shadow: inset 0 0 0 1px var(--focus-ring-subtle);
   box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--ring) 52%, transparent);
 }
 
@@ -463,14 +464,18 @@ function loadMoreGroups() {
   border-width: 0;
   border-radius: 7px;
   padding: 0 7px;
-  @apply bg-transparent text-muted-foreground shadow-none hover:bg-primary/8 hover:text-primary;
+  @apply bg-transparent text-muted-foreground shadow-none hover:text-primary;
   font-size: var(--font-content-secondary);
   font-weight: 500;
   white-space: nowrap;
 }
 
 .group-select-action[data-applied='true'] {
-  @apply bg-transparent text-primary hover:bg-primary/8 hover:text-primary;
+  @apply bg-transparent text-primary hover:text-primary;
+}
+
+.group-select-action:hover {
+  background: var(--surface-primary-subtle);
 }
 
 .group-select-action :deep(svg) {

@@ -99,7 +99,8 @@
 .application-status.applicationRunning {
   border-radius: 999px;
   padding: 5px 9px;
-  @apply bg-warning/10 text-warning;
+  @apply text-warning;
+  background: var(--surface-warning-subtle);
 }
 
 .application-size {
@@ -296,11 +297,13 @@
 }
 
 .component-risk.rebuildable {
-  @apply bg-success/10 text-success;
+  @apply text-success;
+  background: var(--surface-success-subtle);
 }
 
 .component-risk.userData {
-  @apply bg-warning/10 text-warning;
+  @apply text-warning;
+  background: var(--surface-warning-subtle);
 }
 
 @container application-uninstall (max-width: 760px) {

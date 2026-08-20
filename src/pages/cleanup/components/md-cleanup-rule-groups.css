@@ -62,7 +62,8 @@
 }
 
 .category-row.active {
-  @apply bg-primary/7 text-foreground;
+  @apply text-foreground;
+  background: var(--surface-primary-subtle);
 }
 
 .category-row.active::before {
@@ -163,7 +164,9 @@
 }
 
 .detail-warning {
-  @apply bg-warning/10 border-warning/20 text-warning-foreground;
+  @apply text-warning-foreground;
+  border-color: var(--border-subtle);
+  background: var(--surface-warning-subtle);
 }
 
 .detail-list-content {
@@ -286,7 +289,8 @@
 }
 
 .rule-title em.safe {
-  @apply bg-success/10 text-success-foreground;
+  @apply text-success-foreground;
+  background: var(--surface-success-subtle);
 }
 
 .rule-size {

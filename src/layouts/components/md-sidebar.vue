@@ -165,6 +165,7 @@ watch(
   height: 44px;
   overflow: hidden;
   place-items: center;
+  filter: drop-shadow(0 2px 2px var(--shadow-subtle));
   filter: drop-shadow(0 2px 2px color-mix(in oklab, var(--brand-stem, var(--foreground)) 16%, transparent));
 }
 .sidebar.expanded .brand {
@@ -221,10 +222,12 @@ watch(
   padding-inline: 12px;
 }
 .nav-item:hover:not(.active) {
+  background: var(--sidebar-accent);
   background: color-mix(in oklab, var(--sidebar-accent) 52%, transparent);
   color: var(--sidebar-foreground);
 }
 .nav-item:active:not(.active) {
+  background: var(--sidebar-accent);
   background: color-mix(in oklab, var(--sidebar-accent) 72%, transparent);
 }
 .nav-item.active {
@@ -242,6 +245,7 @@ watch(
 }
 .nav-item:focus-visible {
   outline: none;
+  box-shadow: inset 0 0 0 2px var(--focus-ring-subtle);
   box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--primary) 32%, transparent);
 }
 .nav-icon {
@@ -258,8 +262,11 @@ watch(
 .nav-icon-status {
   position: absolute;
   inset: -4px;
+  border: 1.5px solid var(--border-primary-subtle);
   border: 1.5px solid color-mix(in oklab, var(--primary) 16%, transparent);
+  border-top-color: var(--primary);
   border-top-color: color-mix(in oklab, var(--primary) 88%, transparent);
+  border-right-color: var(--primary);
   border-right-color: color-mix(in oklab, var(--primary) 46%, transparent);
   border-radius: 50%;
   pointer-events: none;
@@ -289,7 +296,9 @@ watch(
   width: 11px;
   height: 11px;
   aspect-ratio: 1;
+  border: 1.5px solid var(--border-primary-subtle);
   border: 1.5px solid color-mix(in oklab, var(--primary) 20%, transparent);
+  border-top-color: var(--primary);
   border-top-color: color-mix(in oklab, var(--primary) 78%, transparent);
   border-radius: 50%;
   animation: nav-spin 0.75s linear infinite;

@@ -1179,14 +1179,15 @@ function requestCancelDeepCleanup() {
   flex: none;
   place-items: center;
   border-radius: 14px;
-  @apply bg-primary/10 text-primary;
+  @apply text-primary;
+  background: var(--surface-primary-subtle);
 }
 .loading-activity {
   height: 4px;
   margin-top: 20px;
   overflow: hidden;
   border-radius: 999px;
-  @apply bg-primary/10;
+  background: var(--surface-primary-subtle);
 }
 .loading-activity span {
   display: block;
@@ -1219,7 +1220,7 @@ function requestCancelDeepCleanup() {
   border-top: 0;
 }
 .cleanup-execution-item.is-active {
-  @apply bg-primary/5;
+  background: var(--surface-primary-subtle);
 }
 .cleanup-execution-item-status {
   display: grid;
@@ -1230,13 +1231,16 @@ function requestCancelDeepCleanup() {
   @apply bg-muted text-muted-foreground;
 }
 .cleanup-execution-item.is-completed .cleanup-execution-item-status {
-  @apply bg-success/12 text-success;
+  @apply text-success;
+  background: var(--surface-success-subtle);
 }
 .cleanup-execution-item.is-skipped .cleanup-execution-item-status {
-  @apply bg-warning/15 text-warning-foreground;
+  @apply text-warning-foreground;
+  background: var(--surface-warning-subtle);
 }
 .cleanup-execution-item.is-active .cleanup-execution-item-status {
-  @apply bg-primary/10 text-primary;
+  @apply text-primary;
+  background: var(--surface-primary-subtle);
 }
 .cleanup-execution-item-status i {
   width: 7px;
@@ -1309,7 +1313,7 @@ function requestCancelDeepCleanup() {
   margin-top: 14px;
   overflow: hidden;
   border-radius: 999px;
-  @apply bg-primary/10;
+  background: var(--surface-primary-subtle);
 }
 .cleanup-execution-progress > span {
   display: block;

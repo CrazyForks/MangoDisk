@@ -308,6 +308,7 @@ function downloadUpdate() {
   width: 64px;
   height: 64px;
   place-items: center;
+  filter: drop-shadow(0 3px 4px var(--shadow-subtle));
   filter: drop-shadow(0 3px 4px color-mix(in oklab, var(--brand-stem, var(--foreground)) 14%, transparent));
 }
 
@@ -456,7 +457,7 @@ function downloadUpdate() {
   height: 5px;
   overflow: hidden;
   border-radius: 999px;
-  @apply bg-primary/12;
+  background: var(--surface-primary-subtle);
 }
 
 .download-track > span {
@@ -490,7 +491,8 @@ function downloadUpdate() {
   align-items: flex-start;
   flex-direction: column;
   gap: 3px;
-  @apply bg-destructive/8 text-destructive;
+  @apply text-destructive;
+  background: var(--surface-destructive-subtle);
 }
 
 .update-action-error span {

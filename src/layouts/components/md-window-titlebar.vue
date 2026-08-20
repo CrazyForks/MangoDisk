@@ -228,6 +228,7 @@ function close() {
 }
 
 .window-controls :deep(.window-control:hover::before) {
+  background: var(--surface-muted-subtle);
   background: color-mix(in oklab, var(--foreground) 9%, transparent);
 }
 

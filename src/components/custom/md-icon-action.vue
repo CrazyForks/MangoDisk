@@ -105,7 +105,9 @@ function handleClick(event: MouseEvent) {
 }
 
 .icon-action.result.destructive:not([aria-disabled='true']):hover {
-  @apply border-destructive/25 bg-destructive/8 text-destructive;
+  @apply text-destructive;
+  border-color: var(--border-subtle);
+  background: var(--surface-destructive-subtle);
 }
 
 .icon-action.result.ghost.destructive:not([aria-disabled='true']):hover {

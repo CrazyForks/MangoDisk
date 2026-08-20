@@ -33,6 +33,7 @@
   background: transparent;
   color: inherit;
   text-align: left;
+  cursor: pointer;
 }
 
 .application-actions {
@@ -119,19 +120,8 @@
   transition: transform 0.18s ease;
 }
 
-.application-expand {
-  display: grid;
-  width: 30px;
-  height: 30px;
-  place-items: center;
-  border: 0;
-  border-radius: 8px;
-  padding: 0;
-  background: transparent;
-}
-
-.application-expand:hover {
-  @apply bg-muted/70;
+.application-row-line :deep(.application-expand) {
+  grid-column: 5;
 }
 
 .application-chevron.expanded {
@@ -202,7 +192,7 @@
   white-space: nowrap;
 }
 
-.possible-related-location > :deep(.result-row-action) {
+.possible-related-location > :deep(.icon-action) {
   position: absolute;
   right: 0;
   opacity: 0;
@@ -210,7 +200,7 @@
   transition: opacity 0.14s ease;
 }
 
-.possible-related-location:is(:hover, :has(:focus-visible)) > :deep(.result-row-action) {
+.possible-related-location:is(:hover, :has(:focus-visible)) > :deep(.icon-action) {
   opacity: 1;
   pointer-events: auto;
 }

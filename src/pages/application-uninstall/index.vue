@@ -661,7 +661,7 @@ function confirmCancelExecution() {
             <MdResultTable v-else ref="applicationList" class="application-list">
               <template #header>
                 <div class="application-list-header">
-                  <label :title="t('applicationUninstall.selectVisible')">
+                  <label>
                     <MdResultCheckbox
                       :checked="allFilteredSelected"
                       :indeterminate="someFilteredSelected && !allFilteredSelected"

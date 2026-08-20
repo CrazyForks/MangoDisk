@@ -4,10 +4,10 @@ import { computed, ref, watch } from 'vue';
 
 import MdLoadMoreButton from '@/components/custom/md-load-more-button.vue';
 import MdFileEntryContextMenu from '@/components/custom/md-file-entry-context-menu.vue';
+import MdIconAction from '@/components/custom/md-icon-action.vue';
 import MdMiddleEllipsis from '@/components/custom/md-middle-ellipsis.vue';
 import MdNativeFileIcon from '@/components/custom/md-native-file-icon.vue';
 import MdResultCheckbox from '@/components/custom/md-result-checkbox.vue';
-import MdResultRowAction from '@/components/custom/md-result-row-action.vue';
 import MdResultTable from '@/components/custom/md-result-table.vue';
 import MdResultTableHierarchy from '@/components/custom/md-result-table-hierarchy.vue';
 import MdResultTableRow from '@/components/custom/md-result-table-row.vue';
@@ -245,13 +245,6 @@ function loadMoreGroups() {
           type="button"
           :data-applied="isGroupSelectionApplied(group)"
           :disabled="selectionDisabled"
-          :title="
-            t(
-              isGroupSelectionApplied(group)
-                ? 'duplicateFiles.clearGroupSelectionHint'
-                : 'duplicateFiles.selectGroupHint'
-            )
-          "
           :aria-label="
             t(
               isGroupSelectionApplied(group)
@@ -305,22 +298,22 @@ function loadMoreGroups() {
                 <MdMiddleEllipsis :text="PathUtils.display(entry.path)" :tail-length="32" />
               </span>
               <span class="member-actions">
-                <MdResultRowAction
+                <MdIconAction
                   variant="ghost"
-                  :title="t('common.showInFileManager')"
+                  :label="t('common.showInFileManager')"
                   @click.prevent="emit('reveal', entry.path)"
                 >
                   <MdIcon :name="ICON_NAMES.folder" :size="16" />
-                </MdResultRowAction>
-                <MdResultRowAction
+                </MdIconAction>
+                <MdIconAction
                   variant="ghost"
-                  :title="t('common.deletePermanently')"
+                  :label="t('common.deletePermanently')"
                   destructive
                   :disabled="deleteDisabled"
                   @click.prevent="emit('delete', entry)"
                 >
                   <MdIcon :name="ICON_NAMES.trash" :size="16" />
-                </MdResultRowAction>
+                </MdIconAction>
               </span>
             </span>
             <span class="member-date">{{ FormatUtils.dateTime(entry.modifiedAtMs, locale) }}</span>

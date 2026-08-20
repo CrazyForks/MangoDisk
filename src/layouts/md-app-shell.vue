@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { toast } from 'vue-sonner';
 
 import MdDialogContent from '@/components/custom/md-dialog-content.vue';
+import MdIconAction from '@/components/custom/md-icon-action.vue';
 import MdMiddleEllipsis from '@/components/custom/md-middle-ellipsis.vue';
 import MdIcon from '@/components/icons/md-icon.vue';
 import { Button } from '@/components/ui/button';
@@ -1072,9 +1073,14 @@ function requestCancelDeepCleanup() {
         <strong>{{ errorTitle }}</strong>
         <p>{{ errorMessage }}</p>
       </div>
-      <button type="button" :aria-label="t('common.close')" @click="store.clearError()">
+      <MdIconAction
+        appearance="unstyled"
+        class="error-toast-close"
+        :label="t('common.close')"
+        @click="store.clearError()"
+      >
         <MdIcon :name="ICON_NAMES.close" :size="18" />
-      </button>
+      </MdIconAction>
     </div>
   </main>
 </template>
@@ -1376,7 +1382,7 @@ function requestCancelDeepCleanup() {
   font-size: 12px;
   line-height: 1.45;
 }
-.error-toast button {
+.error-toast :deep(.error-toast-close) {
   border: 0;
   background: transparent;
   @apply text-muted-foreground transition-colors hover:text-foreground;

@@ -767,6 +767,8 @@
     "releaseNotes": "What's new",
     "noReleaseNotes": "This update includes improvements and fixes",
     "downloadUpdate": "Download Update",
+    "downloadPortable": "Download Portable Version",
+    "portableDescription": "This portable edition must be updated manually. Download the new file, close MangoDisk, then replace the current executable",
     "continueInBackground": "Continue in Background",
     "downloadedTitle": "MangoDisk {version} is ready",
     "installedTitle": "MangoDisk {version} is installed",
@@ -782,6 +784,7 @@
     "downloadProgress": "Downloaded {downloaded} of {total}",
     "installing": "Installing update…",
     "downloadFailed": "Download failed",
+    "manualDownloadFailed": "Unable to open the download",
     "installFailed": "Installation failed",
     "restartFailed": "Unable to restart MangoDisk",
     "navigationNotice": "A new version is available"

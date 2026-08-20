@@ -771,6 +771,8 @@
     "releaseNotes": "本次更新",
     "noReleaseNotes": "此版本包含体验优化和问题修复",
     "downloadUpdate": "下载更新",
+    "downloadPortable": "下载单文件版",
+    "portableDescription": "单文件版需要手动更新。请下载新文件，退出 MangoDisk 后替换当前程序",
     "continueInBackground": "转到后台下载",
     "downloadedTitle": "MangoDisk {version} 已下载",
     "installedTitle": "MangoDisk {version} 已安装",
@@ -786,6 +788,7 @@
     "downloadProgress": "已下载 {downloaded} / {total}",
     "installing": "正在安装更新…",
     "downloadFailed": "下载失败",
+    "manualDownloadFailed": "无法打开下载地址",
     "installFailed": "安装失败",
     "restartFailed": "无法重新启动 MangoDisk",
     "navigationNotice": "有新版本可用"

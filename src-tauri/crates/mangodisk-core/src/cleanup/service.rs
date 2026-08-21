@@ -1759,6 +1759,258 @@ mod macos_cleanup_tests {
         assert!(protected_files.iter().all(|fixture| fixture.exists()));
     }
 
+    /// Exercises the reference-derived macOS rules against isolated layouts
+    /// that mirror the verified applications. Poetry's virtual environment,
+    /// PyInstaller siblings, Ollama models, VS Code settings, and Docker state
+    /// deliberately sit beside the selected cache data to guard each boundary.
+    #[test]
+    #[ignore = "modifies HOME and requires VS Code and Docker Desktop to be stopped"]
+    fn reference_cache_rules_preserve_durable_developer_and_application_state() {
+        let _operation_lock = crate::shared::operation::test_operation_lock();
+        let sandbox = std::env::current_dir()
+            .expect("the test process must have a working directory")
+            .join("target")
+            .join(format!(
+                "mangodisk-reference-cache-cleanup-test-{}-{}",
+                std::process::id(),
+                now_ms()
+            ));
+        let _sandbox_cleanup = DirectoryCleanup(sandbox.clone());
+        let home = sandbox.join("home");
+        let cache_files = [
+            home.join("Library/Caches/pypoetry/artifacts/aa/package.whl"),
+            home.join("Library/Caches/pypoetry/cache/repositories/PyPI/index.json"),
+            home.join("Library/Application Support/pyinstaller/bincache00py31364bit/arm64/adhoc/no-entitlements/index.dat"),
+            home.join("Library/Application Support/Code/CachedExtensionVSIXs/extension.vsix"),
+            home.join("Library/Caches/ollama/updates/hash/Ollama-darwin.zip"),
+            home.join("Library/Containers/com.docker.docker/Data/log/vm/init.log.1"),
+        ];
+        let recent_ollama_update =
+            home.join("Library/Caches/ollama/updates/recent/Ollama-darwin.zip");
+        let recent_docker_log =
+            home.join("Library/Containers/com.docker.docker/Data/log/vm/init.log");
+        let protected_files = [
+            home.join("Library/Caches/pypoetry/virtualenvs/project-py3.13/pyvenv.cfg"),
+            home.join("Library/Application Support/pyinstaller/state/keep.json"),
+            home.join(".ollama/models/blobs/sha256-model"),
+            home.join("Library/Application Support/Code/User/settings.json"),
+            home.join("Library/Group Containers/group.com.docker/settings-store.json"),
+            home.join("Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw"),
+        ];
+        for fixture in cache_files
+            .iter()
+            .chain([&recent_ollama_update, &recent_docker_log])
+            .chain(&protected_files)
+        {
+            fs::create_dir_all(fixture.parent().expect("the fixture must have a parent"))
+                .expect("the isolated reference cache directory must be created");
+            fs::write(fixture, b"MangoDisk reference cache fixture")
+                .expect("the isolated reference cache fixture must be written");
+        }
+        let stale_time = SystemTime::now()
+            .checked_sub(Duration::from_secs(8 * 86_400))
+            .expect("the test time must move back by eight days");
+        for fixture in [&cache_files[4], &cache_files[5]] {
+            fs::File::options()
+                .write(true)
+                .open(fixture)
+                .expect("the stale reference fixture must open")
+                .set_times(fs::FileTimes::new().set_modified(stale_time))
+                .expect("the stale reference fixture timestamp must be set");
+        }
+
+        let _restore = EnvironmentRestore(vec![("HOME", std::env::var_os("HOME"))]);
+        std::env::set_var("HOME", &home);
+        let rule_ids = [
+            "dev.python-cache",
+            "dev.pyinstaller-cache",
+            "dev.vscode-cache",
+            "app.ollama-update-cache",
+            "container.docker-desktop-diagnostic-cache",
+        ]
+        .map(str::to_string)
+        .to_vec();
+
+        let preview = CleanupService::execute(CleanupRequest {
+            rule_ids: rule_ids.clone(),
+            source_selections: Vec::new(),
+            dry_run: true,
+            project_roots: Vec::new(),
+        })
+        .expect("the isolated reference cache preview must succeed");
+        assert_eq!(preview.failed_item_count, 0, "{:?}", preview.actions);
+        assert!(cache_files.iter().all(|fixture| fixture.exists()));
+        assert!(protected_files.iter().all(|fixture| fixture.exists()));
+
+        let result = CleanupService::execute(CleanupRequest {
+            rule_ids,
+            source_selections: Vec::new(),
+            dry_run: false,
+            project_roots: Vec::new(),
+        })
+        .expect("the isolated reference cache cleanup must succeed");
+        assert_eq!(result.failed_item_count, 0, "{:?}", result.actions);
+        assert_eq!(result.affected_item_count, 6, "{:?}", result.actions);
+        assert!(cache_files.iter().all(|fixture| !fixture.exists()));
+        assert!(recent_ollama_update.exists());
+        assert!(recent_docker_log.exists());
+        assert!(protected_files.iter().all(|fixture| fixture.exists()));
+    }
+
+    /// Permanently clears the verified real cache families after their owners
+    /// stop. Durable state is recorded from disjoint Poetry, Ollama, VS Code,
+    /// and Docker locations; the large Ollama model store and Docker VM disk
+    /// use metadata signatures so validation never reads multi-gigabyte data.
+    #[test]
+    #[ignore = "permanently clears real Poetry, PyInstaller, Ollama, VS Code, and Docker caches"]
+    fn real_reference_cache_rules_preserve_environments_models_and_vm_state() {
+        fn tree_metadata_signature(root: &Path) -> (u64, u64, u128) {
+            fn visit(path: &Path, signature: &mut (u64, u64, u128)) {
+                let metadata = fs::symlink_metadata(path)
+                    .expect("the preserved metadata entry must remain readable");
+                signature.0 = signature.0.saturating_add(1);
+                signature.1 = signature.1.saturating_add(metadata.len());
+                signature.2 = signature.2.saturating_add(
+                    metadata
+                        .modified()
+                        .ok()
+                        .and_then(|modified| modified.duration_since(SystemTime::UNIX_EPOCH).ok())
+                        .map(|duration| duration.as_nanos())
+                        .unwrap_or_default(),
+                );
+                if !metadata.is_dir() || metadata.file_type().is_symlink() {
+                    return;
+                }
+                for entry in
+                    fs::read_dir(path).expect("the preserved metadata directory must be readable")
+                {
+                    visit(
+                        &entry
+                            .expect("the preserved metadata entry must be readable")
+                            .path(),
+                        signature,
+                    );
+                }
+            }
+
+            let mut signature = (0u64, 0u64, 0u128);
+            visit(root, &mut signature);
+            signature
+        }
+
+        assert_eq!(
+            std::env::var("MANGODISK_TEST_REAL_MACOS_REFERENCE_CACHE").as_deref(),
+            Ok("1"),
+            "set MANGODISK_TEST_REAL_MACOS_REFERENCE_CACHE=1 to authorize this real cache diagnostic"
+        );
+        let process_snapshot =
+            ProcessSnapshot::capture().expect("the macOS process inventory must be available");
+        for process_name in [
+            "Visual Studio Code",
+            "Code",
+            "Docker",
+            "Docker Desktop",
+            "com.docker.backend",
+            "com.docker.virtualization",
+        ] {
+            assert!(
+                process_snapshot
+                    .matching_processes(&[process_name.to_string()])
+                    .is_empty(),
+                "every reference cache owner must be stopped before cleanup"
+            );
+        }
+
+        let home = std::env::var_os("HOME")
+            .map(PathBuf::from)
+            .expect("HOME must be available");
+        let poetry_virtualenvs = home.join("Library/Caches/pypoetry/virtualenvs");
+        let ollama_models = home.join(".ollama/models");
+        let vscode_user = home.join("Library/Application Support/Code/User");
+        let docker_group = home.join("Library/Group Containers/group.com.docker");
+        let docker_disk =
+            home.join("Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw");
+        for path in [
+            &poetry_virtualenvs,
+            &ollama_models,
+            &vscode_user,
+            &docker_group,
+            &docker_disk,
+        ] {
+            assert!(path.exists(), "every durable-state fixture must exist");
+        }
+        let poetry_before = digest_macos_tree_without_following_links(&poetry_virtualenvs);
+        let ollama_before = tree_metadata_signature(&ollama_models);
+        let vscode_before = digest_macos_tree_without_following_links(&vscode_user);
+        let docker_group_before = digest_macos_tree_without_following_links(&docker_group);
+        let docker_disk_before = tree_metadata_signature(&docker_disk);
+
+        let rule_ids = [
+            "dev.python-cache",
+            "dev.pyinstaller-cache",
+            "dev.vscode-cache",
+            "app.ollama-update-cache",
+            "container.docker-desktop-diagnostic-cache",
+        ]
+        .map(str::to_string)
+        .to_vec();
+        let preview = CleanupService::execute(CleanupRequest {
+            rule_ids: rule_ids.clone(),
+            source_selections: Vec::new(),
+            dry_run: true,
+            project_roots: Vec::new(),
+        })
+        .expect("the real reference cache preview must succeed");
+        assert_eq!(preview.failed_item_count, 0, "{:?}", preview.actions);
+        assert!(
+            preview.expected_bytes > 350 * 1024 * 1024,
+            "the real reference cache baseline must provide material benefit"
+        );
+        assert_eq!(
+            digest_macos_tree_without_following_links(&poetry_virtualenvs),
+            poetry_before
+        );
+        assert_eq!(tree_metadata_signature(&ollama_models), ollama_before);
+        assert_eq!(
+            digest_macos_tree_without_following_links(&vscode_user),
+            vscode_before
+        );
+        assert_eq!(
+            digest_macos_tree_without_following_links(&docker_group),
+            docker_group_before
+        );
+        assert_eq!(tree_metadata_signature(&docker_disk), docker_disk_before);
+
+        let result = CleanupService::execute(CleanupRequest {
+            rule_ids,
+            source_selections: Vec::new(),
+            dry_run: false,
+            project_roots: Vec::new(),
+        })
+        .expect("the real reference cache cleanup must succeed");
+        assert_eq!(result.failed_item_count, 0, "{:?}", result.actions);
+        assert!(result.released_bytes > 350 * 1024 * 1024);
+        assert!(result.affected_item_count > 100);
+        assert_eq!(
+            digest_macos_tree_without_following_links(&poetry_virtualenvs),
+            poetry_before
+        );
+        assert_eq!(tree_metadata_signature(&ollama_models), ollama_before);
+        assert_eq!(
+            digest_macos_tree_without_following_links(&vscode_user),
+            vscode_before
+        );
+        assert_eq!(
+            digest_macos_tree_without_following_links(&docker_group),
+            docker_group_before
+        );
+        assert_eq!(tree_metadata_signature(&docker_disk), docker_disk_before);
+        println!(
+            "real_macos_reference_cache_cleanup expected_bytes={} released_bytes={} affected_item_count={} preserved_root_count=5",
+            preview.expected_bytes, result.released_bytes, result.affected_item_count
+        );
+    }
+
     #[test]
     #[ignore = "modifies HOME and executes isolated cleanup; run this test alone"]
     fn ai_cache_rules_clean_only_rebuildable_data_and_preserve_models() {
@@ -1929,6 +2181,62 @@ mod macos_cleanup_tests {
         assert!(
             project_model.exists(),
             "models inside projects must remain unchanged"
+        );
+    }
+
+    /// Verifies the executable-name gates for the newly absorbed VS Code and
+    /// Docker Desktop rules against the real signed applications. Both rules
+    /// must stop before filesystem traversal while their owners are running.
+    #[test]
+    #[ignore = "requires real VS Code and Docker Desktop processes"]
+    fn real_reference_cache_rules_block_running_owners() {
+        assert_eq!(
+            std::env::var("MANGODISK_TEST_REAL_MACOS_REFERENCE_CACHE_BLOCK").as_deref(),
+            Ok("1"),
+            "set MANGODISK_TEST_REAL_MACOS_REFERENCE_CACHE_BLOCK=1 for the real process-gate diagnostic"
+        );
+        let cases = [
+            (
+                "container.docker-desktop-diagnostic-cache",
+                vec![
+                    "Docker".to_string(),
+                    "Docker Desktop".to_string(),
+                    "com.docker.backend".to_string(),
+                ],
+            ),
+            ("dev.vscode-cache", vec!["Code".to_string()]),
+        ];
+        let process_snapshot =
+            ProcessSnapshot::capture().expect("the macOS process inventory must be available");
+
+        for (rule_id, process_names) in &cases {
+            assert!(
+                !process_snapshot
+                    .matching_processes(process_names)
+                    .is_empty(),
+                "every reference cache owner must be running"
+            );
+            let result = CleanupService::execute(CleanupRequest {
+                rule_ids: vec![(*rule_id).to_string()],
+                source_selections: Vec::new(),
+                dry_run: false,
+                project_roots: Vec::new(),
+            })
+            .expect("the blocked reference cache cleanup must return a structured result");
+            assert_eq!(result.actions.len(), 1);
+            let action = &result.actions[0];
+            assert_eq!(action.status, crate::cleanup::CleanupActionStatus::Blocked);
+            assert_eq!(
+                action.reason_code,
+                Some(crate::cleanup::CleanupActionReason::RunningProcesses)
+            );
+            assert_eq!(action.released_bytes, 0);
+            assert_eq!(action.affected_item_count, 0);
+            assert!(!action.running_processes.is_empty());
+        }
+        println!(
+            "real_macos_reference_cache_block owner_count={}",
+            cases.len()
         );
     }
 
@@ -9472,11 +9780,11 @@ mod windows_cleanup_tests {
     fn validate_real_windows_browser_cache_cleanup(
         rule_id: &str,
         process_names: &[&str],
+        profile_environment_variable: &str,
         user_data_relative: &str,
         preserved_relatives: &[&str],
         target_relatives: &[&str],
         minimum_preserved_count: usize,
-        browser_name: &str,
     ) {
         let process_names = process_names
             .iter()
@@ -9485,18 +9793,15 @@ mod windows_cleanup_tests {
         let running = ProcessSnapshot::capture()
             .expect("the Windows process inventory must be available")
             .matching_processes(&process_names);
-        assert!(
-            running.is_empty(),
-            "{browser_name} must be completely stopped"
-        );
+        assert!(running.is_empty(), "{rule_id} must be completely stopped");
 
-        let local_app_data = std::env::var_os("LOCALAPPDATA")
+        let profile_base = std::env::var_os(profile_environment_variable)
             .map(PathBuf::from)
-            .expect("LOCALAPPDATA must be available");
-        let user_data = local_app_data.join(user_data_relative);
+            .unwrap_or_else(|| panic!("{profile_environment_variable} must be available"));
+        let user_data = profile_base.join(user_data_relative);
         assert!(
             user_data.join("Default").is_dir(),
-            "{browser_name} must complete a first launch"
+            "{rule_id} must complete a first launch"
         );
 
         let preserved_paths = preserved_relatives
@@ -9506,7 +9811,7 @@ mod windows_cleanup_tests {
             .collect::<Vec<_>>();
         assert!(
             preserved_paths.len() >= minimum_preserved_count,
-            "{browser_name} must expose representative durable profile state"
+            "{rule_id} must expose representative durable profile state"
         );
         let preserved_before = preserved_paths
             .iter()
@@ -9521,7 +9826,7 @@ mod windows_cleanup_tests {
         assert_eq!(
             target_roots.len(),
             target_relatives.len(),
-            "{browser_name} must expose every verified cache root"
+            "{rule_id} must expose every verified cache root"
         );
         let markers = target_roots
             .iter()
@@ -9555,7 +9860,7 @@ mod windows_cleanup_tests {
         assert_eq!(preserved_after, preserved_before);
         println!(
             "real_windows_browser_cache_cleanup browser={} expected_bytes={} released_bytes={} affected_item_count={} target_root_count={} preserved_root_count={}",
-            browser_name,
+            rule_id,
             preview.expected_bytes,
             result.released_bytes,
             result.affected_item_count,
@@ -9594,6 +9899,7 @@ mod windows_cleanup_tests {
         validate_real_windows_browser_cache_cleanup(
             "browser.360-speed-cache",
             &["360ChromeX.exe"],
+            "LOCALAPPDATA",
             "360ChromeX/Chrome/User Data",
             &[
                 "Local State",
@@ -9619,7 +9925,6 @@ mod windows_cleanup_tests {
                 "Default/DawnWebGPUCache",
             ],
             9,
-            "360-speed",
         );
     }
 
@@ -9654,6 +9959,7 @@ mod windows_cleanup_tests {
         validate_real_windows_browser_cache_cleanup(
             "browser.sogou-cache",
             &["SogouExplorer.exe"],
+            "LOCALAPPDATA",
             "Sogou/SogouExplorer/User Data",
             &[
                 "Local State",
@@ -9679,7 +9985,101 @@ mod windows_cleanup_tests {
                 "Default/DawnCache",
             ],
             10,
-            "sogou",
+        );
+    }
+
+    #[test]
+    #[ignore = "requires 360 Safe Browser to be running in the Windows VM"]
+    fn real_windows_360_safe_browser_cache_blocks_while_running() {
+        assert_eq!(
+            std::env::var("MANGODISK_TEST_REAL_WINDOWS_360_SAFE_CACHE_BLOCK").as_deref(),
+            Ok("1"),
+            "set MANGODISK_TEST_REAL_WINDOWS_360_SAFE_CACHE_BLOCK=1 for the real process-gate diagnostic"
+        );
+        assert_windows_browser_cache_blocked("browser.360-safe-cache", &["360se.exe"], "360-safe");
+    }
+
+    #[test]
+    #[ignore = "clears real 360 Safe Browser caches in the Windows VM"]
+    fn real_windows_360_safe_browser_cache_preserves_profile_state() {
+        assert_eq!(
+            std::env::var("MANGODISK_TEST_REAL_WINDOWS_360_SAFE_CACHE").as_deref(),
+            Ok("1"),
+            "set MANGODISK_TEST_REAL_WINDOWS_360_SAFE_CACHE=1 only in the isolated Windows VM"
+        );
+        validate_real_windows_browser_cache_cleanup(
+            "browser.360-safe-cache",
+            &["360se.exe"],
+            "APPDATA",
+            "360se6/User Data",
+            &[
+                "Local State",
+                "Default/History",
+                "Default/Login Data",
+                "Default/Network",
+                "Default/Extensions",
+                "Default/Local Storage",
+                "Default/Preferences",
+                "Default/Session Storage",
+                "Default/Sessions",
+                "Default/WebStorage",
+            ],
+            &[
+                "GraphiteDawnCache",
+                "Default/Cache",
+                "Default/Code Cache",
+                "Default/DawnCache",
+                "Default/Shared Dictionary/cache",
+            ],
+            5,
+        );
+    }
+
+    #[test]
+    #[ignore = "requires 2345 Browser to be running in the Windows VM"]
+    fn real_windows_2345_browser_cache_blocks_while_running() {
+        assert_eq!(
+            std::env::var("MANGODISK_TEST_REAL_WINDOWS_2345_CACHE_BLOCK").as_deref(),
+            Ok("1"),
+            "set MANGODISK_TEST_REAL_WINDOWS_2345_CACHE_BLOCK=1 for the real process-gate diagnostic"
+        );
+        assert_windows_browser_cache_blocked("browser.2345-cache", &["2345Explorer.exe"], "2345");
+    }
+
+    #[test]
+    #[ignore = "clears real 2345 Browser caches in the Windows VM"]
+    fn real_windows_2345_browser_cache_preserves_profile_state() {
+        assert_eq!(
+            std::env::var("MANGODISK_TEST_REAL_WINDOWS_2345_CACHE").as_deref(),
+            Ok("1"),
+            "set MANGODISK_TEST_REAL_WINDOWS_2345_CACHE=1 only in the isolated Windows VM"
+        );
+        validate_real_windows_browser_cache_cleanup(
+            "browser.2345-cache",
+            &["2345Explorer.exe"],
+            "LOCALAPPDATA",
+            "2345Explorer/User Data",
+            &[
+                "Local State",
+                "Default/History",
+                "Default/Login Data",
+                "Default/Network",
+                "Default/Extensions",
+                "Default/Local Storage",
+                "Default/Preferences",
+                "Default/Session Storage",
+                "Default/Sessions",
+                "Default/WebStorage",
+            ],
+            &[
+                "ShaderCache",
+                "GrShaderCache",
+                "Default/Cache",
+                "Default/Code Cache",
+                "Default/DawnCache",
+                "Default/GPUCache",
+            ],
+            5,
         );
     }
 
@@ -9954,12 +10354,15 @@ mod windows_cleanup_tests {
             local.join("Mozilla/sccache/cache/0/compile-result"),
             profile.join(".hex/cache/registry.ets"),
             local.join("copilot/marketplace/index.json"),
+            local.join("pypoetry/Cache/artifacts/aa/package.whl"),
+            local.join("pypoetry/Cache/cache/repositories/PyPI/index.json"),
         ];
         let protected_files = [
             roaming.join("ccache/ccache.conf"),
             roaming.join("Mozilla/sccache/config/config"),
             profile.join(".hex/hex.config"),
             profile.join(".copilot/settings.json"),
+            local.join("pypoetry/Cache/virtualenvs/project-py3.13/pyvenv.cfg"),
         ];
         for fixture in cache_files.iter().chain(&protected_files) {
             fs::create_dir_all(fixture.parent().expect("fixture must have a parent"))
@@ -9981,6 +10384,7 @@ mod windows_cleanup_tests {
             "dev.sccache-cache",
             "dev.hex-cache",
             "dev.copilot-cli-cache",
+            "dev.python-tooling-cache",
         ]
         .map(str::to_string)
         .to_vec();
@@ -10004,9 +10408,80 @@ mod windows_cleanup_tests {
         })
         .expect("isolated developer cache cleanup should succeed");
         assert_eq!(result.failed_item_count, 0, "{:?}", result.actions);
-        assert_eq!(result.affected_item_count, 4);
+        assert_eq!(result.affected_item_count, 6);
         assert!(cache_files.iter().all(|fixture| !fixture.exists()));
         assert!(protected_files.iter().all(|fixture| fixture.exists()));
+    }
+
+    #[test]
+    #[ignore = "clears real Poetry caches in the Windows VM"]
+    fn real_windows_poetry_cache_preserves_virtual_environments() {
+        assert_eq!(
+            std::env::var("MANGODISK_TEST_REAL_WINDOWS_POETRY_CACHE").as_deref(),
+            Ok("1"),
+            "set MANGODISK_TEST_REAL_WINDOWS_POETRY_CACHE=1 only in the isolated Windows VM"
+        );
+        let local_app_data = std::env::var_os("LOCALAPPDATA")
+            .map(PathBuf::from)
+            .expect("LOCALAPPDATA must be available");
+        let poetry_cache = local_app_data.join("pypoetry/Cache");
+        let virtualenvs = poetry_cache.join("virtualenvs");
+        assert!(virtualenvs.is_dir(), "Poetry must create a real virtualenv");
+        let virtualenv = fs::read_dir(&virtualenvs)
+            .expect("the Poetry virtualenv directory must remain readable")
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .find(|path| {
+                path.join("pyvenv.cfg").is_file()
+                    && path.join("Lib/site-packages/idna/__init__.py").is_file()
+            })
+            .expect("Poetry must create a virtualenv containing the test dependency");
+        let protected_files = [
+            virtualenv.join("pyvenv.cfg"),
+            virtualenv.join("Lib/site-packages/idna/__init__.py"),
+        ];
+        let protected_before = protected_files
+            .iter()
+            .map(|path| fs::read(path).expect("the Poetry virtualenv file must be readable"))
+            .collect::<Vec<_>>();
+
+        let target_roots = [poetry_cache.join("artifacts"), poetry_cache.join("cache")];
+        assert!(
+            target_roots.iter().all(|root| root.is_dir()),
+            "Poetry must populate both rebuildable cache roots"
+        );
+        let markers = target_roots
+            .iter()
+            .map(|root| root.join("mangodisk-rule-validation.bin"))
+            .collect::<Vec<_>>();
+        for marker in &markers {
+            fs::write(marker, b"payload").expect("the Poetry cache marker must be created");
+        }
+        let request = |dry_run| CleanupRequest {
+            rule_ids: vec!["dev.python-tooling-cache".to_string()],
+            source_selections: Vec::new(),
+            dry_run,
+            project_roots: Vec::new(),
+        };
+
+        let preview = CleanupService::execute(request(true))
+            .expect("the real Poetry cache dry run must succeed");
+        assert_eq!(preview.failed_item_count, 0, "{:?}", preview.actions);
+        assert!(markers.iter().all(|marker| marker.exists()));
+
+        let result = CleanupService::execute(request(false))
+            .expect("the real Poetry cache cleanup must succeed");
+        assert_eq!(result.failed_item_count, 0, "{:?}", result.actions);
+        assert!(markers.iter().all(|marker| !marker.exists()));
+        let protected_after = protected_files
+            .iter()
+            .map(|path| fs::read(path).expect("the Poetry virtualenv file must remain readable"))
+            .collect::<Vec<_>>();
+        assert_eq!(protected_after, protected_before);
+        println!(
+            "real_windows_poetry_cache_cleanup expected_bytes={} released_bytes={} affected_item_count={}",
+            preview.expected_bytes, result.released_bytes, result.affected_item_count
+        );
     }
 
     #[test]

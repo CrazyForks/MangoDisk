@@ -955,6 +955,11 @@
         "description": "QQ がホットアップデートを展開した後に保持している古い更新アーカイブ。",
         "impact": "現在または保留中のバージョン、アカウント、メッセージ、ファイル、ログイン状態は保持されます。削除した更新は再ダウンロードが必要になる場合があります。"
       },
+      "app.ollama-update-cache": {
+        "name": "Ollama のダウンロード済み更新",
+        "description": "Ollama がダウンロードした 7 日以上前の macOS 更新アーカイブ。",
+        "impact": "モデル、マニフェスト、設定、アカウント、インストール済みアプリは保持されます。削除した更新は再ダウンロードが必要になる場合があります。"
+      },
       "app.parallels-windows-image-cache": {
         "name": "Parallels Windows イメージ",
         "description": "Parallels Desktop がダウンロードして保持している古い Windows ESD インストールイメージ。",
@@ -1240,6 +1245,11 @@
         "description": "Docker Desktopダッシュボードによって生成される一時的なウェブ、コード、GPU、シェーダーデータ。",
         "impact": "クリーンアップ前に Docker Desktop を終了してください。イメージ、コンテナ、ボリューム、ビルドキャッシュ、設定、プロジェクト、診断、ログ、VM ディスクは保持されます。ダッシュボードのデータは再作成されます。"
       },
+      "container.docker-desktop-diagnostic-cache": {
+        "name": "Docker Desktop の古いログ",
+        "description": "7 日以上前のホストおよび仮想マシンの診断ログ。",
+        "impact": "クリーンアップ前に Docker Desktop を終了してください。イメージ、コンテナ、ボリューム、ビルドキャッシュ、設定、プロジェクト、VM ディスク、最近の診断情報は保持されます。"
+      },
       "app.douyin-live-updater-cache": {
         "name": "Douyin Live Companion アップデートキャッシュ",
         "description": "Douyin Live Companionがダウンロードした古いインストーラーパッケージ。",
@@ -1269,6 +1279,16 @@
         "name": "Sogou Explorer キャッシュ",
         "description": "Sogou Explorer が保存する一時的な Web、コード、GPU、Dawn、およびシェーダーデータ。",
         "impact": "パスワード、Cookie、履歴、拡張機能、ブックマーク、ダウンロード、セッションは保持されます。先に Sogou Explorer を終了してください。キャッシュは必要に応じて再構築されます。"
+      },
+      "browser.360-safe-cache": {
+        "name": "360 Safe Browser キャッシュ",
+        "description": "360 Safe Browser が保存する一時的な Web、コード、GPU、Dawn、およびシェーダーデータ。",
+        "impact": "パスワード、Cookie、履歴、拡張機能、ブックマーク、ダウンロード、セッションは保持されます。先に 360 Safe Browser を終了してください。キャッシュは必要に応じて再構築されます。"
+      },
+      "browser.2345-cache": {
+        "name": "2345 Browser キャッシュ",
+        "description": "2345 Browser が保存する一時的な Web、コード、GPU、Dawn、およびシェーダーデータ。",
+        "impact": "パスワード、Cookie、履歴、拡張機能、ブックマーク、ダウンロード、セッションは保持されます。先に 2345 Browser を終了してください。キャッシュは必要に応じて再構築されます。"
       },
       "browser.edge-cache": {
         "name": "Edge キャッシュ",
@@ -1379,6 +1399,11 @@
         "name": "Python パッケージキャッシュ",
         "description": "Python 開発ツールが保存したダウンロード済みパッケージと解析データ。",
         "impact": "プロジェクトとインストール済みの依存関係は保持されます。必要なパッケージは再ダウンロードされる場合があります。"
+      },
+      "dev.pyinstaller-cache": {
+        "name": "PyInstaller バイナリキャッシュ",
+        "description": "PyInstaller が後続のビルド用に保存した処理済みバイナリのコピー。",
+        "impact": "プロジェクト、spec ファイル、ビルド成果物は保持されます。後続のビルドでバイナリの再処理が必要になる場合があります。"
       },
       "dev.python-tooling-cache": {
         "name": "Python ツーリングキャッシュ",

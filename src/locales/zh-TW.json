@@ -955,6 +955,11 @@
         "description": "QQ 解壓縮熱更新元件後保留的舊版更新壓縮檔",
         "impact": "不會刪除目前或待啟用版本、帳號、訊息、檔案或登入狀態；移除的更新可能需要重新下載。"
       },
+      "app.ollama-update-cache": {
+        "name": "Ollama 已下載更新",
+        "description": "Ollama 已下載且超過 7 天的 macOS 更新壓縮檔",
+        "impact": "不會刪除模型、清單、設定、帳號或已安裝的應用程式；移除的更新可能需要重新下載。"
+      },
       "app.parallels-windows-image-cache": {
         "name": "Parallels Windows 映像檔",
         "description": "Parallels Desktop 下載並保留的舊版 Windows ESD 安裝映像檔",
@@ -1240,6 +1245,11 @@
         "description": "Docker Desktop 控制面板產生的暫存網頁、程式碼、GPU 與著色器資料",
         "impact": "清理前需關閉 Docker Desktop；映像檔、容器、磁碟區、建置快取、設定、專案、診斷資料、記錄檔和虛擬機磁碟都會保留，控制台內容之後可重新產生。"
       },
+      "container.docker-desktop-diagnostic-cache": {
+        "name": "Docker Desktop 舊記錄",
+        "description": "超過 7 天的主機與虛擬機器診斷記錄",
+        "impact": "清理前需關閉 Docker Desktop；映像檔、容器、磁碟區、建置快取、設定、專案、虛擬機器磁碟和近期診斷資訊都會保留。"
+      },
       "app.douyin-live-updater-cache": {
         "name": "抖音直播伴侶更新快取",
         "description": "抖音直播伴侶下載後留下的舊安裝程式",
@@ -1269,6 +1279,16 @@
         "name": "搜狗高速瀏覽器快取",
         "description": "搜狗高速瀏覽器儲存的暫存網頁、程式碼、GPU、Dawn 和著色器快取",
         "impact": "不會清理 Cookie、密碼、瀏覽紀錄、擴充功能、書籤、下載或工作階段；請先關閉搜狗高速瀏覽器再清理，快取之後會視需要重建。"
+      },
+      "browser.360-safe-cache": {
+        "name": "360 安全瀏覽器快取",
+        "description": "360 安全瀏覽器儲存的暫存網頁、程式碼、GPU、Dawn 和著色器快取",
+        "impact": "不會清理 Cookie、密碼、瀏覽紀錄、擴充功能、書籤、下載或工作階段；請先關閉 360 安全瀏覽器再清理，快取之後會視需要重建。"
+      },
+      "browser.2345-cache": {
+        "name": "2345 瀏覽器快取",
+        "description": "2345 瀏覽器儲存的暫存網頁、程式碼、GPU、Dawn 和著色器快取",
+        "impact": "不會清理 Cookie、密碼、瀏覽紀錄、擴充功能、書籤、下載或工作階段；請先關閉 2345 瀏覽器再清理，快取之後會視需要重建。"
       },
       "browser.edge-cache": {
         "name": "Edge 快取",
@@ -1379,6 +1399,11 @@
         "name": "Python 工具快取",
         "description": "Python 開發工具儲存的相依套件下載與程式碼分析快取",
         "impact": "不會刪除虛擬環境或解釋器；後續操作可能重新下載相依套件。"
+      },
+      "dev.pyinstaller-cache": {
+        "name": "PyInstaller 二進位快取",
+        "description": "PyInstaller 為後續建置儲存的已處理二進位副本",
+        "impact": "不會刪除專案、spec 檔案或建置產物；後續建置可能需要重新處理二進位檔案。"
       },
       "dev.python-tooling-cache": {
         "name": "Python 工具鏈快取",

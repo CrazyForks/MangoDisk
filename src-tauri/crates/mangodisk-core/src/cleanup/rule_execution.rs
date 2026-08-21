@@ -484,6 +484,25 @@ fn delete_entry(
         stats.failed_item_count += 1;
         return false;
     }
+    let Ok(initial_metadata) = fs::symlink_metadata(path) else {
+        stats.failed_item_count += 1;
+        return false;
+    };
+    if is_link_like(&initial_metadata) {
+        // Links inside durable subtrees are expected in mixed-purpose roots.
+        // They become failures only when the matcher attempted to select the
+        // link itself; otherwise no deletion authority exists for that entry.
+        if matches_rule(
+            traversal.canonical_root,
+            path,
+            &initial_metadata,
+            Some(traversal.matcher),
+        ) && (traversal.owns_path)(path, &initial_metadata)
+        {
+            stats.failed_item_count += 1;
+        }
+        return false;
+    }
     let Ok(prepared) = prepare_path_for_permanent_delete(path) else {
         stats.failed_item_count += 1;
         return false;
@@ -873,5 +892,43 @@ mod bulk_cleanup_tests {
         assert!(failed_item_count > 0);
         let metadata = fs::symlink_metadata(&fifo).expect("the FIFO fixture should remain");
         assert!(metadata.file_type().is_fifo());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn narrow_cleanup_ignores_unmatched_links_and_rejects_matched_links() {
+        use std::os::unix::fs::symlink;
+
+        let sandbox = TestDirectory::new("unmatched-link-test");
+        let root = sandbox.0.join("versions");
+        let active_version = root.join("current");
+        fs::create_dir_all(&active_version).expect("create the retained version directory");
+        fs::write(active_version.join("runtime.bin"), b"runtime")
+            .expect("write the retained runtime fixture");
+        symlink("runtime.bin", active_version.join("runtime-link"))
+            .expect("create the retained runtime link");
+        symlink("current/runtime.bin", root.join("pending.zip"))
+            .expect("create the matching archive link");
+        let archive = root.join("update.zip");
+        fs::write(&archive, b"archive").expect("write the matching archive fixture");
+
+        let canonical_root = fs::canonicalize(&root).expect("canonicalize the cleanup fixture");
+        let mut stats = DeleteStats::default();
+        delete_root_contents(
+            &root,
+            &canonical_root,
+            &MatcherSpec::NameGlob(vec!["*.zip".to_string()]),
+            &|_, _| true,
+            &|| false,
+            &mut stats,
+        );
+
+        assert!(!archive.exists());
+        assert!(active_version.join("runtime.bin").exists());
+        assert!(active_version.join("runtime-link").exists());
+        assert!(root.join("pending.zip").exists());
+        assert_eq!(stats.deleted_bytes, 7);
+        assert_eq!(stats.affected_item_count, 1);
+        assert_eq!(stats.failed_item_count, 1);
     }
 }

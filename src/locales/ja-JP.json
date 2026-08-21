@@ -1262,7 +1262,7 @@
       },
       "browser.chrome-cache": {
         "name": "Chrome キャッシュ",
-        "description": "Chrome が保存した一時的なウェブサイトおよび起動ファイル。",
+        "description": "Chrome が生成した一時的なウェブ、コード、GPU、シェーダーデータ。",
         "impact": "パスワード、クッキー、履歴、拡張機能、ブックマークは保持されます。ブラウザを先に閉じてください。"
       },
       "browser.uc-cache": {
@@ -1522,8 +1522,8 @@
       },
       "dev.gradle-cache": {
         "name": "Gradle キャッシュ",
-        "description": "Gradle によって保存されたダウンロード済みパッケージ。",
-        "impact": "プロジェクトとインストールされた依存関係は保持されます。パッケージは再度ダウンロードされる場合があります。"
+        "description": "Gradle が保存した依存関係、Wrapper ディストリビューション、ビルドキャッシュ、一時ファイル。",
+        "impact": "プロジェクト、Gradle 設定、インストール済み JDK は保持されます。Gradle と Java を終了してからクリーンアップしてください。関連データは再度ダウンロードまたは生成される場合があります。"
       },
       "dev.user-tool-cache": {
         "name": "開発者ツールキャッシュ",

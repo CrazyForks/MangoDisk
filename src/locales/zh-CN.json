@@ -1266,7 +1266,7 @@
       },
       "browser.chrome-cache": {
         "name": "Chrome 缓存",
-        "description": "Chrome 保存的临时网页和启动文件",
+        "description": "Chrome 生成的临时网页、代码、GPU 与着色器缓存",
         "impact": "不会清理 Cookie、密码、历史、扩展或书签；关闭浏览器后清理，下次使用时会按需重建。"
       },
       "browser.uc-cache": {
@@ -1526,8 +1526,8 @@
       },
       "dev.gradle-cache": {
         "name": "Gradle 构建缓存",
-        "description": "Gradle 下载、构建、守护进程与工作进程缓存",
-        "impact": "不会删除项目源代码；关闭 Gradle 进程后清理，后续构建会重新生成。"
+        "description": "Gradle 下载的依赖、Wrapper 发行包、构建缓存和临时文件",
+        "impact": "不会删除项目、Gradle 设置或已安装的 JDK；关闭 Gradle 和 Java 后清理，后续构建可能重新下载或生成相关数据。"
       },
       "dev.user-tool-cache": {
         "name": "用户级开发工具缓存",

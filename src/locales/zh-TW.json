@@ -1262,7 +1262,7 @@
       },
       "browser.chrome-cache": {
         "name": "Chrome 快取",
-        "description": "Chrome 儲存的暫存網頁和啟動檔案",
+        "description": "Chrome 產生的暫存網頁、程式碼、GPU 與著色器快取",
         "impact": "不會清理 Cookie、密碼、瀏覽紀錄、擴充功能或書籤；請先關閉瀏覽器再清理，下次使用時會視需要重建。"
       },
       "browser.uc-cache": {
@@ -1522,8 +1522,8 @@
       },
       "dev.gradle-cache": {
         "name": "Gradle 建置快取",
-        "description": "Gradle 下載、建置、常駐處理程序與工作處理程序快取",
-        "impact": "不會刪除專案原始碼；關閉 Gradle 處理程序後清理，後續建置會重新產生。"
+        "description": "Gradle 下載的相依套件、Wrapper 發行套件、建置快取和暫存檔案",
+        "impact": "不會刪除專案、Gradle 設定或已安裝的 JDK；關閉 Gradle 和 Java 後清理，後續建置可能會重新下載或產生相關資料。"
       },
       "dev.user-tool-cache": {
         "name": "使用者級開發工具快取",

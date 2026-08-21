@@ -709,9 +709,10 @@ fn delete_via_staging(
 ///
 /// `remove_dir_all` has no cancellation hook, which is unacceptable for the
 /// large small-file trees most likely to be cancelled. The traversal uses
-/// `symlink_metadata` and the platform link-like policy; a link or Windows
-/// reparse point appearing after the earlier scan stops deletion and rolls
-/// back the remainder without following the target.
+/// `symlink_metadata` and the platform link-like policy. Unix symbolic-link
+/// entries are unlinked without following their targets. Other link-like
+/// entries, including Windows reparse points, stop deletion and roll back the
+/// remainder.
 fn remove_directory_tree_cancellable(
     root: &Path,
     is_cancelled: &(dyn Fn() -> bool + Sync),
@@ -738,6 +739,11 @@ fn remove_directory_tree_entry(
         ));
     }
     let metadata = fs::symlink_metadata(path)?;
+    #[cfg(unix)]
+    if metadata.file_type().is_symlink() {
+        fs::remove_file(path)?;
+        return Ok(());
+    }
     if current_platform().is_link_like(&metadata) {
         return Err(std::io::Error::other(
             "a link or reparse point appeared during directory tree deletion",
@@ -803,6 +809,11 @@ fn remove_directory_contents_entry(
         ));
     }
     let metadata = fs::symlink_metadata(path)?;
+    #[cfg(unix)]
+    if metadata.file_type().is_symlink() {
+        fs::remove_file(path)?;
+        return Ok(true);
+    }
     if current_platform().is_link_like(&metadata) {
         return Err(std::io::Error::other(
             "a link or reparse point appeared during directory contents deletion",
@@ -1505,6 +1516,79 @@ mod permanent_delete_tests {
         assert_eq!(outcome.released_bytes(), 11);
         assert_eq!(outcome.affected_item_count(), 2);
         assert!(!path.exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn cancellable_directory_delete_unlinks_a_descendant_symlink_without_following_it() {
+        use std::os::unix::fs::symlink;
+
+        let sandbox = DeleteSandbox::new();
+        let path = sandbox.0.join("cancellable-directory-with-link");
+        let external = sandbox.0.join("external");
+        let protected_file = external.join("must-remain.bin");
+        fs::create_dir_all(&path).expect("create the cancellable fixture");
+        fs::create_dir_all(&external).expect("create the external fixture");
+        fs::write(&protected_file, b"protected").expect("write the protected fixture");
+        symlink(&external, path.join("external-link")).expect("create the descendant symlink");
+        let prepared = prepare_path_for_permanent_delete(&path)
+            .expect("the directory containing the symlink should be prepared");
+
+        let outcome =
+            delete_directory_tree_permanently_with_cancellation(prepared, 0, 0, &|| false)
+                .expect("the approved tree should be removed without following its symlink");
+
+        assert_eq!(outcome.released_bytes(), 0);
+        assert_eq!(outcome.affected_item_count(), 0);
+        assert!(
+            !path.exists(),
+            "the approved directory tree must be removed"
+        );
+        assert!(
+            protected_file.exists(),
+            "the external symlink target must remain untouched"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn directory_contents_delete_unlinks_a_descendant_symlink_without_following_it() {
+        use std::os::unix::fs::symlink;
+
+        let sandbox = DeleteSandbox::new();
+        let path = sandbox.0.join("directory-contents-with-link");
+        let retained_empty = path.join("retained-empty");
+        let external_link = path.join("external-link");
+        let external = sandbox.0.join("external");
+        let protected_file = external.join("must-remain.bin");
+        fs::create_dir_all(&retained_empty).expect("create the retained empty directory");
+        fs::create_dir_all(&external).expect("create the external fixture");
+        fs::write(&protected_file, b"protected").expect("write the protected fixture");
+        symlink(&external, &external_link).expect("create the descendant symlink");
+        let prepared = prepare_path_for_permanent_delete(&path)
+            .expect("the directory containing the symlink should be prepared");
+
+        let outcome = delete_directory_contents_permanently_with_cancellation(prepared, &|| false)
+            .expect("the approved contents should be removed without following their symlink");
+
+        assert_eq!(outcome.released_bytes(), 0);
+        assert_eq!(outcome.affected_item_count(), 0);
+        assert!(
+            path.exists(),
+            "the retained directory skeleton must be restored"
+        );
+        assert!(
+            retained_empty.exists(),
+            "the pre-existing empty directory must remain"
+        );
+        assert!(
+            fs::symlink_metadata(&external_link).is_err(),
+            "the descendant symlink entry must be removed"
+        );
+        assert!(
+            protected_file.exists(),
+            "the external symlink target must remain untouched"
+        );
     }
 
     #[test]

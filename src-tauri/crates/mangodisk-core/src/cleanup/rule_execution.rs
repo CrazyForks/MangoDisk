@@ -13,7 +13,7 @@ use crate::{
     cleanup::{
         measurement::{measure_path_filtered, MeasureResult},
         rules::{
-            matches_rule, protected_paths::validate_automatic_cleanup_root, CompiledRule,
+            matches_rule, root_validation::validate_automatic_cleanup_root, CompiledRule,
             MatcherSpec, ScanPlan,
         },
         source_selection::{cleanup_source_path, SourceScope},
@@ -710,7 +710,7 @@ fn validate_cleanup_directory(path: &Path, canonical_root: &Path) -> Result<Path
     let canonical = current_platform()
         .canonicalize_no_links(path)
         .map_err(|error| error.to_string())?;
-    if canonical != canonical_root && !canonical.starts_with(canonical_root) {
+    if !current_platform().path_is_same_or_child(&canonical, canonical_root) {
         return Err("the cleanup path escaped the rule root".to_string());
     }
     Ok(canonical)
@@ -725,7 +725,8 @@ fn revalidate_cleanup_directory(path: &Path, expected_canonical: &Path) -> bool 
     };
     metadata.is_dir()
         && !is_link_like(&metadata)
-        && fs::canonicalize(path).is_ok_and(|canonical| canonical == expected_canonical)
+        && fs::canonicalize(path)
+            .is_ok_and(|canonical| current_platform().paths_equal(&canonical, expected_canonical))
 }
 
 #[derive(Default)]

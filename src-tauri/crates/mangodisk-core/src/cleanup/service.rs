@@ -27,7 +27,7 @@ use crate::{
     },
     cleanup::rules::{compile_scan_plan, registry},
     cleanup::source_selection::SourceSelectionPolicy,
-    filesystem::metadata::now_ms,
+    filesystem::metadata::{display_path, now_ms},
     history::HistoryService,
     shared::{
         operation::{CoordinatedOperationKind, OperationCancellationToken, OperationGuard},
@@ -161,7 +161,7 @@ where
         // Path conversion allocates on both Windows and macOS. Do it only for
         // snapshots that will actually cross the adapter boundary; deletion
         // may otherwise pay this cost tens of thousands of times per rule.
-        self.current_item_path = Some(path.to_string_lossy().into_owned());
+        self.current_item_path = Some(display_path(path));
         self.last_item_emit = Some(now);
         self.emit(CleanupExecutionStage::Cleaning, Some(rule_id));
     }

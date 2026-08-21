@@ -62,11 +62,14 @@ pub(crate) struct PreparedPermanentDelete {
 ///
 /// Complete-root cleanup cannot treat an earlier scan summary as the actual
 /// result: tools may still write before atomic staging. Accumulating the live
-/// removal traversal keeps progress and history truthful.
+/// removal traversal keeps progress and history truthful. The internal mutation
+/// marker also records removals, such as links and directories, that intentionally
+/// do not contribute to regular-file accounting.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) struct PermanentDeleteOutcome {
     released_bytes: u64,
     affected_item_count: u64,
+    had_irreversible_mutation: bool,
 }
 
 impl PermanentDeleteOutcome {
@@ -83,6 +86,7 @@ impl PermanentDeleteOutcome {
         self.affected_item_count = self
             .affected_item_count
             .saturating_add(other.affected_item_count);
+        self.had_irreversible_mutation |= other.had_irreversible_mutation;
     }
 }
 
@@ -561,8 +565,7 @@ fn delete_via_staging(
             &staged_target,
             "the item was replaced before permanent deletion",
             Some(CoreErrorReason::ItemChanged),
-            0,
-            0,
+            PermanentDeleteOutcome::default(),
         )
         .map(|_| PermanentDeleteOutcome::default());
     }
@@ -570,6 +573,7 @@ fn delete_via_staging(
     let expected_outcome = PermanentDeleteOutcome {
         released_bytes: expected_bytes,
         affected_item_count: expected_item_count,
+        had_irreversible_mutation: false,
     };
     let removal_result = match removal {
         StagedRemoval::File => fs::remove_file(&staged_target)
@@ -683,11 +687,9 @@ fn delete_via_staging(
                         released_bytes: expected_bytes.saturating_sub(remaining.bytes),
                         affected_item_count: expected_item_count
                             .saturating_sub(remaining.item_count),
+                        had_irreversible_mutation: false,
                     })
             });
-            let released_bytes = verified_outcome.map_or(0, |outcome| outcome.released_bytes);
-            let affected_item_count =
-                verified_outcome.map_or(0, |outcome| outcome.affected_item_count);
             rollback_staged_target(
                 path,
                 &staging_root,
@@ -697,8 +699,7 @@ fn delete_via_staging(
                     delete_failure.error
                 ),
                 permanent_delete_io_reason(&delete_failure.error),
-                released_bytes,
-                affected_item_count,
+                verified_outcome.unwrap_or_default(),
             )
             .map(|_| PermanentDeleteOutcome::default())
         }
@@ -742,6 +743,7 @@ fn remove_directory_tree_entry(
     #[cfg(unix)]
     if metadata.file_type().is_symlink() {
         fs::remove_file(path)?;
+        outcome.had_irreversible_mutation = true;
         return Ok(());
     }
     if current_platform().is_link_like(&metadata) {
@@ -752,6 +754,7 @@ fn remove_directory_tree_entry(
     if metadata.is_file() {
         let bytes = metadata.len();
         fs::remove_file(path)?;
+        outcome.had_irreversible_mutation = true;
         outcome.released_bytes = outcome.released_bytes.saturating_add(bytes);
         outcome.affected_item_count = outcome.affected_item_count.saturating_add(1);
         return Ok(());
@@ -777,7 +780,9 @@ fn remove_directory_tree_entry(
             "directory tree deletion cancelled",
         ));
     }
-    fs::remove_dir(path)
+    fs::remove_dir(path)?;
+    outcome.had_irreversible_mutation = true;
+    Ok(())
 }
 
 fn remove_directory_contents_cancellable(
@@ -812,6 +817,7 @@ fn remove_directory_contents_entry(
     #[cfg(unix)]
     if metadata.file_type().is_symlink() {
         fs::remove_file(path)?;
+        outcome.had_irreversible_mutation = true;
         return Ok(true);
     }
     if current_platform().is_link_like(&metadata) {
@@ -822,6 +828,7 @@ fn remove_directory_contents_entry(
     if metadata.is_file() {
         let bytes = metadata.len();
         fs::remove_file(path)?;
+        outcome.had_irreversible_mutation = true;
         outcome.released_bytes = outcome.released_bytes.saturating_add(bytes);
         outcome.affected_item_count = outcome.affected_item_count.saturating_add(1);
         return Ok(true);
@@ -866,6 +873,7 @@ fn remove_directory_contents_entry(
     }
     if had_entry && all_removed {
         fs::remove_dir(path)?;
+        outcome.had_irreversible_mutation = true;
         return Ok(true);
     }
     Ok(false)
@@ -1001,13 +1009,18 @@ fn rollback_staged_target(
     staged_target: &Path,
     reason: &str,
     failure_reason: Option<CoreErrorReason>,
-    released_bytes: u64,
-    affected_item_count: u64,
+    outcome: PermanentDeleteOutcome,
 ) -> Result<(), PermanentDeleteError> {
+    let PermanentDeleteOutcome {
+        released_bytes,
+        affected_item_count,
+        had_irreversible_mutation,
+    } = outcome;
     match fs::rename(staged_target, original_path) {
         Ok(()) => {
             let _ = fs::remove_dir(staging_root);
-            let partially_deleted = released_bytes > 0 || affected_item_count > 0;
+            let partially_deleted =
+                released_bytes > 0 || affected_item_count > 0 || had_irreversible_mutation;
             let message = if partially_deleted {
                 format!(
                     "the item was partially deleted; remaining contents were restored: {reason}"
@@ -1552,6 +1565,45 @@ mod permanent_delete_tests {
 
     #[cfg(unix)]
     #[test]
+    fn cancellation_after_descendant_symlink_unlink_reports_partial_restored_deletion() {
+        use std::os::unix::fs::symlink;
+
+        let sandbox = DeleteSandbox::new();
+        let path = sandbox.0.join("cancelled-directory-with-link");
+        let external_link = path.join("external-link");
+        let external = sandbox.0.join("external");
+        let protected_file = external.join("must-remain.bin");
+        fs::create_dir_all(&path).expect("create the cancellation fixture");
+        fs::create_dir_all(&external).expect("create the external fixture");
+        fs::write(&protected_file, b"protected").expect("write the protected fixture");
+        symlink(&external, &external_link).expect("create the descendant symlink");
+        let prepared = prepare_path_for_permanent_delete(&path)
+            .expect("the directory containing the symlink should be prepared");
+        let checks = AtomicU64::new(0);
+
+        let error = delete_directory_tree_permanently_with_cancellation(prepared, 0, 0, &|| {
+            checks.fetch_add(1, Ordering::Relaxed) >= 3
+        })
+        .expect_err("cancellation should stop deletion after the symlink is unlinked");
+
+        assert!(error.is_partial());
+        assert!(error.remaining_was_restored());
+        assert_eq!(error.released_bytes(), 0);
+        assert_eq!(error.affected_item_count(), 0);
+        assert_eq!(checks.load(Ordering::Relaxed), 4);
+        assert!(path.exists(), "the remaining directory must be restored");
+        assert!(
+            fs::symlink_metadata(&external_link).is_err(),
+            "the unlinked descendant symlink must not be restored"
+        );
+        assert!(
+            protected_file.exists(),
+            "the external symlink target must remain untouched"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
     fn directory_contents_delete_unlinks_a_descendant_symlink_without_following_it() {
         use std::os::unix::fs::symlink;
 
@@ -1800,8 +1852,11 @@ mod permanent_delete_tests {
             &staged_target,
             "simulated zero-byte partial deletion",
             None,
-            0,
-            1,
+            PermanentDeleteOutcome {
+                released_bytes: 0,
+                affected_item_count: 1,
+                had_irreversible_mutation: false,
+            },
         )
         .expect_err("a partial rollback should retain its structured outcome");
 

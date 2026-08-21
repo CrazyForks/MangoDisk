@@ -954,6 +954,16 @@
         "description": "QQ 生成的可重建网页、代码、GPU、着色器与分区渲染缓存",
         "impact": "不会删除账号、消息、文件、组件包、浏览器数据或登录状态；关闭 QQ 后清理。"
       },
+      "app.qq-update-cache": {
+        "name": "QQ 已下载更新",
+        "description": "QQ 解压热更新组件后保留的旧版更新压缩包",
+        "impact": "不会删除当前或待启用版本、账号、消息、文件或登录状态；移除的更新可能需要重新下载。"
+      },
+      "app.parallels-windows-image-cache": {
+        "name": "Parallels Windows 镜像",
+        "description": "Parallels Desktop 下载并保留的旧版 Windows ESD 安装镜像",
+        "impact": "不会删除虚拟机、快照、配置或用户文件；移除的安装镜像可能需要重新下载。"
+      },
       "app.ynote-cache": {
         "name": "有道云笔记缓存",
         "description": "有道云笔记生成的可重建界面缓存、诊断日志与已下载更新数据",

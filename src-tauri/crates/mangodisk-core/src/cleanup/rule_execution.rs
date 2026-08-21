@@ -812,4 +812,66 @@ mod bulk_cleanup_tests {
         assert!(stats.deleted_bytes < stats.matched_bytes);
         assert_eq!(stats.failed_item_count, 1);
     }
+
+    #[cfg(unix)]
+    #[test]
+    fn cleanup_fifo_returns_within_the_cancellation_deadline() {
+        use std::{
+            ffi::CString,
+            os::unix::{ffi::OsStrExt, fs::FileTypeExt},
+            sync::{
+                atomic::{AtomicBool, Ordering},
+                mpsc, Arc,
+            },
+            thread,
+            time::Duration,
+        };
+
+        let sandbox = TestDirectory::new("fifo-cancellation-test");
+        let fifo = sandbox.0.join("stale.pipe");
+        let native_path = CString::new(fifo.as_os_str().as_bytes())
+            .expect("the FIFO fixture path should not contain a null byte");
+        // SAFETY: `native_path` is a valid, null-terminated pathname and the
+        // fixture is confined to the test sandbox.
+        let result = unsafe { libc::mkfifo(native_path.as_ptr(), 0o600) };
+        assert_eq!(
+            result,
+            0,
+            "the FIFO fixture should be created: {}",
+            std::io::Error::last_os_error()
+        );
+
+        let root = sandbox.0.clone();
+        let canonical_root = fs::canonicalize(&root).expect("canonicalize the cleanup fixture");
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let worker_cancellation = Arc::clone(&cancelled);
+        let (sender, receiver) = mpsc::channel();
+        thread::spawn(move || {
+            let mut stats = DeleteStats::default();
+            delete_root_contents(
+                &root,
+                &canonical_root,
+                &MatcherSpec::All,
+                &|_, _| true,
+                &|| worker_cancellation.load(Ordering::Acquire),
+                &mut stats,
+            );
+            let _ = sender.send((
+                stats.deleted_bytes,
+                stats.affected_item_count,
+                stats.failed_item_count,
+            ));
+        });
+        thread::sleep(Duration::from_millis(50));
+        cancelled.store(true, Ordering::Release);
+
+        let (deleted_bytes, affected_item_count, failed_item_count) = receiver
+            .recv_timeout(Duration::from_secs(1))
+            .expect("cleanup must return after cancellation instead of blocking on a FIFO");
+        assert_eq!(deleted_bytes, 0);
+        assert_eq!(affected_item_count, 0);
+        assert!(failed_item_count > 0);
+        let metadata = fs::symlink_metadata(&fifo).expect("the FIFO fixture should remain");
+        assert!(metadata.file_type().is_fifo());
+    }
 }

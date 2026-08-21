@@ -123,20 +123,24 @@ pub(crate) fn prepare_path_for_permanent_delete(
 
     #[cfg(unix)]
     let (metadata, identity, identity_handle) = {
-        let identity_handle = fs::File::open(path).map_err(|error| {
-            permanent_delete_io_error("failed to open the deletion target", error)
+        // Reject special files before opening them. A blocking read-only open
+        // on a FIFO waits indefinitely when no writer is connected.
+        let initial_metadata = fs::symlink_metadata(path).map_err(|error| {
+            permanent_delete_io_error("failed to read deletion target metadata", error)
         })?;
+        validate_permanent_delete_target_metadata(&initial_metadata)?;
+        let initial_identity = metadata_identity(&initial_metadata);
+        let identity_handle = open_identity_handle(path)?;
         let metadata = identity_handle.metadata().map_err(|error| {
             permanent_delete_io_error("failed to read deletion target metadata", error)
         })?;
-        if current_platform().is_link_like(&metadata) {
-            return Err(
-                "MangoDisk cannot permanently delete a link or reparse point"
-                    .to_string()
-                    .into(),
-            );
-        }
+        validate_permanent_delete_target_metadata(&metadata)?;
         let identity = metadata_identity(&metadata);
+        if identity != initial_identity {
+            return Err("the item changed while its physical identity was captured"
+                .to_string()
+                .into());
+        }
         current_platform()
             .validate_path_no_links(path)
             .map_err(|error| error.to_string())?;
@@ -155,13 +159,7 @@ pub(crate) fn prepare_path_for_permanent_delete(
         let metadata = identity_handle.metadata().map_err(|error| {
             permanent_delete_io_error("failed to read deletion target metadata", error)
         })?;
-        if current_platform().is_link_like(&metadata) {
-            return Err(
-                "MangoDisk cannot permanently delete a link or reparse point"
-                    .to_string()
-                    .into(),
-            );
-        }
+        validate_permanent_delete_target_metadata(&metadata)?;
         let identity = handle_identity(&identity_handle)?;
         current_platform()
             .validate_path_no_links(path)
@@ -169,20 +167,32 @@ pub(crate) fn prepare_path_for_permanent_delete(
         (metadata, identity, identity_handle)
     };
 
-    if !metadata.is_file() && !metadata.is_dir() {
-        return Err(
-            "only regular files and directories can be permanently deleted"
-                .to_string()
-                .into(),
-        );
-    }
-
     Ok(PreparedPermanentDelete {
         path: path.to_path_buf(),
         metadata,
         identity,
         _identity_handle: identity_handle,
     })
+}
+
+fn validate_permanent_delete_target_metadata(
+    metadata: &fs::Metadata,
+) -> Result<(), PermanentDeleteError> {
+    if current_platform().is_link_like(metadata) {
+        return Err(
+            "MangoDisk cannot permanently delete a link or reparse point"
+                .to_string()
+                .into(),
+        );
+    }
+    if metadata.is_file() || metadata.is_dir() {
+        return Ok(());
+    }
+    Err(
+        "only regular files and directories can be permanently deleted"
+            .to_string()
+            .into(),
+    )
 }
 
 impl PermanentDeleteError {
@@ -1105,6 +1115,20 @@ fn metadata_identity(metadata: &fs::Metadata) -> PhysicalPathIdentity {
 }
 
 #[cfg(unix)]
+fn open_identity_handle(path: &Path) -> Result<fs::File, PermanentDeleteError> {
+    use std::os::unix::fs::OpenOptionsExt;
+
+    // O_NONBLOCK prevents a concurrently substituted FIFO from waiting for a
+    // writer. O_NOFOLLOW closes the final-component symlink race, while the
+    // surrounding path and physical identity checks retain the full boundary.
+    fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NONBLOCK | libc::O_NOFOLLOW | libc::O_CLOEXEC)
+        .open(path)
+        .map_err(|error| permanent_delete_io_error("failed to open the deletion target", error))
+}
+
+#[cfg(unix)]
 fn physical_path_identity(path: &Path) -> Result<PhysicalPathIdentity, PermanentDeleteError> {
     let metadata = fs::symlink_metadata(path).map_err(|error| error.to_string())?;
     if current_platform().is_link_like(&metadata) {
@@ -1260,6 +1284,85 @@ mod permanent_delete_tests {
         }
     }
 
+    #[cfg(unix)]
+    struct UnixSocketFixture {
+        path: PathBuf,
+        _listener: std::os::unix::net::UnixListener,
+    }
+
+    #[cfg(unix)]
+    impl UnixSocketFixture {
+        fn new() -> Self {
+            let unique = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos();
+            // Unix-domain socket paths are short and bounded. `/tmp` is a
+            // platform-approved system alias on macOS and a normal root on
+            // other Unix systems.
+            let path = PathBuf::from("/tmp").join(format!(
+                "mangodisk-permanent-delete-socket-{}-{unique}.sock",
+                std::process::id()
+            ));
+            let listener = std::os::unix::net::UnixListener::bind(&path)
+                .expect("the Unix socket fixture should be bound");
+            Self {
+                path,
+                _listener: listener,
+            }
+        }
+    }
+
+    #[cfg(unix)]
+    impl Drop for UnixSocketFixture {
+        fn drop(&mut self) {
+            let _ = fs::remove_file(&self.path);
+        }
+    }
+
+    #[cfg(unix)]
+    fn create_fifo(path: &Path) {
+        use std::{ffi::CString, os::unix::ffi::OsStrExt};
+
+        let native_path = CString::new(path.as_os_str().as_bytes())
+            .expect("the FIFO fixture path should not contain a null byte");
+        // SAFETY: `native_path` is a valid, null-terminated pathname and each
+        // caller confines the fixture to an isolated test sandbox.
+        let result = unsafe { libc::mkfifo(native_path.as_ptr(), 0o600) };
+        assert_eq!(
+            result,
+            0,
+            "the FIFO fixture should be created: {}",
+            std::io::Error::last_os_error()
+        );
+    }
+
+    #[cfg(unix)]
+    fn assert_special_file_is_rejected_promptly(path: &Path) {
+        use std::{sync::mpsc, time::Duration};
+
+        let target = path.to_path_buf();
+        let (sender, receiver) = mpsc::channel();
+        let worker = thread::spawn(move || {
+            let result = prepare_path_for_permanent_delete(&target)
+                .map(|_| ())
+                .map_err(|error| error.to_string());
+            let _ = sender.send(result);
+        });
+
+        let result = receiver
+            .recv_timeout(Duration::from_secs(1))
+            .expect("special-file validation must not block");
+        worker
+            .join()
+            .expect("the special-file validation worker should finish");
+        let error = result.expect_err("special files must not enter permanent deletion");
+        assert!(
+            error.contains("only regular files and directories"),
+            "the rejection should identify the unsupported file type"
+        );
+    }
+
     #[test]
     fn permanent_delete_removes_a_matching_regular_file() {
         let sandbox = DeleteSandbox::new();
@@ -1277,6 +1380,66 @@ mod permanent_delete_tests {
 
         assert_eq!(released_bytes, metadata.len());
         assert!(!path.exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn permanent_delete_rejects_a_fifo_without_blocking_or_mutation() {
+        use std::os::unix::fs::FileTypeExt;
+
+        let sandbox = DeleteSandbox::new();
+        let path = sandbox.0.join("stale.pipe");
+        create_fifo(&path);
+
+        assert_special_file_is_rejected_promptly(&path);
+
+        let metadata = fs::symlink_metadata(&path).expect("the FIFO fixture should remain");
+        assert!(metadata.file_type().is_fifo());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unix_identity_handle_opens_a_fifo_without_blocking() {
+        use std::{os::unix::fs::FileTypeExt, sync::mpsc, time::Duration};
+
+        let sandbox = DeleteSandbox::new();
+        let path = sandbox.0.join("raced-in.pipe");
+        create_fifo(&path);
+
+        let target = path.clone();
+        let (sender, receiver) = mpsc::channel();
+        let worker = thread::spawn(move || {
+            let result = open_identity_handle(&target)
+                .map_err(|error| error.to_string())
+                .and_then(|handle| handle.metadata().map_err(|error| error.to_string()))
+                .map(|metadata| metadata.file_type().is_fifo());
+            let _ = sender.send(result);
+        });
+
+        let result = receiver
+            .recv_timeout(Duration::from_secs(1))
+            .expect("the Unix identity handle must open a FIFO without blocking");
+        worker
+            .join()
+            .expect("the Unix identity-handle worker should finish");
+        assert_eq!(
+            result,
+            Ok(true),
+            "the identity handle should expose the raced-in FIFO for rejection"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn permanent_delete_rejects_a_unix_socket_without_blocking_or_mutation() {
+        use std::os::unix::fs::FileTypeExt;
+
+        let socket = UnixSocketFixture::new();
+        assert_special_file_is_rejected_promptly(&socket.path);
+
+        let metadata =
+            fs::symlink_metadata(&socket.path).expect("the Unix socket fixture should remain");
+        assert!(metadata.file_type().is_socket());
     }
 
     #[test]

@@ -328,10 +328,16 @@
       "label": "Choose scan type",
       "standard": "Standard Scan",
       "standardDescription": "Check cleanup items and development projects for the current user",
-      "allLocalDisks": "Search All Local Disks",
-      "allLocalDisksDescription": "Search every fixed local disk for more development projects. Takes longer"
-    },
-    "deepDiscoveryProgressHint": "Searching local disks for more development projects. You can cancel at any time"
+      "selectVolumes": "Choose Disks",
+      "selectVolumesDescription": "Find more development projects on other disks",
+      "volumeDialogTitle": "Choose disks to search",
+      "volumeDialogDescription": "The system disk is always scanned. Select other disks to find development projects and build files",
+      "systemVolume": "System · Always scanned",
+      "volumeCapacity": "{available} free / {total}",
+      "noVolumes": "No disks are available",
+      "selectedVolumeCount": "{count} disk selected | {count} disks selected",
+      "startSelectedScan": "Start Scan"
+    }
   },
   "analysis": {
     "title": "Disk Space Analysis",

@@ -328,10 +328,16 @@
       "label": "選擇掃描方式",
       "standard": "標準掃描",
       "standardDescription": "檢查目前使用者的可清理項目與開發專案",
-      "allLocalDisks": "搜尋所有本機磁碟",
-      "allLocalDisksDescription": "搜尋所有本機固定式磁碟，以找出更多開發專案；所需時間較長"
-    },
-    "deepDiscoveryProgressHint": "正在本機磁碟中尋找更多開發專案，可隨時取消"
+      "selectVolumes": "選擇磁碟",
+      "selectVolumesDescription": "在其他磁碟中尋找更多開發專案",
+      "volumeDialogTitle": "選擇要搜尋的磁碟",
+      "volumeDialogDescription": "系統磁碟一律掃描。選擇其他磁碟，可尋找其中的開發專案和建置產物",
+      "systemVolume": "系統磁碟 · 一律掃描",
+      "volumeCapacity": "可用 {available} / 共 {total}",
+      "noVolumes": "找不到可用磁碟",
+      "selectedVolumeCount": "已選擇 {count} 個磁碟",
+      "startSelectedScan": "開始掃描"
+    }
   },
   "analysis": {
     "title": "磁碟空間分析",

@@ -328,10 +328,16 @@
       "label": "スキャン方法を選択",
       "standard": "標準スキャン",
       "standardDescription": "現在のユーザーが利用している領域から、削除可能な項目と開発プロジェクトを確認します",
-      "allLocalDisks": "すべてのローカルディスクを検索",
-      "allLocalDisksDescription": "すべての固定ローカルディスクから開発プロジェクトを検索します。標準スキャンより時間がかかります"
-    },
-    "deepDiscoveryProgressHint": "さらに開発プロジェクトを探すためにローカルディスクを検索しています。いつでもキャンセルできます"
+      "selectVolumes": "ディスクを選択",
+      "selectVolumesDescription": "ほかのディスクから開発プロジェクトを検索します",
+      "volumeDialogTitle": "検索するディスクを選択",
+      "volumeDialogDescription": "システムディスクは常にスキャンします。ほかのディスクを選択すると、開発プロジェクトとビルド生成物も検索できます",
+      "systemVolume": "システム · 常にスキャン",
+      "volumeCapacity": "空き {available} / 合計 {total}",
+      "noVolumes": "利用できるディスクがありません",
+      "selectedVolumeCount": "{count} 台のディスクを選択中",
+      "startSelectedScan": "スキャン開始"
+    }
   },
   "analysis": {
     "title": "ディスク容量分析",

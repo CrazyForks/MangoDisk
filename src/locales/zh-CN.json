@@ -332,10 +332,16 @@
       "label": "选择扫描方式",
       "standard": "标准扫描",
       "standardDescription": "检查当前用户的可清理内容和开发项目",
-      "allLocalDisks": "搜索所有本地磁盘",
-      "allLocalDisksDescription": "在所有固定本地磁盘中查找更多开发项目，耗时较长"
-    },
-    "deepDiscoveryProgressHint": "正在本地磁盘中查找更多开发项目，可以随时取消"
+      "selectVolumes": "选择磁盘",
+      "selectVolumesDescription": "在其他磁盘中查找更多开发项目",
+      "volumeDialogTitle": "选择要搜索的磁盘",
+      "volumeDialogDescription": "系统盘始终扫描。选择其他磁盘，可查找其中的开发项目和构建产物",
+      "systemVolume": "系统盘 · 始终扫描",
+      "volumeCapacity": "可用 {available} / 共 {total}",
+      "noVolumes": "未发现可用磁盘",
+      "selectedVolumeCount": "已选择 {count} 个磁盘",
+      "startSelectedScan": "开始扫描"
+    }
   },
   "analysis": {
     "title": "磁盘空间分析",

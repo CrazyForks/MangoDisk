@@ -15,7 +15,7 @@ import type { ApplicationCloseMode } from '@/lib/models/application-close';
 import type { DirectoryEntryInfo } from '@/lib/models/analysis';
 import type { DuplicateFileEntry } from '@/lib/models/duplicate-file';
 import type { LargeFileEntry } from '@/lib/models/large-file';
-import { CLEANUP_OPERATION_IDS } from '@/lib/models/cleanup';
+import { CLEANUP_OPERATION_IDS, type CleanupScanScope } from '@/lib/models/cleanup';
 import { ICON_NAMES } from '@/lib/models/ui';
 import { isAppShellExpanded, PAGE_IDS } from '@/lib/models/application-shell';
 import type { AppSettings } from '@/lib/models/settings';
@@ -659,11 +659,11 @@ async function openDuplicateFileEntry(scanId: number, path: string) {
   await executeFileManagerAction(() => FileManagerService.openDuplicateFileEntry(scanId, path));
 }
 
-async function scanCleanup(deepProjectDiscovery: boolean) {
+async function scanCleanup(scanScope: CleanupScanScope) {
   if (!ensureOperationAvailable()) return;
   cleanupOrchestrating.value = true;
   try {
-    const completed = await cleanupStore.scanCandidates(deepProjectDiscovery);
+    const completed = await cleanupStore.scanCandidates(scanScope);
     if (completed) await applicationStore.scanLeftovers();
   } finally {
     cleanupOrchestrating.value = false;
@@ -764,7 +764,9 @@ function requestCancelDeepCleanup() {
         <CleanupPage
           v-if="store.currentPage === PAGE_IDS.cleanup"
           :disk="store.disk"
+          :disks="store.disks"
           :scan="localizedCleanupScan"
+          :scan-scope="cleanupStore.scanScope"
           :selected-rule-ids="cleanupStore.selectedRuleIds"
           :source-selections="cleanupStore.sourceSelections"
           :selected-bytes="cleanupStore.selectedBytes"

@@ -218,8 +218,8 @@ onMounted(() => {
 <template>
   <MdPageShell class="optimization-page" content-mode="workspace" :title="t('systemOptimization.title')">
     <template #actions>
-      <Button variant="outline" size="sm" :disabled="busy" @click="store.scan()">
-        <MdIcon :name="ICON_NAMES.refresh" :size="15" />
+      <Button variant="outline" :disabled="busy" @click="store.scan()">
+        <MdIcon :name="ICON_NAMES.refresh" :size="17" />
         {{ t('systemOptimization.rescan') }}
       </Button>
     </template>
@@ -229,7 +229,7 @@ onMounted(() => {
         <div class="mode-control">
           <span>{{ t('systemOptimization.modes.label') }}</span>
           <Select :model-value="store.optimizationMode" :disabled="busy" @update:model-value="updateMode">
-            <SelectTrigger class="mode-select" size="sm" :aria-label="t('systemOptimization.modes.label')">
+            <SelectTrigger class="mode-select" :aria-label="t('systemOptimization.modes.label')">
               <SelectValue>{{ modeLabel }}</SelectValue>
             </SelectTrigger>
             <SelectContent>
@@ -375,7 +375,7 @@ onMounted(() => {
 }
 .optimization-action-bar {
   gap: 12px;
-  padding: 5px 10px 5px 14px;
+  padding: 2px 10px 2px 14px;
 }
 .optimization-loading > span {
   width: 24px;
@@ -388,7 +388,7 @@ onMounted(() => {
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
 }
 .mode-control > span {
   color: var(--muted-foreground);
@@ -398,6 +398,7 @@ onMounted(() => {
 }
 .mode-select {
   width: 168px;
+  height: 38px;
 }
 .optimize-button {
   min-width: 154px;

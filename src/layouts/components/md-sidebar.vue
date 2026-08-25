@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n';
 import MdIcon from '@/components/icons/md-icon.vue';
 import MdIconMangodisk from '@/components/icons/md-icon-mangodisk.vue';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { APP_NAME, PRIMARY_NAV_ITEMS, SECONDARY_NAV_ITEMS } from '@/lib/models/application-shell';
+import { APP_NAME, PRIMARY_NAV_GROUPS, SECONDARY_NAV_ITEMS } from '@/lib/models/application-shell';
 import type { PageId } from '@/lib/models/application-shell';
 
 const { t } = useI18n({ useScope: 'global' });
@@ -65,37 +65,52 @@ watch(
     </div>
 
     <nav class="nav-list" :aria-label="APP_NAME">
-      <Tooltip
-        v-for="item in PRIMARY_NAV_ITEMS"
-        :key="item.id"
-        :disabled="expanded"
-        :open="!expanded && openTooltipPage === item.id"
-        @update:open="updateTooltip(item.id, $event)"
+      <div
+        v-for="group in PRIMARY_NAV_GROUPS"
+        :key="group.id"
+        class="nav-group"
+        role="group"
+        :aria-label="t(group.titleKey)"
       >
-        <TooltipTrigger as-child>
-          <button
-            type="button"
-            :aria-label="t(`navigation.${item.id}`)"
-            :aria-current="currentPage === item.id ? 'page' : undefined"
-            :aria-busy="isBusy(item.id)"
-            class="nav-item"
-            :class="{ active: currentPage === item.id }"
-            @click="navigate(item.id)"
+        <span v-if="expanded" class="nav-group-label">{{ t(group.titleKey) }}</span>
+        <div class="nav-group-items">
+          <Tooltip
+            v-for="item in group.items"
+            :key="item.id"
+            :disabled="expanded"
+            :open="!expanded && openTooltipPage === item.id"
+            @update:open="updateTooltip(item.id, $event)"
           >
-            <span class="nav-icon" aria-hidden="true">
-              <MdIcon :name="item.icon" />
-              <span v-if="!expanded && isBusy(item.id)" class="nav-icon-status md-operational-motion" />
-            </span>
-            <span v-if="expanded" class="nav-label">{{ t(`navigation.${item.id}`) }}</span>
-            <span class="nav-accessory">
-              <span v-if="expanded && isBusy(item.id)" class="nav-status md-operational-motion" aria-hidden="true" />
-            </span>
-          </button>
-        </TooltipTrigger>
-        <TooltipContent v-if="!expanded" side="right" :side-offset="10">
-          {{ t(`navigation.${item.id}`) }}
-        </TooltipContent>
-      </Tooltip>
+            <TooltipTrigger as-child>
+              <button
+                type="button"
+                :aria-label="t(`navigation.${item.id}`)"
+                :aria-current="currentPage === item.id ? 'page' : undefined"
+                :aria-busy="isBusy(item.id)"
+                class="nav-item"
+                :class="{ active: currentPage === item.id }"
+                @click="navigate(item.id)"
+              >
+                <span class="nav-icon" aria-hidden="true">
+                  <MdIcon :name="item.icon" />
+                  <span v-if="!expanded && isBusy(item.id)" class="nav-icon-status md-operational-motion" />
+                </span>
+                <span v-if="expanded" class="nav-label">{{ t(`navigation.${item.id}`) }}</span>
+                <span class="nav-accessory">
+                  <span
+                    v-if="expanded && isBusy(item.id)"
+                    class="nav-status md-operational-motion"
+                    aria-hidden="true"
+                  />
+                </span>
+              </button>
+            </TooltipTrigger>
+            <TooltipContent v-if="!expanded" side="right" :side-offset="10">
+              {{ t(`navigation.${item.id}`) }}
+            </TooltipContent>
+          </Tooltip>
+        </div>
+      </div>
     </nav>
 
     <div class="sidebar-footer">
@@ -188,9 +203,30 @@ watch(
 .nav-list {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 10px;
   padding-inline: 8px;
   padding-block: 4px;
+}
+.nav-group {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+.nav-group-items {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+.nav-group-label {
+  padding-inline: 12px;
+  color: var(--sidebar-foreground);
+  color: color-mix(in oklab, var(--sidebar-foreground) 58%, transparent);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 20px;
+  letter-spacing: 0.04em;
 }
 .nav-item {
   position: relative;
@@ -216,6 +252,10 @@ watch(
 .sidebar.expanded .nav-list,
 .sidebar.expanded .sidebar-footer {
   padding-inline: 10px;
+}
+.sidebar.expanded .nav-list {
+  gap: 12px;
+  padding-block: 6px;
 }
 .sidebar.expanded .nav-item {
   justify-content: flex-start;

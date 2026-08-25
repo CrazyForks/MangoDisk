@@ -29,14 +29,26 @@ export const PAGE_IDS = {
 
 export type PageId = (typeof PAGE_IDS)[keyof typeof PAGE_IDS];
 
-export const PRIMARY_NAV_ITEMS = [
-  { id: PAGE_IDS.cleanup, icon: ICON_NAMES.deepCleanup },
-  { id: PAGE_IDS.largeFiles, icon: ICON_NAMES.largeFiles },
-  { id: PAGE_IDS.duplicateFiles, icon: ICON_NAMES.duplicateFiles },
-  { id: PAGE_IDS.applicationUninstall, icon: ICON_NAMES.uninstall },
-  { id: PAGE_IDS.startup, icon: ICON_NAMES.startup },
-  { id: PAGE_IDS.analysis, icon: ICON_NAMES.analysis },
-  { id: PAGE_IDS.systemOptimization, icon: ICON_NAMES.systemOptimization },
+export const PRIMARY_NAV_GROUPS = [
+  {
+    id: 'storage',
+    titleKey: 'navigationGroups.storage',
+    items: [
+      { id: PAGE_IDS.cleanup, icon: ICON_NAMES.deepCleanup },
+      { id: PAGE_IDS.largeFiles, icon: ICON_NAMES.largeFiles },
+      { id: PAGE_IDS.duplicateFiles, icon: ICON_NAMES.duplicateFiles },
+      { id: PAGE_IDS.analysis, icon: ICON_NAMES.analysis },
+    ],
+  },
+  {
+    id: 'system',
+    titleKey: 'navigationGroups.system',
+    items: [
+      { id: PAGE_IDS.applicationUninstall, icon: ICON_NAMES.uninstall },
+      { id: PAGE_IDS.startup, icon: ICON_NAMES.startup },
+      { id: PAGE_IDS.systemOptimization, icon: ICON_NAMES.systemOptimization },
+    ],
+  },
 ] as const;
 
 export const SECONDARY_NAV_ITEMS = [

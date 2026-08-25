@@ -10,6 +10,10 @@
     "history": "操作履歴",
     "settings": "設定"
   },
+  "navigationGroups": {
+    "storage": "ストレージ",
+    "system": "システムツール"
+  },
   "systemOptimization": {
     "title": "システム最適化",
     "scanning": "システム設定を確認中",

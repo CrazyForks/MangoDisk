@@ -10,6 +10,10 @@
     "history": "Operation History",
     "settings": "Settings"
   },
+  "navigationGroups": {
+    "storage": "Storage",
+    "system": "System Tools"
+  },
   "systemOptimization": {
     "title": "System Optimization",
     "scanning": "Checking system settings",

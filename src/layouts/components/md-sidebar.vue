@@ -63,9 +63,9 @@ watch(
   <aside class="sidebar" :class="{ expanded }">
     <div v-if="showBrand" class="brand">
       <span class="brand-icon">
-        <MdIconMangodisk :size="expanded ? 40 : 44" />
+        <MdIconMangodisk :size="44" />
       </span>
-      <strong v-if="expanded">{{ APP_NAME }}</strong>
+      <strong :aria-hidden="!expanded">{{ APP_NAME }}</strong>
     </div>
 
     <nav class="nav-list" :aria-label="APP_NAME">
@@ -76,7 +76,7 @@ watch(
         role="group"
         :aria-label="t(group.titleKey)"
       >
-        <span v-if="expanded" class="nav-group-label">{{ t(group.titleKey) }}</span>
+        <span class="nav-group-label" aria-hidden="true">{{ t(group.titleKey) }}</span>
         <div class="nav-group-items">
           <Tooltip
             v-for="item in group.items"
@@ -99,7 +99,7 @@ watch(
                   <MdIcon :name="item.icon" />
                   <span v-if="!expanded && isBusy(item.id)" class="nav-icon-status md-operational-motion" />
                 </span>
-                <span v-if="expanded" class="nav-label">{{ t(`navigation.${item.id}`) }}</span>
+                <span class="nav-label" aria-hidden="true">{{ t(`navigation.${item.id}`) }}</span>
                 <span class="nav-accessory">
                   <span
                     v-if="expanded && isBusy(item.id)"
@@ -139,7 +139,7 @@ watch(
               <MdIcon :name="item.icon" />
               <span v-if="!expanded && isBusy(item.id)" class="nav-icon-status md-operational-motion" />
             </span>
-            <span v-if="expanded" class="nav-label">{{ t(`navigation.${item.id}`) }}</span>
+            <span class="nav-label" aria-hidden="true">{{ t(`navigation.${item.id}`) }}</span>
             <span class="nav-accessory">
               <span v-if="expanded && isBusy(item.id)" class="nav-status md-operational-motion" aria-hidden="true" />
               <span
@@ -172,7 +172,7 @@ watch(
                   :stroke-width="1.7"
                 />
               </span>
-              <span v-if="expanded" class="nav-label">{{ t('common.collapseSidebar') }}</span>
+              <span class="nav-label" aria-hidden="true">{{ t('common.collapseSidebar') }}</span>
             </button>
           </TooltipTrigger>
           <TooltipContent v-if="!expanded" side="right" :side-offset="10">
@@ -192,16 +192,23 @@ watch(
   min-width: var(--sidebar-width, 256px);
   height: 100vh;
   flex-direction: column;
+  transition:
+    width var(--sidebar-transition-duration, 240ms) var(--sidebar-transition-easing, ease),
+    min-width var(--sidebar-transition-duration, 240ms) var(--sidebar-transition-easing, ease);
   @apply bg-transparent text-sidebar-foreground;
 }
 .brand {
   display: flex;
   height: var(--layout-sidebar-brand-height);
   flex: none;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  justify-content: center;
-  gap: 6px;
+  justify-content: flex-start;
+  gap: 0;
+  padding-inline: 12px;
+  transition:
+    gap var(--sidebar-transition-duration, 240ms) var(--sidebar-transition-easing, ease),
+    padding-inline var(--sidebar-transition-duration, 240ms) var(--sidebar-transition-easing, ease);
   @apply text-foreground;
 }
 .brand-icon {
@@ -212,10 +219,15 @@ watch(
   place-items: center;
   filter: drop-shadow(0 2px 2px var(--shadow-subtle));
   filter: drop-shadow(0 2px 2px color-mix(in oklab, var(--brand-stem, var(--foreground)) 16%, transparent));
+  transition:
+    width var(--sidebar-transition-duration, 240ms) var(--sidebar-transition-easing, ease),
+    height var(--sidebar-transition-duration, 240ms) var(--sidebar-transition-easing, ease);
+}
+.brand-icon :deep(.mangodisk-icon) {
+  width: 100%;
+  height: 100%;
 }
 .sidebar.expanded .brand {
-  flex-direction: row;
-  justify-content: flex-start;
   gap: 9px;
   padding-inline: 20px;
 }
@@ -225,10 +237,28 @@ watch(
   overflow: visible;
 }
 .brand strong {
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
   font-size: 18px;
   font-weight: 650;
   line-height: 1;
   letter-spacing: -0.35px;
+  white-space: nowrap;
+  visibility: hidden;
+  transform: translateX(-4px);
+  transition:
+    max-width var(--sidebar-transition-duration, 240ms) var(--sidebar-transition-easing, ease),
+    opacity 120ms ease,
+    transform 180ms ease,
+    visibility 0s linear var(--sidebar-transition-duration, 240ms);
+}
+.sidebar.expanded .brand strong {
+  max-width: 150px;
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(0);
+  transition-delay: 0s, 60ms, 60ms, 0s;
 }
 .nav-list {
   display: flex;
@@ -236,12 +266,16 @@ watch(
   gap: 10px;
   padding-inline: 8px;
   padding-block: 4px;
+  transition:
+    gap var(--sidebar-transition-duration, 240ms) var(--sidebar-transition-easing, ease),
+    padding var(--sidebar-transition-duration, 240ms) var(--sidebar-transition-easing, ease);
 }
 .nav-group {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 4px;
+  gap: 0;
+  transition: gap var(--sidebar-transition-duration, 240ms) var(--sidebar-transition-easing, ease);
 }
 .nav-group-items {
   display: flex;
@@ -250,13 +284,24 @@ watch(
   gap: 2px;
 }
 .nav-group-label {
+  max-height: 0;
   padding-inline: 12px;
+  overflow: hidden;
+  opacity: 0;
   color: var(--sidebar-foreground);
   color: color-mix(in oklab, var(--sidebar-foreground) 58%, transparent);
   font-size: 11px;
   font-weight: 600;
   line-height: 20px;
   letter-spacing: 0.04em;
+  white-space: nowrap;
+  visibility: hidden;
+  transform: translateY(-3px);
+  transition:
+    max-height var(--sidebar-transition-duration, 240ms) var(--sidebar-transition-easing, ease),
+    opacity 100ms ease,
+    transform 180ms ease,
+    visibility 0s linear var(--sidebar-transition-duration, 240ms);
 }
 .nav-item {
   position: relative;
@@ -264,11 +309,11 @@ watch(
   width: 100%;
   height: var(--layout-sidebar-item-height);
   align-items: center;
-  justify-content: center;
-  gap: 12px;
+  justify-content: flex-start;
+  gap: 0;
   border: 0;
   border-radius: 8px;
-  padding: 0;
+  padding: 0 14px;
   background: transparent;
   color: inherit;
   font: inherit;
@@ -277,7 +322,9 @@ watch(
   transition:
     background-color 0.16s ease,
     color 0.16s ease,
-    box-shadow 0.16s ease;
+    box-shadow 0.16s ease,
+    gap var(--sidebar-transition-duration, 240ms) var(--sidebar-transition-easing, ease),
+    padding-inline var(--sidebar-transition-duration, 240ms) var(--sidebar-transition-easing, ease);
 }
 .sidebar.expanded .nav-list,
 .sidebar.expanded .sidebar-footer {
@@ -287,8 +334,18 @@ watch(
   gap: 12px;
   padding-block: 6px;
 }
+.sidebar.expanded .nav-group {
+  gap: 4px;
+}
+.sidebar.expanded .nav-group-label {
+  max-height: 20px;
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  transition-delay: 0s, 70ms, 70ms, 0s;
+}
 .sidebar.expanded .nav-item {
-  justify-content: flex-start;
+  gap: 12px;
   padding-inline: 12px;
 }
 .nav-item:hover:not(.active) {
@@ -343,10 +400,26 @@ watch(
   animation: nav-spin 0.9s linear infinite;
 }
 .nav-label {
+  max-width: 0;
   min-width: 0;
   overflow: hidden;
+  opacity: 0;
   text-overflow: ellipsis;
   white-space: nowrap;
+  visibility: hidden;
+  transform: translateX(-4px);
+  transition:
+    max-width var(--sidebar-transition-duration, 240ms) var(--sidebar-transition-easing, ease),
+    opacity 100ms ease,
+    transform 180ms ease,
+    visibility 0s linear var(--sidebar-transition-duration, 240ms);
+}
+.sidebar.expanded .nav-label {
+  max-width: 156px;
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(0);
+  transition-delay: 0s, 60ms, 60ms, 0s;
 }
 .nav-accessory {
   position: absolute;
@@ -387,23 +460,21 @@ watch(
   gap: 3px;
   padding-inline: 8px;
   padding-block: 8px 14px;
+  transition: padding-inline var(--sidebar-transition-duration, 240ms) var(--sidebar-transition-easing, ease);
 }
 .sidebar-toggle-block {
   margin-top: 3px;
 }
 .sidebar-toggle {
   height: 32px;
-  gap: 10px;
+  gap: 0;
   color: var(--sidebar-foreground);
   color: color-mix(in oklab, var(--sidebar-foreground) 66%, transparent);
   font-size: 12px;
 }
 .sidebar.expanded .sidebar-toggle {
+  gap: 10px;
   padding-inline: 12px;
-}
-.sidebar-toggle .nav-icon {
-  width: 20px;
-  height: 20px;
 }
 .sidebar-toggle:hover:not(.active) {
   background: var(--sidebar-accent);

@@ -1120,6 +1120,8 @@ function requestCancelDeepCleanup() {
   --titlebar-height: 0px;
   --window-controls-width: 144px;
   --sidebar-width: var(--layout-sidebar-collapsed-width);
+  --sidebar-transition-duration: 240ms;
+  --sidebar-transition-easing: cubic-bezier(0.22, 1, 0.36, 1);
   display: flex;
   width: 100%;
   height: 100vh;

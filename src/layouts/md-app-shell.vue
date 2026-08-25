@@ -4,7 +4,6 @@ import { useI18n } from 'vue-i18n';
 import { toast } from 'vue-sonner';
 
 import MdDialogContent from '@/components/custom/md-dialog-content.vue';
-import MdIconAction from '@/components/custom/md-icon-action.vue';
 import MdMiddleEllipsis from '@/components/custom/md-middle-ellipsis.vue';
 import MdIcon from '@/components/icons/md-icon.vue';
 import { Button } from '@/components/ui/button';
@@ -38,6 +37,7 @@ import { useHistoryStore } from '@/stores/history-store';
 import { useLargeFilesStore } from '@/stores/large-files-store';
 import { useStorageScopeStore } from '@/stores/storage-scope-store';
 import { useStartupStore } from '@/stores/startup-store';
+import { useSystemSettingsStore } from '@/stores/system-settings-store';
 
 import CleanupPage from '@/pages/cleanup/index.vue';
 
@@ -54,6 +54,7 @@ const loadHistoryPage = () => import('@/pages/history/index.vue');
 const loadLargeFilesPage = () => import('@/pages/large-files/index.vue');
 const loadSettingsPage = () => import('@/pages/settings/index.vue');
 const loadStartupPage = () => import('@/pages/startup/index.vue');
+const loadSystemOptimizationPage = () => import('@/pages/system-optimization/index.vue');
 const pageLoaders: Partial<Record<PageId, () => Promise<unknown>>> = {
   [PAGE_IDS.analysis]: loadAnalysisPage,
   [PAGE_IDS.applicationUninstall]: loadApplicationUninstallPage,
@@ -62,6 +63,7 @@ const pageLoaders: Partial<Record<PageId, () => Promise<unknown>>> = {
   [PAGE_IDS.largeFiles]: loadLargeFilesPage,
   [PAGE_IDS.settings]: loadSettingsPage,
   [PAGE_IDS.startup]: loadStartupPage,
+  [PAGE_IDS.systemOptimization]: loadSystemOptimizationPage,
 };
 const AnalysisPage = defineAsyncComponent(loadAnalysisPage);
 const ApplicationUninstallPage = defineAsyncComponent(loadApplicationUninstallPage);
@@ -70,6 +72,7 @@ const HistoryPage = defineAsyncComponent(loadHistoryPage);
 const LargeFilesPage = defineAsyncComponent(loadLargeFilesPage);
 const SettingsPage = defineAsyncComponent(loadSettingsPage);
 const StartupPage = defineAsyncComponent(loadStartupPage);
+const SystemOptimizationPage = defineAsyncComponent(loadSystemOptimizationPage);
 const MdAboutDialog = defineAsyncComponent(() => import('./components/md-about-dialog.vue'));
 
 const { rt, t, te, tm } = useI18n({ useScope: 'global' });
@@ -104,6 +107,7 @@ const largeFilesStore = useLargeFilesStore();
 const duplicateFilesStore = useDuplicateFilesStore();
 const storageScopeStore = useStorageScopeStore();
 const startupStore = useStartupStore();
+const systemSettingsStore = useSystemSettingsStore();
 // WebKit can leave range-based media-query utilities in their collapsed state
 // after a native window is narrowed and widened again. Drive the shell from
 // the actual viewport width so every resize can restore the expanded sidebar.
@@ -112,6 +116,7 @@ const UPDATE_CHECK_ERROR_TOAST_ID = 'app-update-check-error';
 const LARGE_FILE_DELETE_TOAST_ID = 'large-file-delete-result';
 const DUPLICATE_FILE_DELETE_TOAST_ID = 'duplicate-file-delete-result';
 const DEEP_CLEANUP_TOAST_ID = 'deep-cleanup-result';
+const APPLICATION_ERROR_TOAST_ID = 'application-error';
 const localizedCleanupScan = computed(() =>
   cleanupStore.scan ? CleanupRuleTextUtils.snapshot(cleanupStore.scan, resolveCleanupRuleMessage) : null
 );
@@ -142,7 +147,10 @@ const exclusiveOperationBusy = computed(
     applicationStore.executingUninstall ||
     startupStore.scanning ||
     startupStore.preparingChange ||
-    startupStore.executingChange
+    startupStore.executingChange ||
+    systemSettingsStore.scanning ||
+    systemSettingsStore.preparing ||
+    systemSettingsStore.executing
 );
 // Custom title bars keep the application chrome visually continuous. macOS
 // only needs a drag region beneath the native traffic lights, while Windows
@@ -386,6 +394,26 @@ const errorTitle = computed(() => {
       return store.errorCode ? t(`errorTitles.${store.errorCode}`) : t('common.operationFailed');
   }
 });
+watch(
+  [() => store.errorCode, () => store.errorReason, errorTitle, errorMessage],
+  ([errorCode, errorReason, title, message]) => {
+    if (!errorCode) {
+      toast.dismiss(APPLICATION_ERROR_TOAST_ID);
+      return;
+    }
+    // Global command errors use the same renderer as operation feedback so every notification is
+    // measured and stacked by one layout engine. A separate fixed panel caused overlapping toasts.
+    toast.error(title, {
+      id: APPLICATION_ERROR_TOAST_ID,
+      description: message,
+      duration: Infinity,
+      onDismiss: () => {
+        if (store.errorCode === errorCode && store.errorReason === errorReason) store.clearError();
+      },
+    });
+  },
+  { immediate: true }
+);
 const busyPages = computed<PageId[]>(() => [
   ...(cleanupBusy.value ? [PAGE_IDS.cleanup] : []),
   ...(analysisStore.pending || analysisStore.deleting ? [PAGE_IDS.analysis] : []),
@@ -397,6 +425,9 @@ const busyPages = computed<PageId[]>(() => [
     ? [PAGE_IDS.applicationUninstall]
     : []),
   ...(startupStore.scanning || startupStore.preparingChange || startupStore.executingChange ? [PAGE_IDS.startup] : []),
+  ...(systemSettingsStore.scanning || systemSettingsStore.preparing || systemSettingsStore.executing
+    ? [PAGE_IDS.systemOptimization]
+    : []),
   ...(historyStore.loading ? [PAGE_IDS.history] : []),
 ]);
 const noticePages = computed<PageId[]>(() => (appUpdateStore.updateNoticeUnread ? [PAGE_IDS.settings] : []));
@@ -761,8 +792,9 @@ function requestCancelDeepCleanup() {
     />
     <div class="content-shell">
       <KeepAlive>
+        <SystemOptimizationPage v-if="store.currentPage === PAGE_IDS.systemOptimization" />
         <CleanupPage
-          v-if="store.currentPage === PAGE_IDS.cleanup"
+          v-else-if="store.currentPage === PAGE_IDS.cleanup"
           :disk="store.disk"
           :disks="store.disks"
           :scan="localizedCleanupScan"
@@ -1068,22 +1100,6 @@ function requestCancelDeepCleanup() {
       @restart="appUpdateStore.restartApplication()"
       @open-link="openExternalLink"
     />
-
-    <div v-if="store.errorCode" class="error-toast" role="alert">
-      <span>!</span>
-      <div>
-        <strong>{{ errorTitle }}</strong>
-        <p>{{ errorMessage }}</p>
-      </div>
-      <MdIconAction
-        appearance="unstyled"
-        class="error-toast-close"
-        :label="t('common.close')"
-        @click="store.clearError()"
-      >
-        <MdIcon :name="ICON_NAMES.close" :size="18" />
-      </MdIconAction>
-    </div>
   </main>
 </template>
 
@@ -1355,45 +1371,6 @@ function requestCancelDeepCleanup() {
 .cleanup-execution-cancel {
   pointer-events: auto;
   @apply text-muted-foreground hover:text-foreground;
-}
-.error-toast {
-  position: fixed;
-  z-index: 50;
-  right: 24px;
-  bottom: 24px;
-  display: grid;
-  width: min(430px, calc(100vw - 48px));
-  grid-template-columns: 34px 1fr 24px;
-  gap: 10px;
-  border-width: 1px;
-  border-radius: 11px;
-  padding: 14px;
-  @apply border-destructive/35 bg-card text-card-foreground shadow-2xl shadow-destructive/10;
-}
-.error-toast > span {
-  display: grid;
-  width: 28px;
-  height: 28px;
-  place-items: center;
-  border-radius: 50%;
-  @apply bg-destructive text-destructive-foreground;
-}
-.error-toast strong {
-  @apply text-destructive;
-  font-size: 13px;
-}
-.error-toast p {
-  margin: 3px 0 0;
-  @apply text-muted-foreground;
-  font-size: 12px;
-  line-height: 1.45;
-}
-.error-toast :deep(.error-toast-close) {
-  border: 0;
-  background: transparent;
-  @apply text-muted-foreground transition-colors hover:text-foreground;
-  font-size: 20px;
-  cursor: pointer;
 }
 @keyframes loading-activity {
   0% {

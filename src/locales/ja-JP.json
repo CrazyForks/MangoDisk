@@ -1136,6 +1136,8 @@
     "minimize": "最小化",
     "maximize": "最大化",
     "restore": "復元",
+    "expandSidebar": "サイドバーを展開",
+    "collapseSidebar": "サイドバーを折りたたむ",
     "safe": "低リスク",
     "operationFailed": "操作に失敗しました",
     "loadMore": "もっと表示",

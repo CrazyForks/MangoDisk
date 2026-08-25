@@ -6,6 +6,7 @@ import MdIconMangodisk from '@/components/icons/md-icon-mangodisk.vue';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { APP_NAME, PRIMARY_NAV_GROUPS, SECONDARY_NAV_ITEMS } from '@/lib/models/application-shell';
 import type { PageId } from '@/lib/models/application-shell';
+import { ICON_NAMES } from '@/lib/models/ui';
 
 const { t } = useI18n({ useScope: 'global' });
 
@@ -22,7 +23,10 @@ const props = withDefaults(
     expanded: false,
   }
 );
-const emit = defineEmits<{ navigate: [page: PageId] }>();
+const emit = defineEmits<{
+  navigate: [page: PageId];
+  toggle: [];
+}>();
 const openTooltipPage = ref<PageId | null>(null);
 
 function updateTooltip(page: PageId, open: boolean) {
@@ -150,6 +154,32 @@ watch(
           {{ t(`navigation.${item.id}`) }}
         </TooltipContent>
       </Tooltip>
+
+      <div class="sidebar-toggle-block">
+        <Tooltip :disabled="expanded">
+          <TooltipTrigger as-child>
+            <button
+              type="button"
+              class="nav-item sidebar-toggle"
+              :aria-label="t(expanded ? 'common.collapseSidebar' : 'common.expandSidebar')"
+              :aria-expanded="expanded"
+              @click="emit('toggle')"
+            >
+              <span class="nav-icon" aria-hidden="true">
+                <MdIcon
+                  :name="expanded ? ICON_NAMES.sidebarCollapse : ICON_NAMES.sidebarExpand"
+                  :size="18"
+                  :stroke-width="1.7"
+                />
+              </span>
+              <span v-if="expanded" class="nav-label">{{ t('common.collapseSidebar') }}</span>
+            </button>
+          </TooltipTrigger>
+          <TooltipContent v-if="!expanded" side="right" :side-offset="10">
+            {{ t('common.expandSidebar') }}
+          </TooltipContent>
+        </Tooltip>
+      </div>
     </div>
   </aside>
 </template>
@@ -357,6 +387,28 @@ watch(
   gap: 3px;
   padding-inline: 8px;
   padding-block: 8px 14px;
+}
+.sidebar-toggle-block {
+  margin-top: 3px;
+}
+.sidebar-toggle {
+  height: 32px;
+  gap: 10px;
+  color: var(--sidebar-foreground);
+  color: color-mix(in oklab, var(--sidebar-foreground) 66%, transparent);
+  font-size: 12px;
+}
+.sidebar.expanded .sidebar-toggle {
+  padding-inline: 12px;
+}
+.sidebar-toggle .nav-icon {
+  width: 20px;
+  height: 20px;
+}
+.sidebar-toggle:hover:not(.active) {
+  background: var(--sidebar-accent);
+  background: color-mix(in oklab, var(--sidebar-accent) 38%, transparent);
+  color: var(--sidebar-foreground);
 }
 @keyframes nav-spin {
   to {

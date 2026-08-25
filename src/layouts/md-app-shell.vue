@@ -16,7 +16,12 @@ import type { DuplicateFileEntry } from '@/lib/models/duplicate-file';
 import type { LargeFileEntry } from '@/lib/models/large-file';
 import { CLEANUP_OPERATION_IDS, type CleanupScanScope } from '@/lib/models/cleanup';
 import { ICON_NAMES } from '@/lib/models/ui';
-import { isAppShellExpanded, PAGE_IDS } from '@/lib/models/application-shell';
+import {
+  createSidebarLayoutState,
+  PAGE_IDS,
+  resizeSidebarLayout,
+  toggleSidebarLayout,
+} from '@/lib/models/application-shell';
 import type { AppSettings } from '@/lib/models/settings';
 import type { PageId } from '@/lib/models/application-shell';
 import { ApplicationMenuService } from '@/lib/services/application-menu-service';
@@ -109,9 +114,10 @@ const storageScopeStore = useStorageScopeStore();
 const startupStore = useStartupStore();
 const systemSettingsStore = useSystemSettingsStore();
 // WebKit can leave range-based media-query utilities in their collapsed state
-// after a native window is narrowed and widened again. Drive the shell from
-// the actual viewport width so every resize can restore the expanded sidebar.
-const sidebarExpanded = ref(isAppShellExpanded(window.innerWidth));
+// after a native window is narrowed and widened again. The explicit state also
+// keeps a user's toggle separate from the responsive window-width decision.
+const sidebarLayout = ref(createSidebarLayoutState(window.innerWidth));
+const sidebarExpanded = computed(() => sidebarLayout.value.expanded);
 const UPDATE_CHECK_ERROR_TOAST_ID = 'app-update-check-error';
 const LARGE_FILE_DELETE_TOAST_ID = 'large-file-delete-result';
 const DUPLICATE_FILE_DELETE_TOAST_ID = 'duplicate-file-delete-result';
@@ -470,7 +476,11 @@ function preloadFeaturePages() {
 }
 
 function syncSidebarExpansion() {
-  sidebarExpanded.value = isAppShellExpanded(window.innerWidth);
+  sidebarLayout.value = resizeSidebarLayout(sidebarLayout.value, window.innerWidth);
+}
+
+function toggleSidebar() {
+  sidebarLayout.value = toggleSidebarLayout(sidebarLayout.value);
 }
 
 onMounted(() => {
@@ -789,6 +799,7 @@ function requestCancelDeepCleanup() {
       :show-brand="!isWindows"
       :expanded="sidebarExpanded"
       @navigate="navigate"
+      @toggle="toggleSidebar"
     />
     <div class="content-shell">
       <KeepAlive>

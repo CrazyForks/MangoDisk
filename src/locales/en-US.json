@@ -1139,6 +1139,8 @@
     "minimize": "Minimize",
     "maximize": "Maximize",
     "restore": "Restore",
+    "expandSidebar": "Expand sidebar",
+    "collapseSidebar": "Collapse sidebar",
     "safe": "Low risk",
     "operationFailed": "Operation failed",
     "loadMore": "Show more",

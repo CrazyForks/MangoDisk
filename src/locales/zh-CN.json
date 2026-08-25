@@ -1071,6 +1071,8 @@
     "minimize": "最小化",
     "maximize": "最大化",
     "restore": "还原",
+    "expandSidebar": "展开侧边栏",
+    "collapseSidebar": "收起侧边栏",
     "safe": "低风险",
     "operationFailed": "操作失败",
     "filterFileCategory": "按文件类型筛选",

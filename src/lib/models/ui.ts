@@ -22,6 +22,8 @@ export const ICON_NAMES = {
   chevronUp: 'chevronUp',
   chevronLeft: 'chevronLeft',
   chevronRight: 'chevronRight',
+  sidebarCollapse: 'panelLeftClose',
+  sidebarExpand: 'panelLeftOpen',
   refresh: 'refresh',
   home: 'home',
   search: 'search',

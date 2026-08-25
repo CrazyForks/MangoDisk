@@ -8,6 +8,46 @@ export function isAppShellExpanded(viewportWidth: number): boolean {
   return viewportWidth >= APP_SHELL_EXPANDED_MIN_WIDTH_PX;
 }
 
+export interface SidebarLayoutState {
+  expanded: boolean;
+  preferredExpanded: boolean;
+  wideViewport: boolean;
+}
+
+export function createSidebarLayoutState(viewportWidth: number): SidebarLayoutState {
+  const wideViewport = isAppShellExpanded(viewportWidth);
+  return {
+    expanded: wideViewport,
+    preferredExpanded: true,
+    wideViewport,
+  };
+}
+
+/**
+ * Keeps an explicit user toggle stable during ordinary window resizing. Only
+ * crossing the shell breakpoint changes the responsive mode: narrow windows
+ * collapse to protect page content, while wide windows restore the user's last
+ * explicit choice instead of always forcing the navigation open again.
+ */
+export function resizeSidebarLayout(state: SidebarLayoutState, viewportWidth: number): SidebarLayoutState {
+  const wideViewport = isAppShellExpanded(viewportWidth);
+  if (wideViewport === state.wideViewport) return state;
+  return {
+    expanded: wideViewport ? state.preferredExpanded : false,
+    preferredExpanded: state.preferredExpanded,
+    wideViewport,
+  };
+}
+
+export function toggleSidebarLayout(state: SidebarLayoutState): SidebarLayoutState {
+  const expanded = !state.expanded;
+  return {
+    expanded,
+    preferredExpanded: expanded,
+    wideViewport: state.wideViewport,
+  };
+}
+
 export const PROJECT_LINKS = {
   website: 'https://mangodisk.app',
   repository: 'https://github.com/harry0703/mangodisk',

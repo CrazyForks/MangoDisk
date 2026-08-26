@@ -24,11 +24,6 @@
     "checking": "設定を確認中…",
     "rescan": "再確認",
     "filterCategory": "最適化カテゴリを絞り込む",
-    "searchPlaceholder": "最適化項目を検索",
-    "emptySearch": {
-      "title": "該当する設定がありません",
-      "description": "別のキーワードを入力するか、カテゴリを切り替えてください"
-    },
     "pendingEmpty": {
       "title": "適用待ちの変更はありません",
       "description": "プリセットを選ぶかスイッチを調整すると、変更がここに表示されます"

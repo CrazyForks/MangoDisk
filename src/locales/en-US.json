@@ -24,11 +24,6 @@
     "checking": "Checking settings…",
     "rescan": "Check Again",
     "filterCategory": "Filter optimization categories",
-    "searchPlaceholder": "Search optimizations",
-    "emptySearch": {
-      "title": "No matching settings",
-      "description": "Try another search term or switch categories"
-    },
     "pendingEmpty": {
       "title": "No pending changes",
       "description": "Choose a preset or adjust switches to collect changes here"

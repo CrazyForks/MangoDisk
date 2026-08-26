@@ -8,7 +8,6 @@ import MdCategoryFilter from '@/components/custom/md-category-filter.vue';
 import MdEmptyState from '@/components/custom/md-empty-state.vue';
 import MdPageShell from '@/components/custom/md-page-shell.vue';
 import MdResultFilterToolbar from '@/components/custom/md-result-filter-toolbar.vue';
-import MdResultSearch from '@/components/custom/md-result-search.vue';
 import MdResultWorkspace from '@/components/custom/md-result-workspace.vue';
 import MdSwitch from '@/components/custom/md-switch.vue';
 import MdIcon from '@/components/icons/md-icon.vue';
@@ -35,7 +34,6 @@ type OptimizationCategoryFilter = 'pending' | 'all' | SystemSettingCategory;
 
 const activeCategory = ref<OptimizationCategoryFilter>('all');
 const optimizationScroll = ref<HTMLElement | null>(null);
-const searchQuery = ref('');
 const riskDialogOpen = ref(false);
 const draftNoticeShown = ref(false);
 
@@ -55,9 +53,8 @@ const pendingChanges = computed(() =>
 );
 const pendingById = computed(() => new Map(pendingChanges.value.map(item => [item.settingId, item.target])));
 const changeCount = computed(() => pendingChanges.value.length);
-const visibleItems = computed(() => {
-  const query = searchQuery.value.trim().toLocaleLowerCase();
-  return availableItems.value.filter(item => {
+const visibleItems = computed(() =>
+  availableItems.value.filter(item => {
     if (activeCategory.value === 'pending' && !pendingById.value.has(item.settingId)) return false;
     if (
       activeCategory.value !== 'pending' &&
@@ -66,10 +63,9 @@ const visibleItems = computed(() => {
     ) {
       return false;
     }
-    if (!query) return true;
-    return `${itemMessage(item, 'name')} ${itemMessage(item, 'description')}`.toLocaleLowerCase().includes(query);
-  });
-});
+    return true;
+  })
+);
 const categoryOptions = computed(() => [
   {
     value: 'pending',
@@ -288,37 +284,15 @@ onMounted(() => {
             :aria-label="t('systemOptimization.filterCategory')"
             @update:model-value="updateCategory"
           />
-          <template #aside>
-            <MdResultSearch
-              v-model="searchQuery"
-              compact
-              :disabled="busy"
-              :placeholder="t('systemOptimization.searchPlaceholder')"
-            />
-          </template>
         </MdResultFilterToolbar>
       </template>
 
       <div ref="optimizationScroll" class="optimization-scroll scrollbar-stable-end">
         <MdEmptyState
           v-if="!visibleItems.length"
-          :icon-name="
-            activeCategory === 'pending' && !searchQuery.trim() ? ICON_NAMES.systemOptimization : ICON_NAMES.search
-          "
-          :title="
-            t(
-              activeCategory === 'pending' && !searchQuery.trim()
-                ? 'systemOptimization.pendingEmpty.title'
-                : 'systemOptimization.emptySearch.title'
-            )
-          "
-          :description="
-            t(
-              activeCategory === 'pending' && !searchQuery.trim()
-                ? 'systemOptimization.pendingEmpty.description'
-                : 'systemOptimization.emptySearch.description'
-            )
-          "
+          :icon-name="ICON_NAMES.systemOptimization"
+          :title="t('systemOptimization.pendingEmpty.title')"
+          :description="t('systemOptimization.pendingEmpty.description')"
           compact
         />
         <section v-else class="optimization-list">

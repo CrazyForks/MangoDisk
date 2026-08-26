@@ -24,11 +24,6 @@
     "checking": "正在確認設定…",
     "rescan": "重新檢查",
     "filterCategory": "篩選最佳化類別",
-    "searchPlaceholder": "搜尋最佳化項目",
-    "emptySearch": {
-      "title": "找不到相關設定",
-      "description": "請嘗試其他關鍵字或切換設定類別"
-    },
     "pendingEmpty": {
       "title": "沒有待套用變更",
       "description": "選擇建議方案或調整設定開關後，變更會顯示在這裡"

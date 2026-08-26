@@ -24,11 +24,6 @@
     "checking": "正在确认设置…",
     "rescan": "重新检查",
     "filterCategory": "筛选优化类别",
-    "searchPlaceholder": "搜索优化项",
-    "emptySearch": {
-      "title": "没有找到相关设置",
-      "description": "尝试其他关键词或切换设置类别"
-    },
     "pendingEmpty": {
       "title": "没有待应用更改",
       "description": "选择推荐方案或调整设置开关后，更改会显示在这里"

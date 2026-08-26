@@ -745,10 +745,10 @@ mod tests {
         let definition = definition("macos.activity-monitor.show-all-processes")
             .expect("the Activity Monitor setting should exist");
         let before = read_value(definition).expect("the original preference should be readable");
-        let temporary = if before == PlatformSystemSettingValue::Integer(0) {
-            PlatformSystemSettingValue::Integer(100)
+        let temporary = if before == PlatformSystemSettingValue::Integer(100) {
+            PlatformSystemSettingValue::Integer(102)
         } else {
-            PlatformSystemSettingValue::Integer(0)
+            PlatformSystemSettingValue::Integer(100)
         };
 
         let round_trip = (|| -> PlatformResult<()> {

@@ -29,7 +29,12 @@
       "title": "該当する設定がありません",
       "description": "別のキーワードを入力するか、カテゴリを切り替えてください"
     },
+    "pendingEmpty": {
+      "title": "適用待ちの変更はありません",
+      "description": "プリセットを選ぶかスイッチを調整すると、変更がここに表示されます"
+    },
     "categories": {
+      "pending": "適用待ち",
       "all": "すべて",
       "performance": "パフォーマンス",
       "productivity": "操作効率",
@@ -46,7 +51,8 @@
       "manual": { "name": "カスタム" }
     },
     "statuses": {
-      "pendingChange": "適用待ち",
+      "pendingEnable": "有効化予定",
+      "pendingDisable": "無効化予定",
       "requiresElevation": "管理者権限",
       "authorizationRequired": "選択した変更の適用には管理者認証が必要です",
       "requiresRestart": "適用後に関連するシステム機能を開き直すか、再ログインする必要があります",

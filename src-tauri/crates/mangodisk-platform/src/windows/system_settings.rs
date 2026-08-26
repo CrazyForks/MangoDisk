@@ -39,6 +39,7 @@ enum BuildApplicability {
 struct SettingDefinition {
     id: &'static str,
     root: RegistryRoot,
+    requires_elevation: bool,
     subkey: &'static str,
     value_name: &'static str,
     kind: ValueKind,
@@ -154,7 +155,7 @@ const SETTINGS: &[SettingDefinition] = &[
         "SharingWizardOn",
         ValueKind::Dword,
     ),
-    setting(
+    elevated_user_setting(
         "windows.explorer.confirm-file-delete",
         r"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer",
         "ConfirmFileDelete",
@@ -633,7 +634,7 @@ const SETTINGS: &[SettingDefinition] = &[
         "WebWidgetAllowed",
         ValueKind::Dword,
     ),
-    setting(
+    elevated_user_setting(
         "windows.office.disable-optional-telemetry",
         r"Software\Policies\Microsoft\Office\16.0\Common\Privacy",
         "SendTelemetry",
@@ -873,7 +874,7 @@ const SETTINGS: &[SettingDefinition] = &[
         "EnableSmartScreen",
         ValueKind::Dword,
     ),
-    setting(
+    elevated_user_setting(
         "windows.security.disable-autorun",
         r"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer",
         "NoDriveTypeAutoRun",
@@ -1046,6 +1047,7 @@ const fn setting(
     SettingDefinition {
         id,
         root: RegistryRoot::CurrentUser,
+        requires_elevation: false,
         subkey,
         value_name,
         kind,
@@ -1065,6 +1067,7 @@ const fn machine_setting(
     SettingDefinition {
         id,
         root: RegistryRoot::LocalMachine,
+        requires_elevation: true,
         subkey,
         value_name,
         kind,
@@ -1073,6 +1076,21 @@ const fn machine_setting(
         delete_tree_subkey: None,
         composite_text_key: None,
     }
+}
+
+/// Marks a user-scoped policy that Windows exposes below a read-only HKCU policy parent.
+///
+/// The elevated helper still writes the current user's hive; the flag only separates privilege
+/// routing from registry scope so user-only ADMX policies are not incorrectly moved to HKLM.
+const fn elevated_user_setting(
+    id: &'static str,
+    subkey: &'static str,
+    value_name: &'static str,
+    kind: ValueKind,
+) -> SettingDefinition {
+    let mut definition = setting(id, subkey, value_name, kind);
+    definition.requires_elevation = true;
+    definition
 }
 
 const fn delete_tree_on_missing(
@@ -1245,7 +1263,7 @@ where
 
     for (index, request) in requests.iter().enumerate() {
         match definition(&request.setting_id) {
-            Some(definition) if definition.root == RegistryRoot::LocalMachine => {
+            Some(definition) if definition.requires_elevation => {
                 privileged_indexes.push(index);
                 privileged_requests.push(request);
             }
@@ -1254,9 +1272,18 @@ where
     }
 
     if !privileged_requests.is_empty() {
+        let user_policy_item_count = privileged_requests
+            .iter()
+            .filter(|request| {
+                definition(&request.setting_id)
+                    .is_some_and(|definition| definition.root == RegistryRoot::CurrentUser)
+            })
+            .count();
         log::info!(
-            "windows_system_settings_elevated_batch_started item_count={}",
-            privileged_requests.len()
+            "windows_system_settings_elevated_batch_started item_count={} machine_item_count={} user_policy_item_count={}",
+            privileged_requests.len(),
+            privileged_requests.len() - user_policy_item_count,
+            user_policy_item_count
         );
         match privileged_change(&privileged_requests) {
             Ok(privileged_results) if privileged_results.len() == privileged_indexes.len() => {
@@ -1277,8 +1304,9 @@ where
                     })
                     .count();
                 log::info!(
-                    "windows_system_settings_elevated_batch_finished item_count={} uncertain_mutation_count={}",
+                    "windows_system_settings_elevated_batch_finished item_count={} user_policy_item_count={} uncertain_mutation_count={}",
                     verified_results.len(),
+                    user_policy_item_count,
                     uncertain_mutation_count
                 );
                 for (index, result) in privileged_indexes.into_iter().zip(verified_results) {
@@ -1380,7 +1408,24 @@ fn verify_privileged_change_result(
 pub(crate) fn helper_change_many(
     requests: &[PlatformSystemSettingChangeRequest],
 ) -> Vec<PlatformResult<PlatformSystemSettingChangeResult>> {
-    requests.iter().map(change).collect()
+    requests
+        .iter()
+        .map(|request| {
+            let definition = definition(&request.setting_id).ok_or_else(|| {
+                PlatformError::new(
+                    PlatformErrorCode::Unsupported,
+                    "system setting identifier is unsupported by the elevated helper",
+                )
+            })?;
+            if !definition.requires_elevation {
+                return Err(PlatformError::new(
+                    PlatformErrorCode::Unsupported,
+                    "system setting does not require the elevated helper",
+                ));
+            }
+            change(request)
+        })
+        .collect()
 }
 
 fn definition(setting_id: &str) -> Option<SettingDefinition> {
@@ -1402,7 +1447,7 @@ fn unsupported_state_for_definition(definition: SettingDefinition) -> PlatformSy
         setting_id: definition.id.to_string(),
         value: PlatformSystemSettingValue::Missing,
         effective_value: PlatformSystemSettingValue::Missing,
-        requires_elevation: definition.root == RegistryRoot::LocalMachine,
+        requires_elevation: definition.requires_elevation,
         diagnostic: Some(PlatformSystemSettingDiagnosticCode::Unsupported),
     }
 }
@@ -1420,7 +1465,7 @@ fn error_state_for_definition(
         setting_id: definition.id.to_string(),
         value: PlatformSystemSettingValue::Missing,
         effective_value: PlatformSystemSettingValue::Missing,
-        requires_elevation: definition.root == RegistryRoot::LocalMachine,
+        requires_elevation: definition.requires_elevation,
         diagnostic: Some(diagnostic_for_error(error.code())),
     }
 }
@@ -1481,7 +1526,7 @@ fn read_state(definition: SettingDefinition) -> PlatformSystemSettingState {
                 setting_id: definition.id.to_string(),
                 value,
                 effective_value,
-                requires_elevation: definition.root == RegistryRoot::LocalMachine,
+                requires_elevation: definition.requires_elevation,
                 diagnostic: None,
             }
         }
@@ -1495,7 +1540,7 @@ fn read_state(definition: SettingDefinition) -> PlatformSystemSettingState {
                 setting_id: definition.id.to_string(),
                 value: PlatformSystemSettingValue::Missing,
                 effective_value: PlatformSystemSettingValue::Missing,
-                requires_elevation: definition.root == RegistryRoot::LocalMachine,
+                requires_elevation: definition.requires_elevation,
                 diagnostic: Some(diagnostic_for_error(error.code())),
             }
         }
@@ -2025,7 +2070,7 @@ fn validate_value(
             (ValueKind::Dword, PlatformSystemSettingValue::Integer(_))
                 | (ValueKind::Text, PlatformSystemSettingValue::Text(_))
         );
-    if valid && machine_value_is_allowlisted(definition, value) {
+    if valid && privileged_value_is_allowlisted(definition, value) {
         Ok(())
     } else {
         Err(PlatformError::operation_failed(
@@ -2039,13 +2084,11 @@ fn validate_value(
 /// The desktop process normally supplies values from Core's catalog. This second allowlist exists
 /// because the helper can also be launched directly from a command line after a UAC confirmation;
 /// accepting an arbitrary DWORD there would make a known setting ID broader than the product UI.
-fn machine_value_is_allowlisted(
+fn privileged_value_is_allowlisted(
     definition: SettingDefinition,
     value: &PlatformSystemSettingValue,
 ) -> bool {
-    if definition.root != RegistryRoot::LocalMachine
-        || matches!(value, PlatformSystemSettingValue::Missing)
-    {
+    if !definition.requires_elevation || matches!(value, PlatformSystemSettingValue::Missing) {
         return true;
     }
     match (definition.id, value) {
@@ -2110,6 +2153,9 @@ fn machine_value_is_allowlisted(
             "windows.office.disable-optional-telemetry",
             PlatformSystemSettingValue::Integer(value),
         ) => (1..=3).contains(value),
+        ("windows.security.disable-autorun", PlatformSystemSettingValue::Integer(value)) => {
+            matches!(*value, 145 | 255)
+        }
         ("windows.explorer.remove-cast-to-device", PlatformSystemSettingValue::Text(value)) => {
             value == "Play to Menu"
         }
@@ -2307,6 +2353,20 @@ mod tests {
             .expect("the Edge diagnostic data policy should exist");
         assert!(validate_value(edge_diagnostics, &PlatformSystemSettingValue::Integer(2)).is_ok());
         assert!(validate_value(edge_diagnostics, &PlatformSystemSettingValue::Integer(3)).is_err());
+
+        let delete_confirmation = definition("windows.explorer.confirm-file-delete")
+            .expect("the delete confirmation policy should exist");
+        assert!(
+            validate_value(delete_confirmation, &PlatformSystemSettingValue::Integer(1)).is_ok()
+        );
+        assert!(
+            validate_value(delete_confirmation, &PlatformSystemSettingValue::Integer(2)).is_err()
+        );
+
+        let autorun = definition("windows.security.disable-autorun")
+            .expect("the autorun policy should exist");
+        assert!(validate_value(autorun, &PlatformSystemSettingValue::Integer(255)).is_ok());
+        assert!(validate_value(autorun, &PlatformSystemSettingValue::Integer(254)).is_err());
     }
 
     #[test]
@@ -2340,7 +2400,37 @@ mod tests {
         for setting_id in policy_ids {
             let definition = definition(setting_id).expect("the policy setting should exist");
             assert!(definition.root == RegistryRoot::LocalMachine);
+            assert!(definition.requires_elevation);
         }
+    }
+
+    #[test]
+    fn protected_current_user_policies_keep_the_user_hive_and_require_elevation() {
+        for setting_id in [
+            "windows.explorer.confirm-file-delete",
+            "windows.office.disable-optional-telemetry",
+            "windows.security.disable-autorun",
+        ] {
+            let definition = definition(setting_id).expect("the user policy setting should exist");
+            assert!(definition.root == RegistryRoot::CurrentUser);
+            assert!(definition.requires_elevation);
+        }
+    }
+
+    #[test]
+    fn elevated_helper_rejects_settings_that_do_not_require_privileges() {
+        let results = helper_change_many(&[PlatformSystemSettingChangeRequest {
+            setting_id: "windows.explorer.show-file-extensions".to_string(),
+            expected_value: PlatformSystemSettingValue::Missing,
+            desired_value: PlatformSystemSettingValue::Integer(0),
+        }]);
+
+        let error = results
+            .into_iter()
+            .next()
+            .expect("one result should exist")
+            .expect_err("a direct user preference must be rejected by the helper");
+        assert_eq!(error.code(), PlatformErrorCode::Unsupported);
     }
 
     #[test]
@@ -2477,9 +2567,9 @@ mod tests {
                 desired_value: PlatformSystemSettingValue::Integer(0),
             },
             PlatformSystemSettingChangeRequest {
-                setting_id: "windows.taskbar.hide-weather".to_string(),
+                setting_id: "windows.explorer.confirm-file-delete".to_string(),
                 expected_value: PlatformSystemSettingValue::Missing,
-                desired_value: PlatformSystemSettingValue::Integer(0),
+                desired_value: PlatformSystemSettingValue::Integer(1),
             },
         ];
         let direct_called = Cell::new(false);
@@ -2670,7 +2760,6 @@ mod tests {
         let mut failures = Vec::new();
 
         for setting_id in [
-            "windows.explorer.confirm-file-delete",
             "windows.explorer.use-manual-default-printer",
             "windows.taskbar.show-on-all-displays",
             "windows.gaming.disable-game-bar-controller",
@@ -2680,20 +2769,13 @@ mod tests {
             "windows.start.hide-recently-added-apps",
             "windows.start.hide-most-used-apps",
             "windows.start.hide-recent-items",
-            "windows.security.disable-autorun",
         ] {
             let definition = definition(setting_id).expect("the expanded setting should exist");
             if !is_applicable(definition, windows_build) {
                 continue;
             }
             let original = read_value(definition).expect("the original setting should be readable");
-            let desired = if setting_id == "windows.security.disable-autorun" {
-                if original == PlatformSystemSettingValue::Integer(255) {
-                    PlatformSystemSettingValue::Integer(145)
-                } else {
-                    PlatformSystemSettingValue::Integer(255)
-                }
-            } else if original == PlatformSystemSettingValue::Integer(0) {
+            let desired = if original == PlatformSystemSettingValue::Integer(0) {
                 PlatformSystemSettingValue::Integer(1)
             } else {
                 PlatformSystemSettingValue::Integer(0)

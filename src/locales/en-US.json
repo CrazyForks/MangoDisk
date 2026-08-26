@@ -29,7 +29,12 @@
       "title": "No matching settings",
       "description": "Try another search term or switch categories"
     },
+    "pendingEmpty": {
+      "title": "No pending changes",
+      "description": "Choose a preset or adjust switches to collect changes here"
+    },
     "categories": {
+      "pending": "Pending",
       "all": "All",
       "performance": "Performance",
       "productivity": "Productivity",
@@ -46,7 +51,8 @@
       "manual": { "name": "Custom" }
     },
     "statuses": {
-      "pendingChange": "Pending",
+      "pendingEnable": "Will enable",
+      "pendingDisable": "Will disable",
       "requiresElevation": "Administrator",
       "authorizationRequired": "Administrator authorization is required to apply the selected changes",
       "requiresRestart": "Requires reopening related system components or signing in again",

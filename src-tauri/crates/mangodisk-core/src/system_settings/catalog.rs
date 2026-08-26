@@ -416,8 +416,8 @@ const MACOS_SETTINGS: &[SettingDefinition] = &[
     custom(
         "macos.activity-monitor.show-all-processes",
         SystemSettingCategory::Productivity,
+        DefinitionValue::Integer(102),
         DefinitionValue::Integer(100),
-        DefinitionValue::Integer(0),
         true,
     ),
     one_click(
@@ -1815,6 +1815,19 @@ mod tests {
             function_keys.default_value,
             DefinitionValue::Missing
         ));
+
+        let all_processes = macos
+            .iter()
+            .find(|definition| definition.id == "macos.activity-monitor.show-all-processes")
+            .expect("the Activity Monitor process filter should exist");
+        assert!(matches!(
+            all_processes.default_value,
+            DefinitionValue::Integer(102)
+        ));
+        assert!(matches!(
+            all_processes.recommended_value,
+            DefinitionValue::Integer(100)
+        ));
     }
 
     #[test]
@@ -1917,6 +1930,366 @@ mod tests {
         }
     }
 
+    #[cfg(target_os = "macos")]
+    #[test]
+    #[ignore = "temporarily changes every macOS setting, refreshes system components, and restores exact values"]
+    fn actual_macos_catalog_values_roundtrip_and_restore() {
+        use std::{
+            collections::BTreeMap,
+            process::{Command, Stdio},
+            thread,
+            time::Duration,
+        };
+
+        use mangodisk_platform::{
+            current_platform, PlatformCancellation, PlatformSystemSettingChangeRequest,
+            SystemSettingsPlatform as _,
+        };
+
+        const DESTRUCTIVE_WITH_REFRESH: &str = "macos.finder.remove-old-trash-items";
+
+        fn refresh_system_components(phase: &str, failures: &mut Vec<String>) {
+            for process in ["Finder", "Dock", "SystemUIServer", "cfprefsd"] {
+                let status = Command::new("/usr/bin/killall")
+                    .arg(process)
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .status();
+                match status {
+                    Ok(status) if status.success() => eprintln!(
+                        "macos_system_settings_component_refreshed phase={phase} process={process}"
+                    ),
+                    Ok(status) => failures.push(format!(
+                        "{phase}: failed to refresh {process} with status {status}"
+                    )),
+                    Err(error) => failures.push(format!(
+                        "{phase}: failed to start refresh for {process}: {error}"
+                    )),
+                }
+            }
+
+            // Finder, Dock, and SystemUIServer are relaunched by launchd. Waiting before the next
+            // read proves the persisted preferences survive process and CFPreferences cache reloads.
+            for process in ["Finder", "Dock", "SystemUIServer"] {
+                let mut relaunched = false;
+                for _ in 0..20 {
+                    let status = Command::new("/usr/bin/pgrep")
+                        .args(["-x", process])
+                        .stdin(Stdio::null())
+                        .stdout(Stdio::null())
+                        .stderr(Stdio::null())
+                        .status();
+                    if status.is_ok_and(|status| status.success()) {
+                        relaunched = true;
+                        break;
+                    }
+                    thread::sleep(Duration::from_millis(500));
+                }
+                if !relaunched {
+                    failures.push(format!("{phase}: {process} did not relaunch"));
+                }
+            }
+
+            // Launching the preference-owning apps catches keys that appear writable through
+            // `defaults` but are discarded or rewritten when the current macOS app starts.
+            let applications = [
+                ("com.apple.Safari", "Safari"),
+                ("com.apple.TextEdit", "TextEdit"),
+                ("com.apple.Photos", "Photos"),
+                ("com.apple.ActivityMonitor", "Activity Monitor"),
+                ("com.apple.AppStore", "App Store"),
+            ];
+            for (bundle_id, process) in applications {
+                let status = Command::new("/usr/bin/open")
+                    .args(["-g", "-j", "-b", bundle_id])
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .status();
+                if !status.is_ok_and(|status| status.success()) {
+                    failures.push(format!("{phase}: failed to launch {process}"));
+                    continue;
+                }
+
+                let mut launched = false;
+                for _ in 0..20 {
+                    let status = Command::new("/usr/bin/pgrep")
+                        .args(["-x", process])
+                        .stdin(Stdio::null())
+                        .stdout(Stdio::null())
+                        .stderr(Stdio::null())
+                        .status();
+                    if status.is_ok_and(|status| status.success()) {
+                        launched = true;
+                        break;
+                    }
+                    thread::sleep(Duration::from_millis(250));
+                }
+                if !launched {
+                    failures.push(format!("{phase}: {process} did not launch"));
+                }
+            }
+            thread::sleep(Duration::from_secs(2));
+            for (_, process) in applications {
+                let status = Command::new("/usr/bin/killall")
+                    .arg(process)
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .status();
+                match status {
+                    Ok(status) if status.success() => eprintln!(
+                        "macos_system_settings_application_refreshed phase={phase} process={process}"
+                    ),
+                    Ok(status) => failures.push(format!(
+                        "{phase}: failed to close {process} with status {status}"
+                    )),
+                    Err(error) => failures.push(format!(
+                        "{phase}: failed to close {process}: {error}"
+                    )),
+                }
+            }
+            let _ = Command::new("/usr/bin/killall")
+                .arg("cfprefsd")
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
+            thread::sleep(Duration::from_millis(500));
+        }
+
+        let definitions = definitions(SystemSettingsPlatform::Macos);
+        let ids = definitions
+            .iter()
+            .map(|definition| definition.id)
+            .collect::<Vec<_>>();
+        let platform = current_platform();
+        let cancellation = PlatformCancellation::new(|| false);
+        let originals = platform
+            .scan_system_settings(&ids, &cancellation)
+            .expect("the macOS settings catalog should be readable");
+        let mut failures = originals
+            .iter()
+            .filter_map(|state| {
+                state
+                    .diagnostic
+                    .map(|diagnostic| format!("{}: initial read {diagnostic:?}", state.setting_id))
+            })
+            .collect::<Vec<_>>();
+        assert!(
+            failures.is_empty(),
+            "macOS settings must all be readable before mutation:\n{}",
+            failures.join("\n")
+        );
+
+        let original_by_id = originals
+            .iter()
+            .map(|state| (state.setting_id.as_str(), state.value.clone()))
+            .collect::<BTreeMap<_, _>>();
+        let mut enable_verified = BTreeMap::new();
+        let mut disable_verified = BTreeMap::new();
+
+        // Enabling automatic old-Trash removal and then restarting Finder could delete user data.
+        // Validate its real persisted values separately and restore it before any component refresh.
+        let destructive = definitions
+            .iter()
+            .find(|definition| definition.id == DESTRUCTIVE_WITH_REFRESH)
+            .expect("the old-Trash setting should exist");
+        let destructive_original = original_by_id
+            .get(DESTRUCTIVE_WITH_REFRESH)
+            .expect("the old-Trash original value should exist")
+            .clone();
+        let destructive_enabled = destructive.recommended_value.owned();
+        let destructive_disabled = destructive
+            .disabled_value
+            .unwrap_or(destructive.default_value)
+            .owned();
+        let mut destructive_current = destructive_original.clone();
+        for (phase, desired, verified) in [
+            ("enable", destructive_enabled, &mut enable_verified),
+            ("disable", destructive_disabled, &mut disable_verified),
+        ] {
+            let result = platform.change_system_setting(&PlatformSystemSettingChangeRequest {
+                setting_id: DESTRUCTIVE_WITH_REFRESH.to_string(),
+                expected_value: destructive_current.clone(),
+                desired_value: desired.clone(),
+            });
+            let state = platform
+                .scan_system_settings(&[DESTRUCTIVE_WITH_REFRESH], &cancellation)
+                .expect("the old-Trash preference should remain readable")
+                .into_iter()
+                .next()
+                .expect("the old-Trash state should exist");
+            let persisted = result.is_ok_and(|result| result.verified)
+                && state.diagnostic.is_none()
+                && state.effective_value == desired;
+            if !persisted {
+                failures.push(format!(
+                    "{DESTRUCTIVE_WITH_REFRESH}: {phase} was not persisted"
+                ));
+            }
+            verified.insert(DESTRUCTIVE_WITH_REFRESH, persisted);
+            destructive_current = state.value;
+        }
+        if destructive_current != destructive_original {
+            if let Err(error) =
+                platform.change_system_setting(&PlatformSystemSettingChangeRequest {
+                    setting_id: DESTRUCTIVE_WITH_REFRESH.to_string(),
+                    expected_value: destructive_current,
+                    desired_value: destructive_original,
+                })
+            {
+                failures.push(format!(
+                    "{DESTRUCTIVE_WITH_REFRESH}: early restore failed with {:?}",
+                    error.code()
+                ));
+            }
+        }
+
+        for (definition, original) in definitions.iter().zip(&originals) {
+            if definition.id == DESTRUCTIVE_WITH_REFRESH {
+                continue;
+            }
+            let desired = definition.recommended_value.owned();
+            match platform.change_system_setting(&PlatformSystemSettingChangeRequest {
+                setting_id: definition.id.to_string(),
+                expected_value: original.value.clone(),
+                desired_value: desired,
+            }) {
+                Ok(result) if result.verified => {}
+                Ok(result) => failures.push(format!(
+                    "{}: enable did not verify changed={} verified={}",
+                    definition.id, result.changed, result.verified
+                )),
+                Err(error) => failures.push(format!(
+                    "{}: enable failed with {:?}",
+                    definition.id,
+                    error.code()
+                )),
+            }
+        }
+        refresh_system_components("enable", &mut failures);
+        let enabled_states = platform
+            .scan_system_settings(&ids, &cancellation)
+            .expect("enabled macOS settings should remain readable after component refresh");
+        for (definition, state) in definitions.iter().zip(&enabled_states) {
+            if definition.id == DESTRUCTIVE_WITH_REFRESH {
+                continue;
+            }
+            let verified = state.diagnostic.is_none()
+                && state.effective_value == definition.recommended_value.owned();
+            if !verified {
+                failures.push(format!(
+                    "{}: enabled value did not survive component refresh",
+                    definition.id
+                ));
+            }
+            enable_verified.insert(definition.id, verified);
+        }
+
+        for (definition, enabled) in definitions.iter().zip(&enabled_states) {
+            if definition.id == DESTRUCTIVE_WITH_REFRESH {
+                continue;
+            }
+            let desired = definition
+                .disabled_value
+                .unwrap_or(definition.default_value)
+                .owned();
+            match platform.change_system_setting(&PlatformSystemSettingChangeRequest {
+                setting_id: definition.id.to_string(),
+                expected_value: enabled.value.clone(),
+                desired_value: desired,
+            }) {
+                Ok(result) if result.verified => {}
+                Ok(result) => failures.push(format!(
+                    "{}: disable did not verify changed={} verified={}",
+                    definition.id, result.changed, result.verified
+                )),
+                Err(error) => failures.push(format!(
+                    "{}: disable failed with {:?}",
+                    definition.id,
+                    error.code()
+                )),
+            }
+        }
+        refresh_system_components("disable", &mut failures);
+        let disabled_states = platform
+            .scan_system_settings(&ids, &cancellation)
+            .expect("disabled macOS settings should remain readable after component refresh");
+        for (definition, state) in definitions.iter().zip(&disabled_states) {
+            if definition.id == DESTRUCTIVE_WITH_REFRESH {
+                continue;
+            }
+            let expected = definition
+                .disabled_value
+                .unwrap_or(definition.default_value)
+                .owned();
+            let verified = state.diagnostic.is_none() && state.effective_value == expected;
+            if !verified {
+                failures.push(format!(
+                    "{}: disabled value did not survive component refresh",
+                    definition.id
+                ));
+            }
+            disable_verified.insert(definition.id, verified);
+        }
+
+        for (definition, disabled) in definitions.iter().zip(&disabled_states) {
+            let original = original_by_id
+                .get(definition.id)
+                .expect("the original macOS value should exist")
+                .clone();
+            if disabled.value == original {
+                continue;
+            }
+            if let Err(error) =
+                platform.change_system_setting(&PlatformSystemSettingChangeRequest {
+                    setting_id: definition.id.to_string(),
+                    expected_value: disabled.value.clone(),
+                    desired_value: original,
+                })
+            {
+                failures.push(format!(
+                    "{}: restore failed with {:?}",
+                    definition.id,
+                    error.code()
+                ));
+            }
+        }
+        refresh_system_components("restore", &mut failures);
+        let restored_states = platform
+            .scan_system_settings(&ids, &cancellation)
+            .expect("restored macOS settings should remain readable after component refresh");
+        for (definition, restored) in definitions.iter().zip(restored_states) {
+            let restored_exactly = restored.diagnostic.is_none()
+                && original_by_id.get(definition.id) == Some(&restored.value);
+            if !restored_exactly {
+                failures.push(format!(
+                    "{}: original value was not restored",
+                    definition.id
+                ));
+            }
+            eprintln!(
+                "macos_system_setting_roundtrip_item setting_id={} enable_verified={} disable_verified={} restored={restored_exactly}",
+                definition.id,
+                enable_verified.get(definition.id).copied().unwrap_or(false),
+                disable_verified.get(definition.id).copied().unwrap_or(false)
+            );
+        }
+
+        eprintln!(
+            "macos_system_settings_roundtrip_finished tested_count={} failed_count={}",
+            definitions.len(),
+            failures.len()
+        );
+        assert!(
+            failures.is_empty(),
+            "macOS setting roundtrip failures:\n{}",
+            failures.join("\n")
+        );
+    }
+
     #[cfg(target_os = "windows")]
     #[test]
     #[ignore = "temporarily changes each applicable Windows setting and restores its exact value"]
@@ -1943,70 +2316,125 @@ mod tests {
         for (definition, state) in definitions.iter().zip(states) {
             if state.diagnostic == Some(PlatformSystemSettingDiagnosticCode::Unsupported) {
                 unsupported_count += 1;
+                eprintln!(
+                    "windows_system_setting_roundtrip_item setting_id={} status=unsupported",
+                    definition.id
+                );
                 continue;
             }
             if let Some(diagnostic) = state.diagnostic {
                 failures.push(format!("{}: initial read {diagnostic:?}", definition.id));
+                eprintln!(
+                    "windows_system_setting_roundtrip_item setting_id={} status=failed phase=initial_read diagnostic={diagnostic:?}",
+                    definition.id
+                );
                 continue;
             }
 
             let original = state.value;
-            let original_effective = state.effective_value;
             let recommended = definition.recommended_value.owned();
             let disabled = definition
                 .disabled_value
                 .unwrap_or(definition.default_value)
                 .owned();
-            let desired = if original_effective == recommended {
-                disabled
-            } else {
-                recommended
-            };
-            if desired == original {
+            if recommended == disabled {
                 failures.push(format!(
-                    "{}: catalog has no distinct value for roundtrip validation",
+                    "{}: enabled and disabled values are identical",
                     definition.id
                 ));
+                eprintln!(
+                    "windows_system_setting_roundtrip_item setting_id={} status=failed phase=catalog_validation",
+                    definition.id
+                );
                 continue;
             }
 
-            let apply = platform.change_system_setting(&PlatformSystemSettingChangeRequest {
-                setting_id: definition.id.to_string(),
-                expected_value: original.clone(),
-                desired_value: desired.clone(),
-            });
-            match apply {
-                Ok(result) if result.verified => {}
-                Ok(result) => failures.push(format!(
-                    "{}: apply did not verify changed={} verified={}",
-                    definition.id, result.changed, result.verified
-                )),
-                Err(error) => failures.push(format!(
-                    "{}: apply failed with {:?}",
-                    definition.id,
-                    error.code()
-                )),
+            let mut current = original.clone();
+            let mut last_attempted = None;
+            let mut enabled = false;
+            let mut disabled_verified = false;
+            for (phase, desired) in [
+                ("enable", recommended.clone()),
+                ("disable", disabled.clone()),
+            ] {
+                last_attempted = Some(desired.clone());
+                let apply = platform.change_system_setting(&PlatformSystemSettingChangeRequest {
+                    setting_id: definition.id.to_string(),
+                    expected_value: current.clone(),
+                    desired_value: desired.clone(),
+                });
+                let operation_verified = match apply {
+                    Ok(result) if result.verified => true,
+                    Ok(result) => {
+                        failures.push(format!(
+                            "{}: {phase} did not verify changed={} verified={}",
+                            definition.id, result.changed, result.verified
+                        ));
+                        false
+                    }
+                    Err(error) => {
+                        failures.push(format!(
+                            "{}: {phase} failed with {:?}",
+                            definition.id,
+                            error.code()
+                        ));
+                        false
+                    }
+                };
+
+                // A separate read validates the observable state even when the adapter reported a
+                // post-write error. Its exact value becomes the optimistic-concurrency baseline
+                // for the next phase and for restoration.
+                let after = platform
+                    .scan_system_settings(&[definition.id], &cancellation)
+                    .expect("a post-change Windows setting read should complete")
+                    .into_iter()
+                    .next()
+                    .expect("a post-change Windows setting state should exist");
+                if let Some(diagnostic) = after.diagnostic {
+                    failures.push(format!(
+                        "{}: {phase} readback {diagnostic:?}",
+                        definition.id
+                    ));
+                    break;
+                }
+                current = after.value;
+                let phase_verified = operation_verified && after.effective_value == desired;
+                if after.effective_value != desired {
+                    failures.push(format!(
+                        "{}: {phase} readback did not match the target",
+                        definition.id
+                    ));
+                }
+                if phase == "enable" {
+                    enabled = phase_verified;
+                } else {
+                    disabled_verified = phase_verified;
+                }
             }
 
-            // Always observe the registry again before restoring. This covers the uncommon case
-            // where a write succeeds but the platform adapter reports a subsequent read failure.
-            let after = platform
+            // Read once more before restoration so a transient phase read failure cannot leave a
+            // changed value behind. If the state remains unreadable, the last attempted scalar is
+            // the only safe fallback because optimistic concurrency rejects unrelated live values.
+            let before_restore = platform
                 .scan_system_settings(&[definition.id], &cancellation)
-                .expect("a post-change Windows setting read should complete")
+                .expect("a pre-restore Windows setting read should complete")
                 .into_iter()
                 .next()
-                .expect("a post-change Windows setting state should exist");
-            if after.diagnostic.is_none() && after.value != original {
-                if after.effective_value != desired {
-                    failures.push(format!("{}: applied value did not match", definition.id));
-                }
+                .expect("a pre-restore Windows setting state should exist");
+            let restore_expected = if before_restore.diagnostic.is_none() {
+                Some(before_restore.value)
+            } else {
+                last_attempted
+            };
+            if let Some(expected_value) = restore_expected.filter(|value| value != &original) {
                 let restore = platform.change_system_setting(&PlatformSystemSettingChangeRequest {
                     setting_id: definition.id.to_string(),
-                    expected_value: after.value.clone(),
+                    expected_value,
                     desired_value: original.clone(),
                 });
                 match restore {
-                    Ok(result) if result.verified && result.value == original => {}
+                    Ok(result) if result.verified => {}
                     Ok(result) => failures.push(format!(
                         "{}: restore did not verify changed={} verified={}",
                         definition.id, result.changed, result.verified
@@ -2017,33 +2445,24 @@ mod tests {
                         error.code()
                     )),
                 }
-            } else if let Some(diagnostic) = after.diagnostic {
-                failures.push(format!(
-                    "{}: post-change read {diagnostic:?}",
-                    definition.id
-                ));
-                // If the adapter failed after persisting the write, the desired value is the only
-                // safe expected value available. A conflict leaves an untouched original value
-                // alone, while a match restores the exact baseline captured before the test.
-                let _ = platform.change_system_setting(&PlatformSystemSettingChangeRequest {
-                    setting_id: definition.id.to_string(),
-                    expected_value: desired.clone(),
-                    desired_value: original.clone(),
-                });
             }
-
             let restored = platform
                 .scan_system_settings(&[definition.id], &cancellation)
                 .expect("a restored Windows setting read should complete")
                 .into_iter()
                 .next()
                 .expect("a restored Windows setting state should exist");
-            if restored.diagnostic.is_some() || restored.value != original {
+            let restored_exactly = restored.diagnostic.is_none() && restored.value == original;
+            if !restored_exactly {
                 failures.push(format!(
                     "{}: original value was not restored",
                     definition.id
                 ));
             }
+            eprintln!(
+                "windows_system_setting_roundtrip_item setting_id={} enable_verified={} disable_verified={} restored={restored_exactly}",
+                definition.id, enabled, disabled_verified
+            );
             tested_count += 1;
         }
 

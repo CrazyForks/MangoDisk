@@ -31,7 +31,9 @@ import MdSystemSettingRiskDialog from './components/md-system-setting-risk-dialo
 const { t } = useI18n({ useScope: 'global' });
 const store = useSystemSettingsStore();
 const executionRequested = ref(false);
-const activeCategory = ref<'all' | SystemSettingCategory>('all');
+type OptimizationCategoryFilter = 'pending' | 'all' | SystemSettingCategory;
+
+const activeCategory = ref<OptimizationCategoryFilter>('all');
 const optimizationScroll = ref<HTMLElement | null>(null);
 const searchQuery = ref('');
 const riskDialogOpen = ref(false);
@@ -48,15 +50,32 @@ const categories: SystemSettingCategory[] = [
 const busy = computed(() => store.scanning || store.preparing || store.executing);
 const desiredOptimized = computed(() => new Set(store.desiredOptimizedIds));
 const availableItems = computed(() => store.catalog?.items.filter(item => item.status !== 'unavailable') ?? []);
+const pendingChanges = computed(() =>
+  store.catalog ? systemOptimizationPendingChanges(store.catalog, store.desiredOptimizedIds) : []
+);
+const pendingById = computed(() => new Map(pendingChanges.value.map(item => [item.settingId, item.target])));
+const changeCount = computed(() => pendingChanges.value.length);
 const visibleItems = computed(() => {
   const query = searchQuery.value.trim().toLocaleLowerCase();
   return availableItems.value.filter(item => {
-    if (activeCategory.value !== 'all' && item.category !== activeCategory.value) return false;
+    if (activeCategory.value === 'pending' && !pendingById.value.has(item.settingId)) return false;
+    if (
+      activeCategory.value !== 'pending' &&
+      activeCategory.value !== 'all' &&
+      item.category !== activeCategory.value
+    ) {
+      return false;
+    }
     if (!query) return true;
     return `${itemMessage(item, 'name')} ${itemMessage(item, 'description')}`.toLocaleLowerCase().includes(query);
   });
 });
 const categoryOptions = computed(() => [
+  {
+    value: 'pending',
+    label: t('systemOptimization.categories.pending'),
+    count: changeCount.value,
+  },
   {
     value: 'all',
     label: t('systemOptimization.categories.all'),
@@ -70,12 +89,7 @@ const categoryOptions = computed(() => [
     }))
     .filter(option => option.count > 0),
 ]);
-const pendingChanges = computed(() =>
-  store.catalog ? systemOptimizationPendingChanges(store.catalog, store.desiredOptimizedIds) : []
-);
-const pendingById = computed(() => new Map(pendingChanges.value.map(item => [item.settingId, item.target])));
 const itemById = computed(() => new Map(availableItems.value.map(item => [item.settingId, item])));
-const changeCount = computed(() => pendingChanges.value.length);
 const pendingRequiresElevation = computed(() =>
   pendingChanges.value.some(change => itemById.value.get(change.settingId)?.requiresElevation === true)
 );
@@ -172,8 +186,8 @@ function updateMode(value: unknown) {
 }
 
 function updateCategory(value: string) {
-  if (value !== 'all' && !categories.includes(value as SystemSettingCategory)) return;
-  activeCategory.value = value as 'all' | SystemSettingCategory;
+  if (value !== 'pending' && value !== 'all' && !categories.includes(value as SystemSettingCategory)) return;
+  activeCategory.value = value as OptimizationCategoryFilter;
   optimizationScroll.value?.scrollTo({ top: 0 });
 }
 
@@ -288,9 +302,23 @@ onMounted(() => {
       <div ref="optimizationScroll" class="optimization-scroll scrollbar-stable-end">
         <MdEmptyState
           v-if="!visibleItems.length"
-          :icon-name="ICON_NAMES.search"
-          :title="t('systemOptimization.emptySearch.title')"
-          :description="t('systemOptimization.emptySearch.description')"
+          :icon-name="
+            activeCategory === 'pending' && !searchQuery.trim() ? ICON_NAMES.systemOptimization : ICON_NAMES.search
+          "
+          :title="
+            t(
+              activeCategory === 'pending' && !searchQuery.trim()
+                ? 'systemOptimization.pendingEmpty.title'
+                : 'systemOptimization.emptySearch.title'
+            )
+          "
+          :description="
+            t(
+              activeCategory === 'pending' && !searchQuery.trim()
+                ? 'systemOptimization.pendingEmpty.description'
+                : 'systemOptimization.emptySearch.description'
+            )
+          "
           compact
         />
         <section v-else class="optimization-list">
@@ -317,7 +345,13 @@ onMounted(() => {
                 </TooltipContent>
               </Tooltip>
               <span v-if="pendingTarget(item)" class="item-state is-pending">
-                {{ t('systemOptimization.statuses.pendingChange') }}
+                {{
+                  t(
+                    pendingTarget(item) === 'optimized'
+                      ? 'systemOptimization.statuses.pendingEnable'
+                      : 'systemOptimization.statuses.pendingDisable'
+                  )
+                }}
               </span>
               <Tooltip v-if="pendingTarget(item) && item.requiresRestart">
                 <TooltipTrigger as-child>
@@ -397,8 +431,15 @@ onMounted(() => {
   white-space: nowrap;
 }
 .mode-select {
-  width: 168px;
+  width: 190px;
   height: 38px;
+}
+.mode-select :deep([data-slot='select-value']) {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
 }
 .optimize-button {
   min-width: 154px;
@@ -496,10 +537,12 @@ onMounted(() => {
 .optimization-loading small {
   font-size: 12px;
 }
-@container (max-width: 520px) {
+@container (max-width: 620px) {
   .mode-control > span {
     display: none;
   }
+}
+@container (max-width: 520px) {
   .optimize-button {
     min-width: 0;
   }

@@ -73,7 +73,7 @@ struct MessagePaths {
     response: PathBuf,
 }
 
-/// Runs the narrow machine-scoped settings helper before Tauri initializes.
+/// Runs the narrow privileged-settings helper before Tauri initializes.
 ///
 /// The helper accepts only typed setting identifiers compiled into MangoDisk. It never accepts a
 /// registry path or command from the desktop process, which keeps the elevation boundary finite
@@ -96,7 +96,7 @@ where
     Some(exit_code)
 }
 
-/// Applies every machine-scoped setting through one temporary elevated process.
+/// Applies every privilege-required setting through one temporary elevated process.
 ///
 /// A batch avoids repeated UAC prompts. The elevated process still re-reads each value, checks the
 /// optimistic-concurrency snapshot, applies the allowlisted mutation, and verifies the result.

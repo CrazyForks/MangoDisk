@@ -29,7 +29,12 @@
       "title": "找不到相關設定",
       "description": "請嘗試其他關鍵字或切換設定類別"
     },
+    "pendingEmpty": {
+      "title": "沒有待套用變更",
+      "description": "選擇建議方案或調整設定開關後，變更會顯示在這裡"
+    },
     "categories": {
+      "pending": "待套用",
       "all": "全部",
       "performance": "效能回應",
       "productivity": "效率體驗",
@@ -46,7 +51,8 @@
       "manual": { "name": "自訂選擇" }
     },
     "statuses": {
-      "pendingChange": "待套用",
+      "pendingEnable": "待啟用",
+      "pendingDisable": "待停用",
       "requiresElevation": "需系統管理員權限",
       "authorizationRequired": "套用所選變更時需要系統管理員授權",
       "requiresRestart": "套用後需要重新開啟相關系統元件或重新登入",

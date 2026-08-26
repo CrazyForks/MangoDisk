@@ -29,7 +29,12 @@
       "title": "没有找到相关设置",
       "description": "尝试其他关键词或切换设置类别"
     },
+    "pendingEmpty": {
+      "title": "没有待应用更改",
+      "description": "选择推荐方案或调整设置开关后，更改会显示在这里"
+    },
     "categories": {
+      "pending": "待应用",
       "all": "全部",
       "performance": "性能响应",
       "productivity": "效率体验",
@@ -46,7 +51,8 @@
       "manual": { "name": "自定义选择" }
     },
     "statuses": {
-      "pendingChange": "待应用",
+      "pendingEnable": "待启用",
+      "pendingDisable": "待停用",
       "requiresElevation": "需管理员权限",
       "authorizationRequired": "应用所选更改时需要管理员授权",
       "requiresRestart": "应用后需要重新打开相关系统组件或重新登录",

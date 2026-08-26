@@ -2258,9 +2258,44 @@ mod tests {
             }
         }
         refresh_system_components("restore", &mut failures);
-        let restored_states = platform
+        let refreshed_states = platform
             .scan_system_settings(&ids, &cancellation)
             .expect("restored macOS settings should remain readable after component refresh");
+        for (definition, refreshed) in definitions.iter().zip(&refreshed_states) {
+            let original = original_by_id
+                .get(definition.id)
+                .expect("the original macOS value should exist")
+                .clone();
+            if refreshed.diagnostic.is_some() || refreshed.value == original {
+                continue;
+            }
+
+            // Some macOS releases materialize a missing preference as its explicit default when
+            // the owning process restarts. Reconcile once after all refreshes so the ignored test
+            // leaves the preference database in the exact state captured before the round trip.
+            match platform.change_system_setting(&PlatformSystemSettingChangeRequest {
+                setting_id: definition.id.to_string(),
+                expected_value: refreshed.value.clone(),
+                desired_value: original,
+            }) {
+                Ok(result) if result.verified => eprintln!(
+                    "macos_system_setting_restore_reconciled setting_id={}",
+                    definition.id
+                ),
+                Ok(result) => failures.push(format!(
+                    "{}: post-refresh restore did not verify changed={} verified={}",
+                    definition.id, result.changed, result.verified
+                )),
+                Err(error) => failures.push(format!(
+                    "{}: post-refresh restore failed with {:?}",
+                    definition.id,
+                    error.code()
+                )),
+            }
+        }
+        let restored_states = platform
+            .scan_system_settings(&ids, &cancellation)
+            .expect("reconciled macOS settings should remain readable");
         for (definition, restored) in definitions.iter().zip(restored_states) {
             let restored_exactly = restored.diagnostic.is_none()
                 && original_by_id.get(definition.id) == Some(&restored.value);

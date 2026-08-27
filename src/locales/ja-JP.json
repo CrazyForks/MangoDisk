@@ -19,6 +19,7 @@
     "scanning": "システム設定を確認中",
     "scanningDescription": "対応する設定を読み取るだけで、スキャン中に変更は行いません",
     "applyChanges": "{count} 件の変更を適用",
+    "pendingSummary": "適用待ちの変更",
     "noChanges": "適用待ちの変更はありません",
     "optimizing": "最適化中…",
     "checking": "設定を確認中…",

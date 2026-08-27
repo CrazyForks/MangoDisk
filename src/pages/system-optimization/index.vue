@@ -6,6 +6,8 @@ import { toast } from 'vue-sonner';
 import MdActionBarContainer from '@/components/custom/md-action-bar-container.vue';
 import MdCategoryFilter from '@/components/custom/md-category-filter.vue';
 import MdEmptyState from '@/components/custom/md-empty-state.vue';
+import MdOperationProgress from '@/components/custom/md-operation-progress.vue';
+import MdOperationWorkspace from '@/components/custom/md-operation-workspace.vue';
 import MdPageShell from '@/components/custom/md-page-shell.vue';
 import MdResultFilterToolbar from '@/components/custom/md-result-filter-toolbar.vue';
 import MdResultWorkspace from '@/components/custom/md-result-workspace.vue';
@@ -236,41 +238,47 @@ onMounted(() => {
 
     <template v-if="store.catalog" #footer>
       <MdActionBarContainer class="optimization-action-bar">
-        <div class="mode-control">
-          <span>{{ t('systemOptimization.modes.label') }}</span>
-          <Select :model-value="store.optimizationMode" :disabled="busy" @update:model-value="updateMode">
-            <SelectTrigger class="mode-select" :aria-label="t('systemOptimization.modes.label')">
-              <SelectValue>{{ modeLabel }}</SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem v-for="mode in availableModes" :key="mode" :value="mode">
-                {{ modeName(mode) }}
-              </SelectItem>
-              <SelectItem v-if="store.optimizationMode === 'manual'" value="manual" disabled>
-                {{ t('systemOptimization.modes.manual.name') }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
+        <button type="button" class="change-summary" :disabled="busy" @click="updateCategory('pending')">
+          <small>{{ t('systemOptimization.pendingSummary') }}</small>
+          <strong>{{ t('common.itemCount', { count: changeCount }, changeCount) }}</strong>
+        </button>
+        <div class="optimization-actions">
+          <div class="mode-control">
+            <span>{{ t('systemOptimization.modes.label') }}</span>
+            <Select :model-value="store.optimizationMode" :disabled="busy" @update:model-value="updateMode">
+              <SelectTrigger class="mode-select" :aria-label="t('systemOptimization.modes.label')">
+                <SelectValue>{{ modeLabel }}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="mode in availableModes" :key="mode" :value="mode">
+                  {{ modeName(mode) }}
+                </SelectItem>
+                <SelectItem v-if="store.optimizationMode === 'manual'" value="manual" disabled>
+                  {{ t('systemOptimization.modes.manual.name') }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <Tooltip :disabled="!pendingRequiresElevation">
+            <TooltipTrigger as-child>
+              <Button class="optimize-button" :disabled="busy || !changeCount" @click="runOptimization">
+                <MdIcon :name="pendingRequiresElevation ? ICON_NAMES.shield : ICON_NAMES.sparkles" :size="18" />
+                {{
+                  store.executing
+                    ? t('systemOptimization.optimizing')
+                    : store.preparing
+                      ? t('systemOptimization.checking')
+                      : changeCount
+                        ? t('systemOptimization.applyChanges', { count: changeCount })
+                        : t('systemOptimization.noChanges')
+                }}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top" :side-offset="6">
+              {{ t('systemOptimization.statuses.authorizationRequired') }}
+            </TooltipContent>
+          </Tooltip>
         </div>
-        <Tooltip :disabled="!pendingRequiresElevation">
-          <TooltipTrigger as-child>
-            <Button class="optimize-button" :disabled="busy || !changeCount" @click="runOptimization">
-              <MdIcon :name="pendingRequiresElevation ? ICON_NAMES.shield : ICON_NAMES.sparkles" :size="18" />
-              {{
-                store.executing
-                  ? t('systemOptimization.optimizing')
-                  : store.preparing
-                    ? t('systemOptimization.checking')
-                    : changeCount
-                      ? t('systemOptimization.applyChanges', { count: changeCount })
-                      : t('systemOptimization.noChanges')
-              }}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top" :side-offset="6">
-            {{ t('systemOptimization.statuses.authorizationRequired') }}
-          </TooltipContent>
-        </Tooltip>
       </MdActionBarContainer>
     </template>
 
@@ -359,11 +367,20 @@ onMounted(() => {
       </div>
     </MdResultWorkspace>
 
-    <section v-else class="optimization-loading" role="status">
-      <span class="md-operational-motion" />
-      <strong>{{ t('systemOptimization.scanning') }}</strong>
-      <small>{{ t('systemOptimization.scanningDescription') }}</small>
-    </section>
+    <MdOperationWorkspace v-else>
+      <MdOperationProgress
+        :icon-name="ICON_NAMES.systemOptimization"
+        :title="t('systemOptimization.scanning')"
+        :progress="null"
+        :path-label="t('systemOptimization.scanning')"
+        :preparing-text="t('systemOptimization.scanningDescription')"
+        :hint="t('systemOptimization.scanningDescription')"
+        :show-traversal-details="false"
+        :show-step-progress="false"
+        :cancelable="false"
+        :cancel-disabled="true"
+      />
+    </MdOperationWorkspace>
 
     <MdSystemSettingRiskDialog
       v-model:open="riskDialogOpen"
@@ -385,12 +402,43 @@ onMounted(() => {
   gap: 12px;
   padding: 2px 10px 2px 14px;
 }
-.optimization-loading > span {
-  width: 24px;
-  height: 24px;
-  border: 3px solid color-mix(in oklab, var(--primary) 25%, transparent);
-  border-top-color: var(--primary);
-  border-radius: 999px;
+.change-summary {
+  display: flex;
+  flex: none;
+  cursor: pointer;
+  align-items: baseline;
+  gap: 8px;
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  text-align: left;
+}
+.change-summary small {
+  color: var(--muted-foreground);
+  font-size: var(--font-content-meta);
+}
+.change-summary strong {
+  color: var(--foreground);
+  font-size: var(--font-content-primary);
+  white-space: nowrap;
+}
+.change-summary:hover:not(:disabled) strong,
+.change-summary:focus-visible strong {
+  color: var(--primary);
+}
+.change-summary:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--ring) 35%, transparent);
+  outline-offset: 2px;
+}
+.change-summary:disabled {
+  cursor: default;
+}
+.optimization-actions {
+  display: flex;
+  min-width: 0;
+  margin-left: auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
 }
 .mode-control {
   display: flex;
@@ -405,7 +453,8 @@ onMounted(() => {
   white-space: nowrap;
 }
 .mode-select {
-  width: 190px;
+  width: 202px;
+  min-width: 202px;
   height: 38px;
 }
 .mode-select :deep([data-slot='select-value']) {
@@ -417,7 +466,6 @@ onMounted(() => {
 }
 .optimize-button {
   min-width: 154px;
-  margin-left: auto;
   white-space: nowrap;
 }
 .optimization-scroll {
@@ -494,26 +542,13 @@ onMounted(() => {
   place-items: center;
   color: var(--muted-foreground);
 }
-.optimization-loading {
-  display: flex;
-  min-height: 0;
-  flex: 1;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
-  color: var(--muted-foreground);
-}
-.optimization-loading strong {
-  color: var(--foreground);
-  font-size: 14px;
-}
-.optimization-loading small {
-  font-size: 12px;
-}
-@container (max-width: 620px) {
+@container (max-width: 760px) {
   .mode-control > span {
     display: none;
+  }
+  .mode-select {
+    width: 148px;
+    min-width: 148px;
   }
 }
 @container (max-width: 520px) {

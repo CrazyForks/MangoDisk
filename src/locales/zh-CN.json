@@ -19,6 +19,7 @@
     "scanning": "正在检查系统设置",
     "scanningDescription": "只读取已支持的设置，不会在扫描时修改系统",
     "applyChanges": "应用 {count} 项更改",
+    "pendingSummary": "待应用更改",
     "noChanges": "暂无待应用更改",
     "optimizing": "正在优化…",
     "checking": "正在确认设置…",

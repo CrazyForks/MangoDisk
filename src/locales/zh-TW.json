@@ -19,6 +19,7 @@
     "scanning": "正在檢查系統設定",
     "scanningDescription": "掃描只會讀取支援的設定，不會修改系統",
     "applyChanges": "套用 {count} 項變更",
+    "pendingSummary": "待套用變更",
     "noChanges": "沒有待套用的變更",
     "optimizing": "正在最佳化…",
     "checking": "正在確認設定…",

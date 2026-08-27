@@ -19,6 +19,7 @@
     "scanning": "Checking system settings",
     "scanningDescription": "The scan only reads supported settings and never changes the system",
     "applyChanges": "Apply {count} Changes",
+    "pendingSummary": "Pending changes",
     "noChanges": "No Changes to Apply",
     "optimizing": "Optimizing…",
     "checking": "Checking settings…",

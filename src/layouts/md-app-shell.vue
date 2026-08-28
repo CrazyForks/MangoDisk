@@ -43,6 +43,7 @@ import { useLargeFilesStore } from '@/stores/large-files-store';
 import { useStorageScopeStore } from '@/stores/storage-scope-store';
 import { useStartupStore } from '@/stores/startup-store';
 import { useSystemSettingsStore } from '@/stores/system-settings-store';
+import { useSystemMaintenanceStore } from '@/stores/system-maintenance-store';
 
 import CleanupPage from '@/pages/cleanup/index.vue';
 
@@ -60,6 +61,7 @@ const loadLargeFilesPage = () => import('@/pages/large-files/index.vue');
 const loadSettingsPage = () => import('@/pages/settings/index.vue');
 const loadStartupPage = () => import('@/pages/startup/index.vue');
 const loadSystemOptimizationPage = () => import('@/pages/system-optimization/index.vue');
+const loadSystemMaintenancePage = () => import('@/pages/system-maintenance/index.vue');
 const pageLoaders: Partial<Record<PageId, () => Promise<unknown>>> = {
   [PAGE_IDS.analysis]: loadAnalysisPage,
   [PAGE_IDS.applicationUninstall]: loadApplicationUninstallPage,
@@ -69,6 +71,7 @@ const pageLoaders: Partial<Record<PageId, () => Promise<unknown>>> = {
   [PAGE_IDS.settings]: loadSettingsPage,
   [PAGE_IDS.startup]: loadStartupPage,
   [PAGE_IDS.systemOptimization]: loadSystemOptimizationPage,
+  [PAGE_IDS.systemMaintenance]: loadSystemMaintenancePage,
 };
 const AnalysisPage = defineAsyncComponent(loadAnalysisPage);
 const ApplicationUninstallPage = defineAsyncComponent(loadApplicationUninstallPage);
@@ -78,6 +81,7 @@ const LargeFilesPage = defineAsyncComponent(loadLargeFilesPage);
 const SettingsPage = defineAsyncComponent(loadSettingsPage);
 const StartupPage = defineAsyncComponent(loadStartupPage);
 const SystemOptimizationPage = defineAsyncComponent(loadSystemOptimizationPage);
+const SystemMaintenancePage = defineAsyncComponent(loadSystemMaintenancePage);
 const MdAboutDialog = defineAsyncComponent(() => import('./components/md-about-dialog.vue'));
 
 const { rt, t, te, tm } = useI18n({ useScope: 'global' });
@@ -100,6 +104,7 @@ const resolveCleanupRuleMessage: CleanupRuleMessageResolver = (key, parameters) 
 const store = useAppStore();
 const appUpdateStore = useAppUpdateStore();
 const cleanupStore = useCleanupStore();
+const systemMaintenanceStore = useSystemMaintenanceStore();
 const analysisStore = useAnalysisStore();
 const applicationStore = useApplicationStore();
 const cleanupOrchestrating = ref(false);
@@ -156,7 +161,9 @@ const exclusiveOperationBusy = computed(
     startupStore.executingChange ||
     systemSettingsStore.scanning ||
     systemSettingsStore.preparing ||
-    systemSettingsStore.executing
+    systemSettingsStore.executing ||
+    systemMaintenanceStore.scanning ||
+    systemMaintenanceStore.executing
 );
 // Custom title bars keep the application chrome visually continuous. macOS
 // only needs a drag region beneath the native traffic lights, while Windows
@@ -434,6 +441,7 @@ const busyPages = computed<PageId[]>(() => [
   ...(systemSettingsStore.scanning || systemSettingsStore.preparing || systemSettingsStore.executing
     ? [PAGE_IDS.systemOptimization]
     : []),
+  ...(systemMaintenanceStore.scanning || systemMaintenanceStore.executing ? [PAGE_IDS.systemMaintenance] : []),
   ...(historyStore.loading ? [PAGE_IDS.history] : []),
 ]);
 const noticePages = computed<PageId[]>(() => (appUpdateStore.updateNoticeUnread ? [PAGE_IDS.settings] : []));
@@ -804,6 +812,7 @@ function requestCancelDeepCleanup() {
     <div class="content-shell">
       <KeepAlive>
         <SystemOptimizationPage v-if="store.currentPage === PAGE_IDS.systemOptimization" />
+        <SystemMaintenancePage v-else-if="store.currentPage === PAGE_IDS.systemMaintenance" />
         <CleanupPage
           v-else-if="store.currentPage === PAGE_IDS.cleanup"
           :disk="store.disk"

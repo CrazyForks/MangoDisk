@@ -512,10 +512,18 @@ fn join_reader(
 }
 
 fn log_command_error(command_id: &str, stage: &str, error: &io::Error) {
+    // The numeric OS code and stable error kind are safe to persist and make failures such as
+    // Windows elevation error 740 diagnosable without exposing localized paths or command output.
+    // Keep the digest as a correlation key for platforms that do not provide a raw OS code.
     log::warn!(
-        "controlled_command_error command_id={} stage={} error_digest={}",
+        "controlled_command_error command_id={} stage={} error_kind={:?} os_error_code={} error_digest={}",
         command_id,
         stage,
+        error.kind(),
+        error
+            .raw_os_error()
+            .map(|code| code.to_string())
+            .unwrap_or_else(|| "none".to_string()),
         blake3::hash(error.to_string().as_bytes()).to_hex()
     );
 }

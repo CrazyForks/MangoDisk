@@ -23,6 +23,8 @@ objc2-uniform-type-identifiers = { version = "0.3.2", default-features = false, 
 plist = "1.7"
 
 [target.'cfg(windows)'.dependencies]
+base64 = "0.22"
+getrandom = "0.3"
 png = "0.18"
 winreg = "0.55"
 windows = { version = "0.61.3", features = ["Win32_Foundation", "Win32_Security_Cryptography", "Win32_Security_WinTrust", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Ole", "Win32_System_Registry", "Win32_System_Services", "Win32_System_SystemInformation", "Win32_System_TaskScheduler", "Win32_System_Variant", "Win32_UI_LegacyWindowsEnvironmentFeatures", "Win32_UI_Shell"] }

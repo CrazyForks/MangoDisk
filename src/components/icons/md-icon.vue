@@ -9,6 +9,7 @@ import {
   Bug,
   ChartPie,
   Check,
+  Clock,
   ChevronDown,
   ChevronUp,
   ChevronLeft,
@@ -64,6 +65,7 @@ import {
   Trash2,
   Video,
   Wallpaper,
+  Wrench,
   X,
 } from '@lucide/vue';
 import {
@@ -168,10 +170,12 @@ const simpleBrand = (icon: SimpleIcon): IconDefinition => ({
 const iconMap: Record<IconName, IconDefinition> = {
   sparkles: lucide(Sparkles),
   rocket: lucide(Rocket),
+  wrench: lucide(Wrench),
   brushCleaning: lucide(BrushCleaning),
   chartPie: lucide(ChartPie),
   fileSearch: lucide(FileSearch),
   copy: lucide(Copy),
+  clock: lucide(Clock),
   history: lucide(History),
   settings: lucide(Settings),
   hardDrive: lucide(HardDrive),

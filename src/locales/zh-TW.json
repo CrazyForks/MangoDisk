@@ -1,6 +1,7 @@
 {
   "navigation": {
     "system-optimization": "系統最佳化",
+    "system-maintenance": "系統維護",
     "cleanup": "深度清理",
     "analysis": "磁碟空間分析",
     "large-files": "大型檔案清理",
@@ -13,6 +14,181 @@
   "navigationGroups": {
     "storage": "儲存空間",
     "system": "系統工具"
+  },
+  "systemMaintenance": {
+    "title": "系統維護",
+    "scanning": "正在檢查維護項目",
+    "scanningDescription": "只會檢查系統元件狀態，檢查期間不會修改系統",
+    "authorizationPrompt": "MangoDisk 需要管理員權限才能執行此項系統維護",
+    "rescan": "重新檢查",
+    "filterCategory": "篩選維護類別",
+    "executeOne": "執行",
+    "executingOne": "執行中",
+    "retryOne": "重試",
+    "completedOne": "已完成",
+    "systemProcessing": "系統處理中",
+    "refreshRequired": "需重新檢查",
+    "cancelQueued": "取消等待",
+    "cancelExecution": "停止",
+    "progress": {
+      "step": "步驟 {current}/{total}",
+      "elapsedSeconds": "已用 {seconds} 秒",
+      "elapsedMinutesSeconds": "已用 {minutes} 分 {seconds} 秒",
+      "phases": {
+        "preparing": "正在準備",
+        "waitingForAuthorization": "等待管理員授權",
+        "repairingComponentImage": "正在修復 Windows 元件（DISM）",
+        "checkingSystemFiles": "正在檢查系統檔案（SFC）",
+        "checkingStartupDisk": "正在檢查啟動磁碟",
+        "checkingSystemDisk": "正在檢查 Windows 系統磁碟",
+        "rebuildingSearchIndex": "正在重建搜尋索引",
+        "refreshingShellCaches": "正在重新整理介面快取",
+        "restartingFinder": "正在重新啟動 Finder",
+        "restartingAudioService": "正在重新啟動音訊服務",
+        "restartingServices": "正在重新啟動系統服務",
+        "repairingPrintQueue": "正在修復列印佇列",
+        "synchronizingTime": "正在同步系統時間",
+        "rebuildingPerformanceCounters": "正在重建效能計數器",
+        "resettingStoreCache": "正在重設商店快取",
+        "refreshingNetwork": "正在重新整理網路快取",
+        "rebuildingAppAssociations": "正在重建 App 關聯",
+        "repairingPermissions": "正在修復使用者資料夾權限",
+        "restoringDefaults": "正在恢復系統預設值",
+        "verifying": "正在驗證結果"
+      }
+    },
+    "categories": {
+      "all": "全部",
+      "recommended": "建議處理",
+      "systemRepair": "系統修復",
+      "searchAndInterface": "搜尋與介面",
+      "network": "網路連線"
+    },
+    "statuses": {
+      "healthy": "正常",
+      "recommended": "建議處理",
+      "available": "需要時執行",
+      "unavailable": "無法使用",
+      "requiresElevation": "需要系統管理員權限"
+    },
+    "diagnostics": {
+      "accessDenied": "權限不足",
+      "applicationRunning": "相關應用程式正在執行",
+      "checkFailed": "狀態檢查失敗",
+      "componentUnavailable": "系統元件無法使用",
+      "toolUnavailable": "系統工具無法使用",
+      "unsupportedVersion": "目前系統不支援"
+    },
+    "empty": {
+      "title": "此類別沒有維護項目",
+      "description": "可切換至其他類別查看"
+    },
+    "feedback": {
+      "cancelled": "已取消「{name}」",
+      "cancelledMayHaveChanged": "「{name}」已停止，部分操作可能已經生效，建議重新檢查",
+      "completed": "「{name}」已完成",
+      "started": "「{name}」已交由系統處理",
+      "restartRequired": "「{name}」已完成，重新啟動系統後生效",
+      "mayHaveChanged": "「{name}」未能完整結束，部分操作可能已經生效，建議重新檢查",
+      "failures": {
+        "permissionDenied": "權限不足，無法執行「{name}」",
+        "unsupported": "目前系統不支援「{name}」",
+        "verificationFailed": "「{name}」已執行，但 MangoDisk 無法確認最終結果",
+        "platformFailure": "「{name}」執行失敗，請重新檢查後再試",
+        "userCancelled": "已取消「{name}」"
+      }
+    },
+    "confirmation": {
+      "title": "要執行維護嗎？",
+      "description": "此項目可能需要較長時間，或會暫時重新啟動相關系統元件。MangoDisk 會在執行後驗證結果",
+      "confirm": "確認執行"
+    },
+    "items": {
+      "macos_maintenance_spotlight-index": {
+        "name": "重建 Spotlight 搜尋索引",
+        "description": "當搜尋變慢、找不到檔案或結果不完整時，重新建立檔案索引"
+      },
+      "macos_maintenance_launch-services": {
+        "name": "修復「打開方式」與檔案關聯",
+        "description": "移除重複或失效的「打開方式」選項，重新關聯可開啟各類檔案的應用程式"
+      },
+      "macos_maintenance_quicklook-cache": {
+        "name": "重新整理 Quick Look 檔案預覽",
+        "description": "按下空白鍵預覽時若出現空白、內容過期或顯示異常，可重新整理預覽快取"
+      },
+      "macos_maintenance_icon-cache": {
+        "name": "重建 Finder 圖示快取",
+        "description": "檔案或應用程式圖示空白、顯示錯誤或未更新時，重新產生圖示快取"
+      },
+      "macos_maintenance_finder-service": {
+        "name": "重新啟動 Finder",
+        "description": "Finder 卡頓、視窗沒有回應或桌面內容未更新時，重新啟動 Finder"
+      },
+      "macos_maintenance_audio-service": {
+        "name": "重新啟動音訊服務",
+        "description": "系統沒有聲音、音訊裝置無法識別或音訊功能沒有回應時，重新啟動音訊服務"
+      },
+      "macos_maintenance_user-permissions": {
+        "name": "修復使用者資料夾權限",
+        "description": "解決桌面、文件等使用者資料夾無法開啟、儲存或修改檔案的問題"
+      },
+      "macos_maintenance_legacy-overrides": {
+        "name": "還原舊最佳化工具變更的設定",
+        "description": "將 App Nap、磁碟映像驗證等項目還原為 macOS 預設設定"
+      },
+      "macos_maintenance_startup-disk": {
+        "name": "檢查啟動磁碟檔案系統",
+        "description": "使用 macOS 內建工具檢查檔案系統是否有錯誤，不會修改磁碟內容"
+      },
+      "macos_maintenance_dns-cache": {
+        "name": "重新整理 DNS 快取",
+        "description": "清除過期的網域名稱解析記錄，解決網站無法開啟或網路服務連線異常的問題"
+      },
+      "windows_maintenance_system-integrity": {
+        "name": "修復 Windows 系統檔案",
+        "description": "使用 Windows 內建工具檢查並修復損壞的系統元件與受保護檔案"
+      },
+      "windows_maintenance_search-index": {
+        "name": "重建 Windows 搜尋索引",
+        "description": "搜尋不到檔案、結果不正確或長時間沒有回應時，重新建立檔案索引"
+      },
+      "windows_maintenance_explorer-cache": {
+        "name": "重建圖示與縮圖快取",
+        "description": "解決檔案總管中圖示空白、顯示錯誤或縮圖異常的問題"
+      },
+      "windows_maintenance_update-components": {
+        "name": "重新啟動 Windows Update 服務",
+        "description": "重新啟動更新所需的系統服務，並立即檢查新的系統更新"
+      },
+      "windows_maintenance_print-queue": {
+        "name": "修復列印佇列",
+        "description": "清除無法取消或長時間卡住的列印工作，並重新啟動列印服務"
+      },
+      "windows_maintenance_performance-counters": {
+        "name": "修復效能資料顯示",
+        "description": "重建 Windows 效能計數器，解決工作管理員或監控工具資料遺失、數值異常的問題"
+      },
+      "windows_maintenance_system-disk": {
+        "name": "檢查 Windows 系統磁碟",
+        "description": "僅在線上檢查檔案系統錯誤，不會中斷目前操作，也不會安排重新啟動修復"
+      },
+      "windows_maintenance_audio-service": {
+        "name": "重新啟動音訊服務",
+        "description": "系統沒有聲音、音訊裝置無法使用或音訊功能沒有回應時，重新啟動音訊服務"
+      },
+      "windows_maintenance_store-cache": {
+        "name": "重設 Microsoft Store 快取",
+        "description": "清除商店快取，解決 Microsoft Store 無法開啟、下載停滯或頁面載入異常的問題"
+      },
+      "windows_maintenance_dns-cache": {
+        "name": "重新整理 DNS 快取",
+        "description": "清除過期的網域名稱解析記錄，解決網站無法開啟或網路服務連線異常的問題"
+      },
+      "windows_maintenance_time-sync": {
+        "name": "同步系統時間",
+        "description": "連線時間伺服器並立即校準系統時間，解決時鐘不準造成的登入或憑證問題"
+      }
+    }
   },
   "systemOptimization": {
     "title": "系統最佳化",

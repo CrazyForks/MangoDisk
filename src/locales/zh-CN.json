@@ -1,6 +1,7 @@
 {
   "navigation": {
     "system-optimization": "系统优化",
+    "system-maintenance": "系统维护",
     "cleanup": "深度清理",
     "analysis": "磁盘空间分析",
     "large-files": "大文件清理",
@@ -13,6 +14,181 @@
   "navigationGroups": {
     "storage": "存储空间",
     "system": "系统工具"
+  },
+  "systemMaintenance": {
+    "title": "系统维护",
+    "scanning": "正在检查维护项目",
+    "scanningDescription": "只检查系统组件状态，不会在检查过程中修改系统",
+    "authorizationPrompt": "MangoDisk 需要管理员权限才能执行此项系统维护",
+    "rescan": "重新检查",
+    "filterCategory": "筛选维护类别",
+    "executeOne": "执行",
+    "executingOne": "执行中",
+    "retryOne": "重试",
+    "completedOne": "已完成",
+    "systemProcessing": "系统处理中",
+    "refreshRequired": "需重新检查",
+    "cancelQueued": "取消等待",
+    "cancelExecution": "停止",
+    "progress": {
+      "step": "步骤 {current}/{total}",
+      "elapsedSeconds": "已用 {seconds} 秒",
+      "elapsedMinutesSeconds": "已用 {minutes} 分 {seconds} 秒",
+      "phases": {
+        "preparing": "正在准备",
+        "waitingForAuthorization": "等待管理员授权",
+        "repairingComponentImage": "正在修复 Windows 组件（DISM）",
+        "checkingSystemFiles": "正在检查系统文件（SFC）",
+        "checkingStartupDisk": "正在检查启动磁盘",
+        "checkingSystemDisk": "正在检查 Windows 系统盘",
+        "rebuildingSearchIndex": "正在重建搜索索引",
+        "refreshingShellCaches": "正在刷新界面缓存",
+        "restartingFinder": "正在重启 Finder",
+        "restartingAudioService": "正在重启音频服务",
+        "restartingServices": "正在重启系统服务",
+        "repairingPrintQueue": "正在修复打印队列",
+        "synchronizingTime": "正在同步系统时间",
+        "rebuildingPerformanceCounters": "正在重建性能计数器",
+        "resettingStoreCache": "正在重置商店缓存",
+        "refreshingNetwork": "正在刷新网络缓存",
+        "rebuildingAppAssociations": "正在重建应用关联",
+        "repairingPermissions": "正在修复用户目录权限",
+        "restoringDefaults": "正在恢复系统默认设置",
+        "verifying": "正在验证结果"
+      }
+    },
+    "categories": {
+      "all": "全部",
+      "recommended": "建议处理",
+      "systemRepair": "系统修复",
+      "searchAndInterface": "搜索与界面",
+      "network": "网络连接"
+    },
+    "statuses": {
+      "healthy": "正常",
+      "recommended": "建议处理",
+      "available": "按需执行",
+      "unavailable": "不可用",
+      "requiresElevation": "需要管理员权限"
+    },
+    "diagnostics": {
+      "accessDenied": "权限不足",
+      "applicationRunning": "相关应用正在运行",
+      "checkFailed": "状态检查失败",
+      "componentUnavailable": "系统组件不可用",
+      "toolUnavailable": "系统工具不可用",
+      "unsupportedVersion": "当前系统不支持"
+    },
+    "empty": {
+      "title": "当前分类没有维护项目",
+      "description": "可以切换到其他分类查看"
+    },
+    "feedback": {
+      "cancelled": "已取消“{name}”",
+      "cancelledMayHaveChanged": "“{name}”已停止，部分操作可能已经生效，建议重新检查",
+      "completed": "“{name}”已完成",
+      "started": "“{name}”已交由系统处理",
+      "restartRequired": "“{name}”已完成，重启系统后生效",
+      "mayHaveChanged": "“{name}”未能完整结束，部分操作可能已经生效，建议重新检查",
+      "failures": {
+        "permissionDenied": "权限不足，无法执行“{name}”",
+        "unsupported": "当前系统不支持“{name}”",
+        "verificationFailed": "“{name}”已执行，但 MangoDisk 无法确认最终结果",
+        "platformFailure": "“{name}”执行失败，请重新检查后再试",
+        "userCancelled": "已取消“{name}”"
+      }
+    },
+    "confirmation": {
+      "title": "确认执行维护",
+      "description": "此项目可能耗时较长，或会暂时重启相关系统组件。MangoDisk 会在执行后验证结果",
+      "confirm": "确认执行"
+    },
+    "items": {
+      "macos_maintenance_spotlight-index": {
+        "name": "重建 Spotlight 搜索索引",
+        "description": "当搜索变慢、找不到文件或结果不完整时，重新建立文件索引"
+      },
+      "macos_maintenance_launch-services": {
+        "name": "修复“打开方式”和文件关联",
+        "description": "移除重复或失效的“打开方式”选项，重新关联可打开各类文件的应用"
+      },
+      "macos_maintenance_quicklook-cache": {
+        "name": "刷新 Quick Look 文件预览",
+        "description": "当按空格预览出现空白、内容过期或显示异常时，刷新预览缓存"
+      },
+      "macos_maintenance_icon-cache": {
+        "name": "重建 Finder 图标缓存",
+        "description": "当文件或应用图标空白、显示错误或未及时更新时，重新生成图标缓存"
+      },
+      "macos_maintenance_finder-service": {
+        "name": "重启 Finder",
+        "description": "当 Finder 卡顿、窗口无响应或桌面内容未刷新时，重新启动 Finder"
+      },
+      "macos_maintenance_audio-service": {
+        "name": "重启音频服务",
+        "description": "当系统无声、音频设备无法识别或声音功能无响应时，重新启动音频服务"
+      },
+      "macos_maintenance_user-permissions": {
+        "name": "修复个人文件夹权限",
+        "description": "解决桌面、文稿等个人文件夹无法打开、保存或修改文件的问题"
+      },
+      "macos_maintenance_legacy-overrides": {
+        "name": "恢复旧优化工具修改的设置",
+        "description": "将 App Nap、磁盘映像验证等项目恢复为 macOS 默认设置"
+      },
+      "macos_maintenance_startup-disk": {
+        "name": "检查启动磁盘文件系统",
+        "description": "使用 macOS 内置工具检查文件系统是否存在错误，不会修改磁盘内容"
+      },
+      "macos_maintenance_dns-cache": {
+        "name": "刷新 DNS 缓存",
+        "description": "清除过期的域名解析记录，解决网站打不开或网络服务连接异常的问题"
+      },
+      "windows_maintenance_system-integrity": {
+        "name": "修复 Windows 系统文件",
+        "description": "使用 Windows 内置工具检查并修复损坏的系统组件和受保护文件"
+      },
+      "windows_maintenance_search-index": {
+        "name": "重建 Windows 搜索索引",
+        "description": "当搜索不到文件、结果不正确或长时间无响应时，重新建立文件索引"
+      },
+      "windows_maintenance_explorer-cache": {
+        "name": "重建图标和缩略图缓存",
+        "description": "解决文件资源管理器中图标空白、显示错误或缩略图异常的问题"
+      },
+      "windows_maintenance_update-components": {
+        "name": "重启 Windows 更新服务",
+        "description": "重新启动更新所需的系统服务，并立即检查新的系统更新"
+      },
+      "windows_maintenance_print-queue": {
+        "name": "修复打印队列",
+        "description": "清除无法取消或长时间卡住的打印任务，并重新启动打印服务"
+      },
+      "windows_maintenance_performance-counters": {
+        "name": "修复性能数据显示",
+        "description": "重建 Windows 性能计数器，解决任务管理器或监控工具数据缺失、数值异常的问题"
+      },
+      "windows_maintenance_system-disk": {
+        "name": "检查 Windows 系统盘",
+        "description": "仅在线检查文件系统错误，不会中断当前操作，也不会安排重启修复"
+      },
+      "windows_maintenance_audio-service": {
+        "name": "重启音频服务",
+        "description": "当系统无声、音频设备无法使用或声音功能无响应时，重新启动音频服务"
+      },
+      "windows_maintenance_store-cache": {
+        "name": "重置 Microsoft Store 缓存",
+        "description": "清除商店缓存，解决 Microsoft Store 无法打开、下载卡住或页面加载异常的问题"
+      },
+      "windows_maintenance_dns-cache": {
+        "name": "刷新 DNS 缓存",
+        "description": "清除过期的域名解析记录，解决网站打不开或网络服务连接异常的问题"
+      },
+      "windows_maintenance_time-sync": {
+        "name": "同步系统时间",
+        "description": "连接时间服务器并立即校准系统时间，解决时钟不准导致的登录或证书问题"
+      }
+    }
   },
   "systemOptimization": {
     "title": "系统优化",

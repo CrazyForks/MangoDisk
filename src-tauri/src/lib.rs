@@ -220,6 +220,11 @@ pub fn run() {
             commands::system_settings::cancel_system_settings_scan,
             commands::system_settings::prepare_system_settings_change,
             commands::system_settings::execute_system_settings_change,
+            commands::system_maintenance::scan_system_maintenance,
+            commands::system_maintenance::cancel_system_maintenance_scan,
+            commands::system_maintenance::execute_system_maintenance,
+            commands::system_maintenance::cancel_system_maintenance_execution,
+            commands::system_maintenance::get_system_maintenance_runtime,
         ])
         .setup(|app| {
             configure_core_storage(app)?;

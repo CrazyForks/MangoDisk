@@ -16,6 +16,7 @@ mod path_identity;
 mod process_control;
 mod project_markers;
 mod startup;
+mod system_maintenance;
 mod system_settings;
 mod volumes;
 
@@ -40,9 +41,9 @@ use crate::{
     PlatformSystemSettingChangeRequest, PlatformSystemSettingChangeResult,
     PlatformSystemSettingState, ProjectMarkerCandidateProgress, ProjectMarkerCandidateQuery,
     ProjectMarkerCandidateScanError, ProjectMarkerCandidateSummary, RunningProcessIdentity,
-    ScanPurpose, SkipReason, StartupPlatform, SystemInventory, SystemSettingsPlatform,
-    UserDirectories, VolumeInfo, WindowsDiskCleanupEstimate, WindowsDiskCleanupExecution,
-    WindowsDiskCleanupKind,
+    ScanPurpose, SkipReason, StartupPlatform, SystemInventory, SystemMaintenancePlatform,
+    SystemSettingsPlatform, UserDirectories, VolumeInfo, WindowsDiskCleanupEstimate,
+    WindowsDiskCleanupExecution, WindowsDiskCleanupKind,
 };
 
 pub struct WindowsPlatform;
@@ -96,10 +97,37 @@ impl SystemSettingsPlatform for WindowsPlatform {
     }
 }
 
+impl SystemMaintenancePlatform for WindowsPlatform {
+    fn scan_system_maintenance(
+        &self,
+        task_ids: &[&str],
+        cancellation: &PlatformCancellation,
+    ) -> PlatformResult<Vec<crate::PlatformSystemMaintenanceState>> {
+        system_maintenance::scan(task_ids, cancellation)
+    }
+
+    fn execute_system_maintenance(
+        &self,
+        task_id: &str,
+        cancellation: &PlatformCancellation,
+        authorization_prompt: Option<&str>,
+        progress: &crate::PlatformSystemMaintenanceProgressSink,
+    ) -> PlatformResult<crate::PlatformSystemMaintenanceExecution> {
+        system_maintenance::execute(task_id, cancellation, authorization_prompt, progress)
+    }
+}
+
 pub(crate) fn system_settings_helper_change_many(
     requests: &[PlatformSystemSettingChangeRequest],
 ) -> Vec<PlatformResult<PlatformSystemSettingChangeResult>> {
     system_settings::helper_change_many(requests)
+}
+
+pub(crate) fn system_maintenance_helper_execute(
+    task_id: &str,
+    progress: &crate::PlatformSystemMaintenanceProgressSink,
+) -> crate::system_maintenance_helper::PrivilegedMaintenanceResult {
+    system_maintenance::execute_with_current_privileges(task_id, progress)
 }
 
 pub(crate) fn startup_helper_change_many(

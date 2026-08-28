@@ -36,6 +36,8 @@ pub(crate) enum CoordinatedOperationKind {
     StartupChange,
     SystemSettingsScan,
     SystemSettingsChange,
+    SystemMaintenanceScan,
+    SystemMaintenanceExecution,
 }
 
 impl CoordinatedOperationKind {
@@ -55,7 +57,26 @@ impl CoordinatedOperationKind {
             Self::StartupChange => "startup_change",
             Self::SystemSettingsScan => "system_settings_scan",
             Self::SystemSettingsChange => "system_settings_change",
+            Self::SystemMaintenanceScan => "system_maintenance_scan",
+            Self::SystemMaintenanceExecution => "system_maintenance_execution",
         }
+    }
+
+    /// Classifies operations that can change files, application state, or system configuration.
+    /// Read-only scans may overlap the dedicated maintenance session, while every mutation remains
+    /// mutually exclusive across both the in-process coordinator and the process lock boundary.
+    const fn is_mutating(self) -> bool {
+        matches!(
+            self,
+            Self::Applications
+                | Self::ApplicationLeftoverCleanup
+                | Self::ApplicationClose
+                | Self::Cleanup
+                | Self::PermanentDelete
+                | Self::StartupChange
+                | Self::SystemSettingsChange
+                | Self::SystemMaintenanceExecution
+        )
     }
 }
 
@@ -135,6 +156,12 @@ impl OperationCancellationToken {
         }
     }
 
+    pub const fn system_maintenance_scan() -> Self {
+        Self {
+            kind: CoordinatedOperationKind::SystemMaintenanceScan,
+        }
+    }
+
     pub fn cancel(self) {
         OperationGuard::cancel(self.kind);
     }
@@ -148,7 +175,19 @@ struct ActiveOperation {
 
 struct OperationCoordinator {
     next_id: AtomicU64,
-    active: Mutex<Option<ActiveOperation>>,
+    active: Mutex<ActiveOperations>,
+}
+
+#[derive(Default)]
+struct ActiveOperations {
+    foreground: Option<ActiveOperation>,
+    maintenance: Option<ActiveOperation>,
+}
+
+#[derive(Clone, Copy)]
+enum ProcessLockMode {
+    Shared,
+    Exclusive,
 }
 
 struct ProcessOperationLock {
@@ -157,6 +196,14 @@ struct ProcessOperationLock {
 
 impl ProcessOperationLock {
     fn acquire(kind: CoordinatedOperationKind) -> CoreResult<Self> {
+        Self::acquire_named("operation.lock", kind, ProcessLockMode::Exclusive)
+    }
+
+    fn acquire_named(
+        file_name: &str,
+        kind: CoordinatedOperationKind,
+        mode: ProcessLockMode,
+    ) -> CoreResult<Self> {
         let directory = application_paths()?.runtime_directory();
         fs::create_dir_all(directory).map_err(|error| {
             CoreError::operation_failed(format!(
@@ -168,15 +215,19 @@ impl ProcessOperationLock {
             .truncate(false)
             .read(true)
             .write(true)
-            .open(directory.join("operation.lock"))
+            .open(directory.join(file_name))
             .map_err(|error| {
                 CoreError::operation_failed(format!("failed to open the operation lock: {error}"))
             })?;
-        match file.try_lock_exclusive() {
+        let result = match mode {
+            ProcessLockMode::Shared => FileExt::try_lock_shared(&file),
+            ProcessLockMode::Exclusive => FileExt::try_lock_exclusive(&file),
+        };
+        match result {
             Ok(()) => Ok(Self { file }),
             Err(error) if is_lock_contention(&error) => Err(CoreError::operation_busy(format!(
-                "another MangoDisk operation is already running; requested={}",
-                kind.as_str()
+                "another MangoDisk operation is already running; requested={} lock={file_name}",
+                kind.as_str(),
             ))),
             Err(error) => Err(CoreError::operation_failed(format!(
                 "failed to acquire the operation lock: {error}"
@@ -217,7 +268,7 @@ impl OperationCoordinator {
     fn global() -> &'static Self {
         COORDINATOR.get_or_init(|| Self {
             next_id: AtomicU64::new(1),
-            active: Mutex::new(None),
+            active: Mutex::new(ActiveOperations::default()),
         })
     }
 }
@@ -231,7 +282,9 @@ pub(crate) struct OperationGuard {
     cancelled: Arc<AtomicBool>,
     started: Instant,
     outcome: AtomicU8,
-    _process_lock: ProcessOperationLock,
+    _foreground_lock: Option<ProcessOperationLock>,
+    _maintenance_lock: Option<ProcessOperationLock>,
+    _mutation_lock: Option<ProcessOperationLock>,
 }
 
 impl OperationGuard {
@@ -240,7 +293,21 @@ impl OperationGuard {
         let mut active = coordinator.active.lock().map_err(|_| {
             CoreError::operation_failed("the operation coordinator is temporarily unavailable")
         })?;
-        if let Some(operation) = active.as_ref() {
+        let conflict = if kind == CoordinatedOperationKind::SystemMaintenanceExecution {
+            active.maintenance.as_ref().or_else(|| {
+                active
+                    .foreground
+                    .as_ref()
+                    .filter(|operation| operation.kind.is_mutating())
+            })
+        } else {
+            active.foreground.as_ref().or_else(|| {
+                kind.is_mutating()
+                    .then(|| active.maintenance.as_ref())
+                    .flatten()
+            })
+        };
+        if let Some(operation) = conflict {
             return Err(CoreError::operation_busy(format!(
                 "another MangoDisk operation is already running: {} ({})",
                 operation.kind.as_str(),
@@ -248,14 +315,49 @@ impl OperationGuard {
             )));
         }
 
-        let process_lock = ProcessOperationLock::acquire(kind)?;
+        // Foreground operations retain their historical single-operation lock. System maintenance
+        // uses a separate exclusive session lock and a shared mutation lock, allowing read-only
+        // scans to remain responsive while still excluding cleanup, deletion, and setting changes
+        // in this process and in another MangoDisk adapter process.
+        let foreground_lock = (kind != CoordinatedOperationKind::SystemMaintenanceExecution)
+            .then(|| ProcessOperationLock::acquire(kind))
+            .transpose()?;
+        let maintenance_lock = (kind == CoordinatedOperationKind::SystemMaintenanceExecution)
+            .then(|| {
+                ProcessOperationLock::acquire_named(
+                    "system-maintenance.lock",
+                    kind,
+                    ProcessLockMode::Exclusive,
+                )
+            })
+            .transpose()?;
+        let mutation_lock = if kind == CoordinatedOperationKind::SystemMaintenanceExecution {
+            Some(ProcessOperationLock::acquire_named(
+                "mutation.lock",
+                kind,
+                ProcessLockMode::Shared,
+            )?)
+        } else if kind.is_mutating() {
+            Some(ProcessOperationLock::acquire_named(
+                "mutation.lock",
+                kind,
+                ProcessLockMode::Exclusive,
+            )?)
+        } else {
+            None
+        };
         let id = coordinator.next_id.fetch_add(1, Ordering::Relaxed);
         let cancelled = Arc::new(AtomicBool::new(false));
-        *active = Some(ActiveOperation {
+        let operation = ActiveOperation {
             id,
             kind,
             cancelled: Arc::clone(&cancelled),
-        });
+        };
+        if kind == CoordinatedOperationKind::SystemMaintenanceExecution {
+            active.maintenance = Some(operation);
+        } else {
+            active.foreground = Some(operation);
+        }
         log::info!(
             "operation_started operation_id={} operation_kind={}",
             id,
@@ -267,7 +369,9 @@ impl OperationGuard {
             cancelled,
             started: Instant::now(),
             outcome: AtomicU8::new(OPERATION_RUNNING),
-            _process_lock: process_lock,
+            _foreground_lock: foreground_lock,
+            _maintenance_lock: maintenance_lock,
+            _mutation_lock: mutation_lock,
         })
     }
 
@@ -305,7 +409,12 @@ impl OperationGuard {
             );
             return;
         };
-        let Some(operation) = active.as_ref().filter(|operation| operation.kind == kind) else {
+        let operation = if kind == CoordinatedOperationKind::SystemMaintenanceExecution {
+            active.maintenance.as_ref()
+        } else {
+            active.foreground.as_ref()
+        };
+        let Some(operation) = operation.filter(|operation| operation.kind == kind) else {
             return;
         };
         operation.cancelled.store(true, Ordering::Relaxed);
@@ -327,11 +436,16 @@ impl Drop for OperationGuard {
             );
             return;
         };
-        if active
+        let slot = if self.kind == CoordinatedOperationKind::SystemMaintenanceExecution {
+            &mut active.maintenance
+        } else {
+            &mut active.foreground
+        };
+        if slot
             .as_ref()
             .is_some_and(|operation| operation.id == self.id)
         {
-            *active = None;
+            *slot = None;
         }
         let cancelled = self.cancelled.load(Ordering::Relaxed);
         let status = if cancelled {
@@ -424,5 +538,80 @@ mod tests {
         let second = ProcessOperationLock::acquire(CoordinatedOperationKind::Analysis)
             .expect("the process lock should be reusable after release");
         drop(second);
+    }
+
+    #[test]
+    fn mutation_lock_allows_maintenance_readers_and_rejects_a_writer() {
+        let _test_guard = test_operation_lock();
+        let first = ProcessOperationLock::acquire_named(
+            "mutation.lock",
+            CoordinatedOperationKind::SystemMaintenanceExecution,
+            ProcessLockMode::Shared,
+        )
+        .expect("the first maintenance reader should acquire the mutation lock");
+        let second = ProcessOperationLock::acquire_named(
+            "mutation.lock",
+            CoordinatedOperationKind::SystemMaintenanceExecution,
+            ProcessLockMode::Shared,
+        )
+        .expect("a second maintenance reader should share the mutation lock");
+        let error = ProcessOperationLock::acquire_named(
+            "mutation.lock",
+            CoordinatedOperationKind::Cleanup,
+            ProcessLockMode::Exclusive,
+        )
+        .err()
+        .expect("a mutation writer must be rejected while maintenance is active");
+        assert_eq!(error.code(), CoreErrorCode::OperationBusy);
+
+        drop(second);
+        drop(first);
+        let writer = ProcessOperationLock::acquire_named(
+            "mutation.lock",
+            CoordinatedOperationKind::Cleanup,
+            ProcessLockMode::Exclusive,
+        )
+        .expect("the mutation writer should start after maintenance readers finish");
+        drop(writer);
+    }
+
+    #[test]
+    fn maintenance_execution_allows_a_read_only_foreground_scan() {
+        let _test_guard = test_operation_lock();
+        let maintenance =
+            OperationGuard::start(CoordinatedOperationKind::SystemMaintenanceExecution)
+                .expect("maintenance should start in isolation");
+        let scan = OperationGuard::start(CoordinatedOperationKind::SystemSettingsScan)
+            .expect("a read-only settings scan should remain available during maintenance");
+
+        drop(scan);
+        drop(maintenance);
+    }
+
+    #[test]
+    fn maintenance_execution_blocks_foreground_mutations() {
+        let _test_guard = test_operation_lock();
+        let maintenance =
+            OperationGuard::start(CoordinatedOperationKind::SystemMaintenanceExecution)
+                .expect("maintenance should start in isolation");
+        let error = OperationGuard::start(CoordinatedOperationKind::SystemSettingsChange)
+            .err()
+            .expect("a settings mutation must not overlap system maintenance");
+
+        assert_eq!(error.code(), CoreErrorCode::OperationBusy);
+        drop(maintenance);
+    }
+
+    #[test]
+    fn foreground_mutations_block_maintenance_execution() {
+        let _test_guard = test_operation_lock();
+        let mutation = OperationGuard::start(CoordinatedOperationKind::Cleanup)
+            .expect("cleanup should start in isolation");
+        let error = OperationGuard::start(CoordinatedOperationKind::SystemMaintenanceExecution)
+            .err()
+            .expect("system maintenance must not overlap cleanup mutation");
+
+        assert_eq!(error.code(), CoreErrorCode::OperationBusy);
+        drop(mutation);
     }
 }

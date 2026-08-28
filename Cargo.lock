@@ -2407,9 +2407,11 @@ dependencies = [
 name = "mangodisk-platform"
 version = "1.0.7"
 dependencies = [
+ "base64 0.22.1",
  "blake3",
  "dirs",
  "dispatch2",
+ "getrandom 0.3.4",
  "libc",
  "log",
  "objc2",

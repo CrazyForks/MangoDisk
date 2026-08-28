@@ -1,6 +1,7 @@
 {
   "navigation": {
     "system-optimization": "System Optimization",
+    "system-maintenance": "System Maintenance",
     "cleanup": "Deep Cleanup",
     "analysis": "Disk Space Analysis",
     "large-files": "Large File Cleanup",
@@ -13,6 +14,181 @@
   "navigationGroups": {
     "storage": "Storage",
     "system": "System Tools"
+  },
+  "systemMaintenance": {
+    "title": "System Maintenance",
+    "scanning": "Checking maintenance tasks",
+    "scanningDescription": "The check reads component status without changing the system",
+    "authorizationPrompt": "MangoDisk needs administrator permission to run this maintenance task",
+    "rescan": "Check Again",
+    "filterCategory": "Filter maintenance categories",
+    "executeOne": "Run",
+    "executingOne": "Running",
+    "retryOne": "Retry",
+    "completedOne": "Completed",
+    "systemProcessing": "System processing",
+    "refreshRequired": "Check again",
+    "cancelQueued": "Cancel queued",
+    "cancelExecution": "Stop",
+    "progress": {
+      "step": "Step {current}/{total}",
+      "elapsedSeconds": "{seconds}s elapsed",
+      "elapsedMinutesSeconds": "{minutes}m {seconds}s elapsed",
+      "phases": {
+        "preparing": "Preparing",
+        "waitingForAuthorization": "Waiting for administrator approval",
+        "repairingComponentImage": "Repairing Windows components (DISM)",
+        "checkingSystemFiles": "Checking system files (SFC)",
+        "checkingStartupDisk": "Checking the startup disk",
+        "checkingSystemDisk": "Checking the Windows system drive",
+        "rebuildingSearchIndex": "Rebuilding the search index",
+        "refreshingShellCaches": "Refreshing interface caches",
+        "restartingFinder": "Restarting Finder",
+        "restartingAudioService": "Restarting the audio service",
+        "restartingServices": "Restarting system services",
+        "repairingPrintQueue": "Repairing the print queue",
+        "synchronizingTime": "Synchronizing system time",
+        "rebuildingPerformanceCounters": "Rebuilding performance counters",
+        "resettingStoreCache": "Resetting the Store cache",
+        "refreshingNetwork": "Refreshing network caches",
+        "rebuildingAppAssociations": "Rebuilding app associations",
+        "repairingPermissions": "Repairing user folder permissions",
+        "restoringDefaults": "Restoring system defaults",
+        "verifying": "Verifying results"
+      }
+    },
+    "categories": {
+      "all": "All",
+      "recommended": "Suggested",
+      "systemRepair": "System Repair",
+      "searchAndInterface": "Search & Interface",
+      "network": "Network"
+    },
+    "statuses": {
+      "healthy": "Healthy",
+      "recommended": "Suggested",
+      "available": "Run When Needed",
+      "unavailable": "Unavailable",
+      "requiresElevation": "Administrator approval required"
+    },
+    "diagnostics": {
+      "accessDenied": "Permission required",
+      "applicationRunning": "A related app is running",
+      "checkFailed": "Status check failed",
+      "componentUnavailable": "System component unavailable",
+      "toolUnavailable": "System tool unavailable",
+      "unsupportedVersion": "Not supported on this system"
+    },
+    "empty": {
+      "title": "No maintenance tasks in this category",
+      "description": "Choose another category to see more tasks"
+    },
+    "feedback": {
+      "cancelled": "{name} was cancelled",
+      "cancelledMayHaveChanged": "{name} stopped, but some changes may have taken effect. Check again",
+      "completed": "{name} completed",
+      "started": "{name} is now being handled by the system",
+      "restartRequired": "{name} completed. Restart your system to apply the changes",
+      "mayHaveChanged": "{name} did not finish cleanly. Some changes may have taken effect; check again",
+      "failures": {
+        "permissionDenied": "Administrator permission is required to run {name}",
+        "unsupported": "{name} is not supported on this system",
+        "verificationFailed": "{name} ran, but MangoDisk could not verify the final result",
+        "platformFailure": "{name} failed. Check the task status and try again",
+        "userCancelled": "{name} was cancelled"
+      }
+    },
+    "confirmation": {
+      "title": "Run this maintenance task?",
+      "description": "This task may take some time or briefly restart related system components. MangoDisk will verify the result when it finishes",
+      "confirm": "Run"
+    },
+    "items": {
+      "macos_maintenance_spotlight-index": {
+        "name": "Rebuild the Spotlight search index",
+        "description": "Re-index files when Spotlight is slow, misses files, or returns incomplete results"
+      },
+      "macos_maintenance_launch-services": {
+        "name": "Repair Open With and file associations",
+        "description": "Remove duplicate or outdated Open With entries and refresh file associations"
+      },
+      "macos_maintenance_quicklook-cache": {
+        "name": "Refresh Quick Look file previews",
+        "description": "Refresh cached previews when pressing Space shows blank, outdated, or incorrect content"
+      },
+      "macos_maintenance_icon-cache": {
+        "name": "Rebuild Finder icon cache",
+        "description": "Regenerate cached icons when files or apps show blank, incorrect, or outdated icons"
+      },
+      "macos_maintenance_finder-service": {
+        "name": "Restart Finder",
+        "description": "Restart Finder when it is slow, windows stop responding, or desktop items do not refresh"
+      },
+      "macos_maintenance_audio-service": {
+        "name": "Restart the audio service",
+        "description": "Restart macOS audio when sound stops, devices disappear, or audio becomes unresponsive"
+      },
+      "macos_maintenance_user-permissions": {
+        "name": "Repair home folder permissions",
+        "description": "Restore access when Desktop, Documents, or other home folders cannot be opened or changed"
+      },
+      "macos_maintenance_legacy-overrides": {
+        "name": "Restore settings changed by older optimizers",
+        "description": "Return App Nap, disk image verification, and related options to their macOS defaults"
+      },
+      "macos_maintenance_startup-disk": {
+        "name": "Check the startup disk file system",
+        "description": "Use a built-in macOS tool to check for file system errors without changing disk contents"
+      },
+      "macos_maintenance_dns-cache": {
+        "name": "Refresh DNS cache",
+        "description": "Remove outdated DNS records that can block websites or network services"
+      },
+      "windows_maintenance_system-integrity": {
+        "name": "Repair Windows system files",
+        "description": "Use built-in Windows tools to find and repair damaged system components and protected files"
+      },
+      "windows_maintenance_search-index": {
+        "name": "Rebuild the Windows search index",
+        "description": "Re-index files when Windows Search misses files, shows incorrect results, or stops responding"
+      },
+      "windows_maintenance_explorer-cache": {
+        "name": "Rebuild icon and thumbnail caches",
+        "description": "Fix blank or incorrect icons and broken thumbnails in File Explorer"
+      },
+      "windows_maintenance_update-components": {
+        "name": "Restart Windows Update services",
+        "description": "Restart the system services required by Windows Update and immediately check for updates"
+      },
+      "windows_maintenance_print-queue": {
+        "name": "Repair the print queue",
+        "description": "Remove print jobs that are stuck or cannot be canceled, then restart the printing service"
+      },
+      "windows_maintenance_performance-counters": {
+        "name": "Repair system performance data",
+        "description": "Rebuild performance counters when Task Manager or monitoring tools show missing or incorrect data"
+      },
+      "windows_maintenance_system-disk": {
+        "name": "Check the Windows system drive",
+        "description": "Check for file system errors without interrupting work or scheduling a restart repair"
+      },
+      "windows_maintenance_audio-service": {
+        "name": "Restart the audio service",
+        "description": "Restart Windows audio when sound stops, devices disappear, or audio stops responding"
+      },
+      "windows_maintenance_store-cache": {
+        "name": "Reset Microsoft Store cache",
+        "description": "Clear the Store cache when it will not open, downloads stall, or pages fail to load"
+      },
+      "windows_maintenance_dns-cache": {
+        "name": "Refresh DNS cache",
+        "description": "Remove outdated DNS records that can block websites or network services"
+      },
+      "windows_maintenance_time-sync": {
+        "name": "Synchronize system time",
+        "description": "Sync with the time server to resolve clock-related sign-in or certificate errors"
+      }
+    }
   },
   "systemOptimization": {
     "title": "System Optimization",

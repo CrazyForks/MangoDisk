@@ -12,4 +12,5 @@ pub(crate) mod history;
 pub(crate) mod large_files;
 pub(crate) mod permanent_delete;
 pub(crate) mod startup;
+pub(crate) mod system_maintenance;
 pub(crate) mod system_settings;

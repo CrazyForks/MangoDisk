@@ -6,6 +6,7 @@ mod reporting;
 mod shared;
 mod startup;
 mod storage;
+mod system_maintenance;
 mod system_settings;
 
 pub const APPLICATION_IDENTIFIER: &str = "app.mangodisk.desktop";
@@ -89,6 +90,15 @@ pub use storage::duplicates::{
     DuplicateGroupBatch, DuplicateGroupPage,
 };
 pub use storage::large_files::{LargeFileEntry, LargeFileService, LargeFilesResult};
+pub use system_maintenance::{
+    SystemMaintenanceCatalog, SystemMaintenanceCatalogSummary, SystemMaintenanceCategory,
+    SystemMaintenanceExecutionItemResult, SystemMaintenanceExecutionRequest,
+    SystemMaintenanceExecutionStatus, SystemMaintenanceFailureReason, SystemMaintenanceItem,
+    SystemMaintenanceJob, SystemMaintenanceJobStatus, SystemMaintenanceJobUpdateSink,
+    SystemMaintenanceMutationState, SystemMaintenancePlatform, SystemMaintenanceRiskLevel,
+    SystemMaintenanceRuntimeState, SystemMaintenanceService, SystemMaintenanceStatus,
+    SYSTEM_MAINTENANCE_CATALOG_SCHEMA_VERSION,
+};
 pub use system_settings::{
     SystemSettingCategory, SystemSettingChangeFailureReason, SystemSettingChangeItemResult,
     SystemSettingChangeOutcomeStatus, SystemSettingChangePlanItem,

@@ -1,6 +1,7 @@
 {
   "navigation": {
     "system-optimization": "システム最適化",
+    "system-maintenance": "システムメンテナンス",
     "cleanup": "ディープクリーン",
     "analysis": "ディスク容量分析",
     "large-files": "大容量ファイル",
@@ -13,6 +14,181 @@
   "navigationGroups": {
     "storage": "ストレージ",
     "system": "システムツール"
+  },
+  "systemMaintenance": {
+    "title": "システムメンテナンス",
+    "scanning": "メンテナンス項目を確認中",
+    "scanningDescription": "システムを変更せず、コンポーネントの状態だけを確認します",
+    "authorizationPrompt": "このメンテナンスを実行するには、MangoDisk に管理者権限が必要です",
+    "rescan": "再確認",
+    "filterCategory": "メンテナンスのカテゴリを絞り込む",
+    "executeOne": "実行",
+    "executingOne": "実行中",
+    "retryOne": "再試行",
+    "completedOne": "完了",
+    "systemProcessing": "システムで処理中",
+    "refreshRequired": "再確認が必要",
+    "cancelQueued": "待機をキャンセル",
+    "cancelExecution": "停止",
+    "progress": {
+      "step": "ステップ {current}/{total}",
+      "elapsedSeconds": "経過 {seconds} 秒",
+      "elapsedMinutesSeconds": "経過 {minutes} 分 {seconds} 秒",
+      "phases": {
+        "preparing": "準備中",
+        "waitingForAuthorization": "管理者の承認を待っています",
+        "repairingComponentImage": "Windows コンポーネントを修復中（DISM）",
+        "checkingSystemFiles": "システムファイルを確認中（SFC）",
+        "checkingStartupDisk": "起動ディスクを確認中",
+        "checkingSystemDisk": "Windows のシステムドライブを確認中",
+        "rebuildingSearchIndex": "検索インデックスを再構築中",
+        "refreshingShellCaches": "インターフェイスのキャッシュを更新中",
+        "restartingFinder": "Finder を再起動中",
+        "restartingAudioService": "オーディオサービスを再起動中",
+        "restartingServices": "システムサービスを再起動中",
+        "repairingPrintQueue": "印刷キューを修復中",
+        "synchronizingTime": "システム時刻を同期中",
+        "rebuildingPerformanceCounters": "パフォーマンスカウンターを再構築中",
+        "resettingStoreCache": "Microsoft Store のキャッシュをリセット中",
+        "refreshingNetwork": "ネットワークキャッシュを更新中",
+        "rebuildingAppAssociations": "アプリの関連付けを再構築中",
+        "repairingPermissions": "ユーザーフォルダの権限を修復中",
+        "restoringDefaults": "システムのデフォルト設定を復元中",
+        "verifying": "結果を確認中"
+      }
+    },
+    "categories": {
+      "all": "すべて",
+      "recommended": "推奨",
+      "systemRepair": "システム修復",
+      "searchAndInterface": "検索と表示",
+      "network": "ネットワーク"
+    },
+    "statuses": {
+      "healthy": "正常",
+      "recommended": "推奨",
+      "available": "必要なときに実行",
+      "unavailable": "利用不可",
+      "requiresElevation": "管理者の承認が必要です"
+    },
+    "diagnostics": {
+      "accessDenied": "権限が必要です",
+      "applicationRunning": "関連するアプリが実行中です",
+      "checkFailed": "状態を確認できませんでした",
+      "componentUnavailable": "システム機能を利用できません",
+      "toolUnavailable": "システムツールを利用できません",
+      "unsupportedVersion": "このシステムでは利用できません"
+    },
+    "empty": {
+      "title": "このカテゴリに項目はありません",
+      "description": "別のカテゴリを選択してください"
+    },
+    "feedback": {
+      "cancelled": "「{name}」をキャンセルしました",
+      "cancelledMayHaveChanged": "「{name}」を停止しましたが、一部の変更は反映されている可能性があります。再確認してください",
+      "completed": "「{name}」が完了しました",
+      "started": "「{name}」をシステムに引き継ぎました",
+      "restartRequired": "「{name}」が完了しました。再起動すると変更が反映されます",
+      "mayHaveChanged": "「{name}」を正常に完了できませんでした。一部の変更は反映されている可能性があるため、再確認してください",
+      "failures": {
+        "permissionDenied": "「{name}」の実行には管理者権限が必要です",
+        "unsupported": "現在のシステムでは「{name}」を利用できません",
+        "verificationFailed": "「{name}」は実行されましたが、MangoDisk が最終結果を確認できませんでした",
+        "platformFailure": "「{name}」に失敗しました。状態を確認してもう一度お試しください",
+        "userCancelled": "「{name}」をキャンセルしました"
+      }
+    },
+    "confirmation": {
+      "title": "メンテナンスを実行しますか？",
+      "description": "この項目は時間がかかる場合や、関連するシステムコンポーネントを一時的に再起動する場合があります。完了後に MangoDisk が結果を確認します",
+      "confirm": "実行"
+    },
+    "items": {
+      "macos_maintenance_spotlight-index": {
+        "name": "Spotlight の検索インデックスを再構築",
+        "description": "検索が遅い、ファイルが見つからない、結果が不完全な場合にファイルを再インデックスします"
+      },
+      "macos_maintenance_launch-services": {
+        "name": "「このアプリケーションで開く」とファイルの関連付けを修復",
+        "description": "重複または古い候補を削除し、各ファイル形式を開けるアプリを再登録します"
+      },
+      "macos_maintenance_quicklook-cache": {
+        "name": "Quick Look のファイルプレビューを更新",
+        "description": "スペースキーで表示するプレビューが空白、古い、または不正確な場合にキャッシュを更新します"
+      },
+      "macos_maintenance_icon-cache": {
+        "name": "Finder のアイコンキャッシュを再構築",
+        "description": "ファイルやアプリのアイコンが空白、誤表示、または未更新の場合にキャッシュを作り直します"
+      },
+      "macos_maintenance_finder-service": {
+        "name": "Finder を再起動",
+        "description": "Finder が遅い、ウインドウが応答しない、またはデスクトップが更新されない場合に再起動します"
+      },
+      "macos_maintenance_audio-service": {
+        "name": "オーディオサービスを再起動",
+        "description": "音が出ない、オーディオ機器が認識されない、または音声機能が応答しない場合に再起動します"
+      },
+      "macos_maintenance_user-permissions": {
+        "name": "ホームフォルダのアクセス権を修復",
+        "description": "デスクトップや書類などのファイルを開く、保存する、変更するといった操作ができない問題を修復します"
+      },
+      "macos_maintenance_legacy-overrides": {
+        "name": "古い最適化ツールが変更した設定を復元",
+        "description": "App Nap やディスクイメージ検証などの設定を macOS のデフォルトに戻します"
+      },
+      "macos_maintenance_startup-disk": {
+        "name": "起動ディスクのファイルシステムを検査",
+        "description": "macOS の標準ツールでファイルシステムのエラーを確認します。ディスクの内容は変更しません"
+      },
+      "macos_maintenance_dns-cache": {
+        "name": "DNS キャッシュを更新",
+        "description": "古い名前解決情報を削除し、Web サイトを開けない、またはネットワークサービスに接続できない問題を解消します"
+      },
+      "windows_maintenance_system-integrity": {
+        "name": "Windows システムファイルを修復",
+        "description": "Windows の標準ツールで破損したシステムコンポーネントと保護されたファイルを検査、修復します"
+      },
+      "windows_maintenance_search-index": {
+        "name": "Windows 検索インデックスを再構築",
+        "description": "ファイルが見つからない、結果が不正確、または検索が応答しない場合にファイルを再インデックスします"
+      },
+      "windows_maintenance_explorer-cache": {
+        "name": "アイコンとサムネイルのキャッシュを再構築",
+        "description": "エクスプローラーでアイコンが空白または誤表示になる、サムネイルが崩れる問題を修復します"
+      },
+      "windows_maintenance_update-components": {
+        "name": "Windows Update サービスを再起動",
+        "description": "更新に必要なシステムサービスを再起動し、新しい更新プログラムを確認します"
+      },
+      "windows_maintenance_print-queue": {
+        "name": "印刷キューを修復",
+        "description": "停止またはキャンセルできない印刷ジョブを削除し、印刷サービスを再起動します"
+      },
+      "windows_maintenance_performance-counters": {
+        "name": "パフォーマンス表示を修復",
+        "description": "Windows のパフォーマンスカウンターを再構築し、タスク マネージャーや監視ツールのデータ欠落や誤表示を修復します"
+      },
+      "windows_maintenance_system-disk": {
+        "name": "Windows のシステムドライブを確認",
+        "description": "作業を中断したり再起動時の修復を予約したりせず、ファイルシステムのエラーを確認します"
+      },
+      "windows_maintenance_audio-service": {
+        "name": "オーディオサービスを再起動",
+        "description": "音が出ない、オーディオ機器を使用できない、または音声機能が応答しない場合に再起動します"
+      },
+      "windows_maintenance_store-cache": {
+        "name": "Microsoft Store のキャッシュをリセット",
+        "description": "Store が開かない、ダウンロードが止まる、またはページを読み込めない場合にキャッシュを消去します"
+      },
+      "windows_maintenance_dns-cache": {
+        "name": "DNS キャッシュを更新",
+        "description": "古い名前解決情報を削除し、Web サイトを開けない、またはネットワークサービスに接続できない問題を解消します"
+      },
+      "windows_maintenance_time-sync": {
+        "name": "システム時刻を同期",
+        "description": "時刻サーバーに接続して時計を合わせ、時刻のずれによるサインインや証明書の問題を解消します"
+      }
+    }
   },
   "systemOptimization": {
     "title": "システム最適化",

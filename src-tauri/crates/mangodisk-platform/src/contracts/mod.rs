@@ -6,6 +6,7 @@ mod platform;
 mod processes;
 mod scan;
 mod startup;
+mod system_maintenance;
 mod system_settings;
 mod volumes;
 
@@ -52,6 +53,12 @@ pub use startup::{
     PlatformStartupRuntimeState, PlatformStartupScope, PlatformStartupSourceKind,
     PlatformStartupSourceResult, PlatformStartupSummarySource, PlatformStartupTarget,
     PlatformStartupTargetKind, PlatformStartupTrigger, PlatformStartupTrustState, StartupPlatform,
+};
+pub use system_maintenance::{
+    PlatformSystemMaintenanceCompletion, PlatformSystemMaintenanceDiagnosticCode,
+    PlatformSystemMaintenanceExecution, PlatformSystemMaintenancePhase,
+    PlatformSystemMaintenanceProgress, PlatformSystemMaintenanceProgressSink,
+    PlatformSystemMaintenanceState, PlatformSystemMaintenanceStatus, SystemMaintenancePlatform,
 };
 #[cfg(target_os = "macos")]
 pub(crate) use system_settings::preflight_system_setting_change;

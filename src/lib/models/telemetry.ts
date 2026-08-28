@@ -7,6 +7,7 @@ export const EVENT_NAMES = {
   duplicateFileGroups: 'duplicate-files-groups',
   applicationUninstallProgress: 'application-uninstall-progress',
   applicationUninstallExecutionProgress: 'application-uninstall-execution-progress',
+  systemMaintenanceJobUpdated: 'system-maintenance-job-updated',
 } as const;
 
 export const LOG_DOMAINS = {
@@ -23,6 +24,7 @@ export const LOG_DOMAINS = {
   settings: 'settings',
   startup: 'startup',
   storageScope: 'storage-scope',
+  systemMaintenance: 'system-maintenance',
 } as const;
 
 export const LOG_EVENTS = {
@@ -70,4 +72,15 @@ export const LOG_EVENTS = {
   storageScopePreferencesLoadFailed: 'preferences_load_failed',
   storageScopePreferencesSaveFailed: 'preferences_save_failed',
   storageScopeValidationFailed: 'folder_validation_failed',
+  systemMaintenanceExecutionCompleted: 'execution_completed',
+  systemMaintenanceExecutionRequested: 'execution_requested',
+  systemMaintenanceExecutionRequestFailed: 'execution_request_failed',
+  systemMaintenanceExecutionStateChanged: 'execution_state_changed',
+  systemMaintenanceExecutionUpdateIgnored: 'execution_update_ignored',
+  systemMaintenanceExecutionCancelFailed: 'execution_cancel_failed',
+  systemMaintenanceRuntimeRestoreFailed: 'runtime_restore_failed',
+  systemMaintenanceRuntimeRestored: 'runtime_restored',
+  systemMaintenanceScanCompleted: 'scan_completed',
+  systemMaintenanceScanFailed: 'scan_failed',
+  systemMaintenanceScanStarted: 'scan_started',
 } as const;

@@ -7,6 +7,8 @@ mod inventory;
 mod macos;
 mod startup_helper;
 #[cfg(windows)]
+mod system_maintenance_helper;
+#[cfg(windows)]
 mod system_settings_helper;
 #[cfg(windows)]
 mod windows;
@@ -28,6 +30,8 @@ pub use macos::{
     macos_privileged_application_removal_supported, remove_application_bundle_with_privileges,
 };
 pub use startup_helper::run_startup_helper_mode;
+#[cfg(windows)]
+pub use system_maintenance_helper::run_system_maintenance_helper_mode;
 #[cfg(windows)]
 pub use system_settings_helper::run_system_settings_helper_mode;
 #[cfg(windows)]

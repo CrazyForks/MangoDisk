@@ -477,9 +477,10 @@ mod windows_probe {
                 &mut |record| {
                     if let FastAnalysisRecord::Directory {
                         path,
-                        bytes,
+                        allocated_bytes: bytes,
                         file_count,
                         skipped_count,
+                        ..
                     } = record
                     {
                         directories

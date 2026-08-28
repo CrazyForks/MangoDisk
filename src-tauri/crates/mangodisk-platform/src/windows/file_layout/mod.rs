@@ -9,8 +9,8 @@ use std::{
 };
 
 use crate::{
-    FastAnalysisRecord, FastAnalysisScanError, FastAnalysisSummary, LargeFileCandidateScanError,
-    LargeFileCandidateSummary, Platform, ScanPurpose,
+    FastAnalysisRecord, FastAnalysisScanError, FastAnalysisSummary, FileSpaceUsage,
+    LargeFileCandidateScanError, LargeFileCandidateSummary, Platform, ScanPurpose,
 };
 
 use super::native_io::{file_id, OwnedHandle, VolumePaths};
@@ -47,17 +47,24 @@ struct FileNameLink {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 struct DirectoryTotals {
-    bytes: u64,
+    logical_bytes: u64,
+    allocated_bytes: u64,
     file_count: u64,
     skipped_count: u64,
 }
 
 impl DirectoryTotals {
     fn checked_add_assign(&mut self, other: Self) -> Result<(), LayoutScanError> {
-        self.bytes = self
-            .bytes
-            .checked_add(other.bytes)
+        self.logical_bytes = self
+            .logical_bytes
+            .checked_add(other.logical_bytes)
             .ok_or_else(|| LayoutScanError::Platform("directory_bytes_overflow".to_string()))?;
+        self.allocated_bytes = self
+            .allocated_bytes
+            .checked_add(other.allocated_bytes)
+            .ok_or_else(|| {
+                LayoutScanError::Platform("directory_allocation_overflow".to_string())
+            })?;
         self.file_count = self
             .file_count
             .checked_add(other.file_count)
@@ -73,11 +80,17 @@ impl DirectoryTotals {
         Ok(())
     }
 
-    fn checked_add_file(&mut self, bytes: u64) -> Result<(), LayoutScanError> {
-        self.bytes = self
-            .bytes
-            .checked_add(bytes)
+    fn checked_add_file(&mut self, usage: FileSpaceUsage) -> Result<(), LayoutScanError> {
+        self.logical_bytes = self
+            .logical_bytes
+            .checked_add(usage.logical_bytes)
             .ok_or_else(|| LayoutScanError::Platform("directory_bytes_overflow".to_string()))?;
+        self.allocated_bytes = self
+            .allocated_bytes
+            .checked_add(usage.allocated_bytes)
+            .ok_or_else(|| {
+                LayoutScanError::Platform("directory_allocation_overflow".to_string())
+            })?;
         self.file_count = self.file_count.checked_add(1).ok_or_else(|| {
             LayoutScanError::Platform("directory_file_count_overflow".to_string())
         })?;
@@ -96,6 +109,28 @@ impl DirectoryTotals {
 enum LayoutCollectionMode {
     CandidatesOnly,
     FullAnalysis,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CandidateSizeMetric {
+    Logical,
+    Allocated,
+}
+
+impl CandidateSizeMetric {
+    fn bytes(self, usage: FileSpaceUsage) -> u64 {
+        match self {
+            Self::Logical => usage.logical_bytes,
+            Self::Allocated => usage.allocated_bytes,
+        }
+    }
+
+    fn code(self) -> &'static str {
+        match self {
+            Self::Logical => "logical",
+            Self::Allocated => "allocated",
+        }
+    }
 }
 
 #[derive(Default)]
@@ -200,6 +235,7 @@ pub(super) fn analyze_records(
     let Some(volume) = VolumePaths::from_scan_root(request.root) else {
         return Ok(None);
     };
+    let candidate_size_metric = candidate_size_metric(request.purpose);
     let started = Instant::now();
     let result = collect_analysis(AnalysisCollectionRequest {
         platform,
@@ -215,7 +251,8 @@ pub(super) fn analyze_records(
     match result {
         Ok(summary) => {
             log::info!(
-                "windows_file_layout_analysis_finished pages={} entries={} directories={} candidates={} returned_bytes={} consumer_ms={} elapsed_ms={}",
+                "windows_file_layout_analysis_finished candidate_size_metric={} pages={} entries={} directories={} candidates={} returned_bytes={} consumer_ms={} elapsed_ms={}",
+                candidate_size_metric.code(),
                 summary.page_count,
                 summary.entry_count,
                 summary.directory_count,
@@ -248,6 +285,13 @@ fn candidate_purpose(purpose: ScanPurpose) -> ScanPurpose {
     match purpose {
         ScanPurpose::DuplicateFiles => ScanPurpose::DuplicateFiles,
         _ => ScanPurpose::LargeFiles,
+    }
+}
+
+fn candidate_size_metric(purpose: ScanPurpose) -> CandidateSizeMetric {
+    match purpose {
+        ScanPurpose::DuplicateFiles => CandidateSizeMetric::Logical,
+        _ => CandidateSizeMetric::Allocated,
     }
 }
 
@@ -301,6 +345,7 @@ fn collect_analysis(
         volume_handle.raw(),
         large_file_minimum_bytes,
         LayoutCollectionMode::FullAnalysis,
+        candidate_size_metric(purpose),
         is_cancelled,
     )?;
     let mut prepared = prepare_analysis(
@@ -319,7 +364,7 @@ fn collect_analysis(
     report_progress(
         root,
         prepared.root_totals.file_count,
-        prepared.root_totals.bytes,
+        prepared.root_totals.allocated_bytes,
     );
 
     // Validate all native structures, parent chains, skip boundaries, and
@@ -342,7 +387,8 @@ fn collect_analysis(
             .expect("a prevalidated directory must have completed totals");
         consumer(FastAnalysisRecord::Directory {
             path,
-            bytes: totals.bytes,
+            logical_bytes: totals.logical_bytes,
+            allocated_bytes: totals.allocated_bytes,
             file_count: totals.file_count,
             skipped_count: totals.skipped_count,
         })
@@ -374,7 +420,8 @@ fn collect_analysis(
     let consumer_elapsed_ms =
         u64::try_from(consumer_started.elapsed().as_millis()).unwrap_or(u64::MAX);
     Ok(FastAnalysisSummary {
-        root_bytes: prepared.root_totals.bytes,
+        root_logical_bytes: prepared.root_totals.logical_bytes,
+        root_allocated_bytes: prepared.root_totals.allocated_bytes,
         root_file_count: prepared.root_totals.file_count,
         root_skipped_count: prepared.root_totals.skipped_count,
         page_count: prepared.collection.page_count,
@@ -383,7 +430,7 @@ fn collect_analysis(
         candidate_count: prepared.candidate_count,
         returned_bytes: prepared.collection.returned_bytes,
         consumer_elapsed_ms,
-        strategy: "windows_file_layout_aggregate",
+        strategy: "windows_file_layout_allocated_aggregate_v2",
     })
 }
 
@@ -578,6 +625,7 @@ fn collect_and_emit(
         volume_handle.raw(),
         minimum_bytes,
         LayoutCollectionMode::CandidatesOnly,
+        CandidateSizeMetric::Allocated,
         is_cancelled,
     )?;
 
@@ -810,7 +858,8 @@ mod tests {
                 (
                     root_id,
                     DirectoryTotals {
-                        bytes: 100,
+                        logical_bytes: 100,
+                        allocated_bytes: 100,
                         file_count: 1,
                         skipped_count: 0,
                     },
@@ -818,7 +867,8 @@ mod tests {
                 (
                     10,
                     DirectoryTotals {
-                        bytes: 10,
+                        logical_bytes: 10,
+                        allocated_bytes: 10,
                         file_count: 1,
                         skipped_count: 0,
                     },
@@ -826,7 +876,8 @@ mod tests {
                 (
                     11,
                     DirectoryTotals {
-                        bytes: 5,
+                        logical_bytes: 5,
+                        allocated_bytes: 5,
                         file_count: 1,
                         skipped_count: 1,
                     },
@@ -834,7 +885,8 @@ mod tests {
                 (
                     20,
                     DirectoryTotals {
-                        bytes: 1_000,
+                        logical_bytes: 1_000,
+                        allocated_bytes: 1_000,
                         file_count: 1,
                         skipped_count: 0,
                     },
@@ -842,7 +894,8 @@ mod tests {
                 (
                     21,
                     DirectoryTotals {
-                        bytes: 2_000,
+                        logical_bytes: 2_000,
+                        allocated_bytes: 2_000,
                         file_count: 1,
                         skipped_count: 0,
                     },
@@ -850,7 +903,8 @@ mod tests {
                 (
                     31,
                     DirectoryTotals {
-                        bytes: 4_000,
+                        logical_bytes: 4_000,
+                        allocated_bytes: 4_000,
                         file_count: 1,
                         skipped_count: 0,
                     },
@@ -858,7 +912,8 @@ mod tests {
                 (
                     41,
                     DirectoryTotals {
-                        bytes: 8_000,
+                        logical_bytes: 8_000,
+                        allocated_bytes: 8_000,
                         file_count: 1,
                         skipped_count: 0,
                     },
@@ -881,7 +936,8 @@ mod tests {
         assert_eq!(
             prepared.root_totals,
             DirectoryTotals {
-                bytes: 1_115,
+                logical_bytes: 1_115,
+                allocated_bytes: 1_115,
                 file_count: 4,
                 // Reparse file under sample-user, System32, and junction.
                 skipped_count: 3,
@@ -890,7 +946,8 @@ mod tests {
         assert_eq!(
             prepared.totals[&10],
             DirectoryTotals {
-                bytes: 15,
+                logical_bytes: 15,
+                allocated_bytes: 15,
                 file_count: 2,
                 skipped_count: 1,
             }
@@ -899,7 +956,8 @@ mod tests {
         assert_eq!(
             prepared.totals[&20],
             DirectoryTotals {
-                bytes: 1_000,
+                logical_bytes: 1_000,
+                allocated_bytes: 1_000,
                 file_count: 1,
                 skipped_count: 1,
             }
@@ -915,7 +973,8 @@ mod tests {
         collection.direct_totals.insert(
             999,
             DirectoryTotals {
-                bytes: 1,
+                logical_bytes: 1,
+                allocated_bytes: 1,
                 file_count: 1,
                 skipped_count: 0,
             },

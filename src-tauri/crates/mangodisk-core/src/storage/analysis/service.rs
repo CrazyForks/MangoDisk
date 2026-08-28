@@ -78,7 +78,7 @@ impl AnalysisService {
                     }
                 }
                 log::warn!(
-                    "analysis_permanent_delete_failed operation_id={} scan_id={} partial={} released_bytes={} error_digest={}",
+                    "analysis_permanent_delete_failed operation_id={} scan_id={} partial={} released_logical_bytes={} error_digest={}",
                     operation.id(),
                     scan_id,
                     error.is_partial(),
@@ -94,17 +94,18 @@ impl AnalysisService {
         };
         cache::remove_entry(
             &outcome.target,
-            outcome.result.released_bytes,
+            outcome.removed_usage,
             outcome.result.removed_file_count,
             is_directory,
         );
         synchronize_removed_path(scan_id, &outcome.target, outcome.result.released_bytes)?;
         log::info!(
-            "analysis_permanent_delete_finished operation_id={} scan_id={} path={} entry_kind={} released_bytes={} file_count={} elapsed_ms={}",
+            "analysis_permanent_delete_finished operation_id={} scan_id={} path={} entry_kind={} removed_logical_bytes={} released_allocated_bytes={} file_count={} elapsed_ms={}",
             operation.id(),
             scan_id,
             diagnostic_path(&outcome.target),
             if is_directory { "directory" } else { "file" },
+            outcome.removed_usage.logical_bytes,
             outcome.result.released_bytes,
             outcome.result.removed_file_count,
             started.elapsed().as_millis()

@@ -61,15 +61,13 @@ impl LargeFileService {
         scan_id: u64,
         selected_paths: Vec<String>,
     ) -> CoreResult<PermanentDeleteBatchResult> {
-        let candidates = resolve_delete_candidates(scan_id, selected_paths)?;
+        let selection = resolve_delete_candidates(scan_id, selected_paths)?;
+        let expected_bytes = selection.expected_allocated_bytes;
+        let candidates = selection.candidates;
         let operation = OperationGuard::start(CoordinatedOperationKind::PermanentDelete)?;
         let started = Instant::now();
         let started_at_ms = now_ms();
         let requested_count = candidates.len();
-        let expected_bytes = candidates
-            .iter()
-            .map(|candidate| candidate.expected_bytes)
-            .sum();
         let selected_paths = candidates
             .iter()
             .map(|candidate| candidate.path.clone())
@@ -86,10 +84,11 @@ impl LargeFileService {
         };
         for candidate in candidates {
             match delete_file_candidate_permanently(&candidate) {
-                Ok((target, bytes)) => {
-                    result.released_bytes = result.released_bytes.saturating_add(bytes);
+                Ok((target, usage)) => {
+                    result.released_bytes =
+                        result.released_bytes.saturating_add(usage.allocated_bytes);
                     result.removed_paths.push(candidate.path);
-                    cache::remove_entry(&target, bytes, 1, false);
+                    cache::remove_entry(&target, usage, 1, false);
                 }
                 Err(error) => result.failed.push(PermanentDeleteFailure {
                     path: candidate.path,
@@ -97,7 +96,7 @@ impl LargeFileService {
                 }),
             }
         }
-        synchronize_removed_paths(scan_id, &result.removed_paths, result.released_bytes)?;
+        synchronize_removed_paths(scan_id, &result.removed_paths)?;
         let history_record = file_cleanup_record(
             format!("large-file-cleanup-{}-{}", operation.id(), now_ms()),
             FileCleanupHistoryCategory::LargeFiles,
@@ -115,11 +114,12 @@ impl LargeFileService {
             );
         }
         log::info!(
-            "permanent_delete_batch_finished operation_id={} scan_id={} requested_count={} path_sample={:?} removed_count={} failed_count={} released_bytes={} elapsed_ms={}",
+            "permanent_delete_batch_finished operation_id={} scan_id={} requested_count={} path_sample={:?} selected_allocated_bytes={} removed_count={} failed_count={} released_allocated_bytes={} elapsed_ms={}",
             operation.id(),
             scan_id,
             requested_count,
             path_sample,
+            expected_bytes,
             result.removed_paths.len(),
             result.failed.len(),
             result.released_bytes,

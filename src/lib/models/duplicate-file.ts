@@ -29,6 +29,7 @@ export interface DuplicateFileEntry {
   path: string;
   parentPath: string;
   bytes: number;
+  allocatedBytes: number;
   modifiedAtMs: number | null;
 }
 

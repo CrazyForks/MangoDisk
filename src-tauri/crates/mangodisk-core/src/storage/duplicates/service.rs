@@ -1,6 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
-    fs::File,
+    fs::{self, File},
     io::{Read, Seek, SeekFrom},
     path::{Path, PathBuf},
     sync::{
@@ -14,7 +14,8 @@ use std::{
 
 use mangodisk_platform::{
     current_platform, FastAnalysisQuery, FastAnalysisRecord, FastAnalysisScanError,
-    FastAnalysisSummary, Platform, PlatformCancellation, ScanDeviceClass, ScanPurpose, VolumeInfo,
+    FastAnalysisSummary, FileSpaceUsage, Platform, PlatformCancellation, ScanDeviceClass,
+    ScanPurpose, VolumeInfo,
 };
 
 use super::cache_validation::{
@@ -237,6 +238,8 @@ pub(crate) struct DuplicateScanDiagnostics {
     pub(crate) group_and_identity_ms: u64,
     pub(crate) sample_hash_ms: u64,
     pub(crate) full_hash_ms: u64,
+    pub(crate) allocation_measurement_ms: u64,
+    pub(crate) allocation_measurement_fallback_count: u64,
     pub(crate) result_sort_ms: u64,
     pub(crate) directory_aggregation_ms: u64,
     pub(crate) directory_aggregation_candidate_count: u64,
@@ -282,6 +285,8 @@ impl Default for DuplicateScanDiagnostics {
             group_and_identity_ms: 0,
             sample_hash_ms: 0,
             full_hash_ms: 0,
+            allocation_measurement_ms: 0,
+            allocation_measurement_fallback_count: 0,
             result_sort_ms: 0,
             directory_aggregation_ms: 0,
             directory_aggregation_candidate_count: 0,
@@ -562,17 +567,18 @@ impl DuplicateFileService {
             let candidate = validated.candidate.clone();
             let deletion = match validated.kind {
                 DuplicateGroupKind::File => delete_file_candidate_permanently(&candidate)
-                    .map(|(target, bytes)| (target, bytes, 1, false))
+                    .map(|(target, usage)| (target, usage, 1, false))
                     .map_err(|error| error.to_string()),
                 DuplicateGroupKind::Directory => {
                     delete_duplicate_directory_candidate(&validated, &operation)
                 }
             };
             match deletion {
-                Ok((target, bytes, file_count, is_directory)) => {
-                    result.released_bytes = result.released_bytes.saturating_add(bytes);
+                Ok((target, usage, file_count, is_directory)) => {
+                    result.released_bytes =
+                        result.released_bytes.saturating_add(usage.allocated_bytes);
                     result.removed_paths.push(candidate.path);
-                    cache::remove_entry(&target, bytes, file_count, is_directory);
+                    cache::remove_entry(&target, usage, file_count, is_directory);
                     hash_cache::invalidate_containing(&target);
                 }
                 Err(error) => result.failed.push(PermanentDeleteFailure {
@@ -601,11 +607,12 @@ impl DuplicateFileService {
             );
         }
         log::info!(
-            "duplicate_permanent_delete_finished operation_id={} scan_id={} requested_count={} path_sample={:?} removed_count={} failed_count={} released_bytes={} elapsed_ms={}",
+            "duplicate_permanent_delete_finished operation_id={} scan_id={} requested_count={} path_sample={:?} selected_logical_bytes={} removed_count={} failed_count={} released_allocated_bytes={} elapsed_ms={}",
             operation.id(),
             scan_id,
             requested_count,
             path_sample,
+            expected_bytes,
             result.removed_paths.len(),
             result.failed.len(),
             result.released_bytes,
@@ -1079,12 +1086,19 @@ impl DuplicateFileService {
 
         let full_groups = pipeline.full_groups;
         let mut groups = Vec::new();
+        let allocation_measurement_started = Instant::now();
         for (key, candidate_indices) in full_groups.into_iter().filter(|(_, items)| items.len() > 1)
         {
-            if let Some(group) = build_duplicate_group(&candidates, key, candidate_indices) {
+            if let Some(group) = build_duplicate_group(
+                &candidates,
+                key,
+                candidate_indices,
+                &mut diagnostics.allocation_measurement_fallback_count,
+            ) {
                 groups.push(group);
             }
         }
+        diagnostics.allocation_measurement_ms = elapsed_ms(allocation_measurement_started);
         let directory_aggregation_started = Instant::now();
         let aggregation = aggregate_exact_directories(&roots, groups, &operation)?;
         diagnostics.directory_aggregation_ms = elapsed_ms(directory_aggregation_started);
@@ -1115,13 +1129,12 @@ impl DuplicateFileService {
             .sum();
         let total_duplicate_bytes = groups
             .iter()
-            .map(|group| {
-                group
-                    .bytes_per_file
-                    .saturating_mul(group.entries.len() as u64)
-            })
-            .sum();
-        let reclaimable_bytes = groups.iter().map(|group| group.reclaimable_bytes).sum();
+            .map(DuplicateGroup::total_allocated_bytes)
+            .fold(0_u64, u64::saturating_add);
+        let reclaimable_bytes = groups
+            .iter()
+            .map(|group| group.reclaimable_bytes)
+            .fold(0_u64, u64::saturating_add);
         let total_group_count = groups.len() as u64;
         let returned_group_count = groups.len() as u64;
         // Exact directory aggregation and cache authorization are complete. Publish only stable
@@ -1152,7 +1165,7 @@ impl DuplicateFileService {
             .map(|path| diagnostic_path(path))
             .collect::<Vec<_>>();
         log::info!(
-            "duplicate_scan_finished operation_id={} root_count={} root_sample={:?} candidate_strategy={} scanned_files={} duplicate_groups={} returned_groups={} duplicate_files={} reclaimable_bytes={} skipped_count={} enumeration_ms={} group_identity_ms={} identity_hints={} identity_hints_verified={} identity_hint_fallback_directories={} identity_workers={} identity_peak_in_flight={} sample_hash_ms={} full_hash_ms={} result_sort_ms={} sample_plan={} size_candidates={} aliases_filtered={} identity_unavailable={} sample_candidates={} sample_bytes={} sample_workers={} sample_peak_in_flight={} full_candidates={} full_bytes={} full_workers={} full_peak_in_flight={} hash_queue_capacity={} cache_snapshot_found={} cache_candidate_matches={} sample_cache_hits={} full_cache_hits={} cache_load_ms={} cache_validation_ms={} cache_fallbacks={} cache_write_entries={} cache_write_ms={} directory_candidates={} directory_groups={} aggregated_file_entries={} directory_aggregation_ms={} stream_batches={} streamed_groups={} first_stream_group_ms={:?} elapsed_ms={}",
+            "duplicate_scan_finished operation_id={} root_count={} root_sample={:?} candidate_strategy={} scanned_files={} duplicate_groups={} returned_groups={} duplicate_files={} reclaimable_allocated_bytes={} skipped_count={} enumeration_ms={} group_identity_ms={} identity_hints={} identity_hints_verified={} identity_hint_fallback_directories={} identity_workers={} identity_peak_in_flight={} sample_hash_ms={} full_hash_ms={} allocation_measurement_ms={} allocation_measurement_fallbacks={} result_sort_ms={} sample_plan={} size_candidates={} aliases_filtered={} identity_unavailable={} sample_candidates={} sample_logical_bytes={} sample_workers={} sample_peak_in_flight={} full_candidates={} full_logical_bytes={} full_workers={} full_peak_in_flight={} hash_queue_capacity={} cache_snapshot_found={} cache_candidate_matches={} sample_cache_hits={} full_cache_hits={} cache_load_ms={} cache_validation_ms={} cache_fallbacks={} cache_write_entries={} cache_write_ms={} directory_candidates={} directory_groups={} aggregated_file_entries={} directory_aggregation_ms={} stream_batches={} streamed_groups={} first_stream_group_ms={:?} elapsed_ms={}",
             operation.id(),
             roots.len(),
             root_sample,
@@ -1172,6 +1185,8 @@ impl DuplicateFileService {
             diagnostics.identity_peak_in_flight,
             diagnostics.sample_hash_ms,
             diagnostics.full_hash_ms,
+            diagnostics.allocation_measurement_ms,
+            diagnostics.allocation_measurement_fallback_count,
             diagnostics.result_sort_ms,
             diagnostics.sample_plan,
             diagnostics.size_group_candidate_count,
@@ -1232,7 +1247,7 @@ impl DuplicateFileService {
 fn delete_duplicate_directory_candidate(
     validated: &ValidatedDuplicateDeleteCandidate,
     operation: &OperationGuard,
-) -> Result<(PathBuf, u64, u64, bool), String> {
+) -> Result<(PathBuf, FileSpaceUsage, u64, bool), String> {
     let candidate = &validated.candidate;
     let requested_target = PathBuf::from(&candidate.path);
     let prepared =
@@ -1267,7 +1282,7 @@ fn delete_duplicate_directory_candidate(
     {
         return Err("MangoDisk cannot process a protected duplicate directory".to_string());
     }
-    verify_live_directory(
+    let usage = verify_live_directory(
         &target,
         &validated.expected_hash,
         candidate.expected_bytes,
@@ -1286,24 +1301,19 @@ fn delete_duplicate_directory_candidate(
         candidate.expected_bytes,
         validated.expected_file_count,
     ) {
-        Ok(()) => Ok((
-            target,
-            candidate.expected_bytes,
-            validated.expected_file_count,
-            true,
-        )),
+        Ok(()) => Ok((target, usage, validated.expected_file_count, true)),
         Err(error) if error.is_partial() && !requested_target.exists() => {
             // The same-volume staging move already removed the selected path. Keep the result UI
             // synchronized even when best-effort cleanup of the private staging tree was partial.
             log::warn!(
-                "duplicate_directory_staging_cleanup_partial operation_id={} released_bytes={} error_digest={}",
+                "duplicate_directory_staging_cleanup_partial operation_id={} released_logical_bytes={} error_digest={}",
                 operation.id(),
                 error.released_bytes(),
                 blake3::hash(error.to_string().as_bytes()).to_hex()
             );
             Ok((
                 target,
-                error.released_bytes(),
+                FileSpaceUsage::logical_only(error.released_bytes()),
                 error.affected_item_count(),
                 true,
             ))
@@ -1330,41 +1340,54 @@ fn build_duplicate_group(
     candidates: &[FileCandidate],
     (bytes_per_file, hash): (u64, blake3::Hash),
     mut candidate_indices: Vec<usize>,
+    allocation_fallback_count: &mut u64,
 ) -> Option<DuplicateGroup> {
     if candidate_indices.len() < 2 {
         return None;
     }
     candidate_indices.sort_by(|left, right| candidates[*left].path.cmp(&candidates[*right].path));
-    let reclaimable_bytes =
-        bytes_per_file.saturating_mul(candidate_indices.len().saturating_sub(1) as u64);
     let hash = hash.to_hex().to_string();
-    Some(DuplicateGroup {
+    let entries = candidate_indices
+        .into_iter()
+        .map(|index| {
+            let candidate = &candidates[index];
+            let measured_allocated_bytes = fs::symlink_metadata(&candidate.path)
+                .ok()
+                .filter(|metadata| metadata.is_file() && metadata.len() == candidate.bytes)
+                .map(|metadata| {
+                    current_platform()
+                        .file_space_usage(&candidate.path, &metadata)
+                        .allocated_bytes
+                });
+            if measured_allocated_bytes.is_none() {
+                *allocation_fallback_count = allocation_fallback_count.saturating_add(1);
+            }
+            let allocated_bytes = measured_allocated_bytes.unwrap_or(candidate.bytes);
+            DuplicateFileEntry {
+                name: candidate
+                    .path
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_default(),
+                parent_path: native_path_string(candidate.path.parent().unwrap_or(&candidate.path)),
+                path: native_path_string(&candidate.path),
+                bytes: candidate.bytes,
+                allocated_bytes,
+                modified_at_ms: candidate.modified_at_ms,
+            }
+        })
+        .collect();
+    let mut group = DuplicateGroup {
         id: hash.chars().take(16).collect(),
         hash,
         kind: DuplicateGroupKind::File,
         bytes_per_file,
         file_count_per_entry: 1,
-        reclaimable_bytes,
-        entries: candidate_indices
-            .into_iter()
-            .map(|index| {
-                let candidate = &candidates[index];
-                DuplicateFileEntry {
-                    name: candidate
-                        .path
-                        .file_name()
-                        .map(|name| name.to_string_lossy().into_owned())
-                        .unwrap_or_default(),
-                    parent_path: native_path_string(
-                        candidate.path.parent().unwrap_or(&candidate.path),
-                    ),
-                    path: native_path_string(&candidate.path),
-                    bytes: candidate.bytes,
-                    modified_at_ms: candidate.modified_at_ms,
-                }
-            })
-            .collect(),
-    })
+        reclaimable_bytes: 0,
+        entries,
+    };
+    group.refresh_reclaimable_bytes();
+    Some(group)
 }
 
 fn execute_hash_pipeline(

@@ -4,6 +4,7 @@ mod directory_aggregate;
 mod directory_identity;
 mod disk_cleanup;
 mod file_layout;
+mod file_space;
 mod inventory;
 mod large_files;
 mod native_io;
@@ -35,10 +36,10 @@ use crate::{
     ApplicationUninstallRegistrationState, DirectPhysicalDirectoryEnumeration,
     DirectoryEntryIdentities, DirectoryTreeAggregate, DirectoryTreeAggregateError,
     FastAnalysisQuery, FastAnalysisRecord, FastAnalysisScanError, FastAnalysisSummary,
-    FilesystemChangeImpactError, FilesystemChangeImpactOutcome, FilesystemChangeMonitor,
-    FilesystemChangeToken, LargeFileCandidateScanError, LargeFileCandidateSummary, Platform,
-    PlatformCancellation, PlatformError, PlatformErrorCode, PlatformResult,
-    PlatformSystemSettingChangeRequest, PlatformSystemSettingChangeResult,
+    FileSpaceUsage, FilesystemChangeImpactError, FilesystemChangeImpactOutcome,
+    FilesystemChangeMonitor, FilesystemChangeToken, LargeFileCandidateScanError,
+    LargeFileCandidateSummary, Platform, PlatformCancellation, PlatformError, PlatformErrorCode,
+    PlatformResult, PlatformSystemSettingChangeRequest, PlatformSystemSettingChangeResult,
     PlatformSystemSettingState, ProjectMarkerCandidateProgress, ProjectMarkerCandidateQuery,
     ProjectMarkerCandidateScanError, ProjectMarkerCandidateSummary, RunningProcessIdentity,
     ScanPurpose, SkipReason, StartupPlatform, SystemInventory, SystemMaintenancePlatform,
@@ -279,6 +280,10 @@ impl Platform for WindowsPlatform {
         metadata.file_type().is_symlink()
             || attributes & FILE_ATTRIBUTE_REPARSE_POINT_VALUE != 0
             || is_remote_placeholder_attributes(attributes)
+    }
+
+    fn file_space_usage(&self, path: &Path, metadata: &fs::Metadata) -> FileSpaceUsage {
+        file_space::usage(path, metadata)
     }
 
     fn directory_entry_identities(

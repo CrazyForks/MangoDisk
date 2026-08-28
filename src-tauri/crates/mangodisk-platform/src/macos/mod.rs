@@ -34,7 +34,7 @@ use crate::{
     ApplicationComponentAggregate, ApplicationComponentAggregateError, ApplicationDirectories,
     ApplicationProcessCloseMode, ApplicationProcessCloseResult, ApplicationProcessTarget,
     DirectoryTreeAggregate, DirectoryTreeAggregateError, FastAnalysisQuery, FastAnalysisRecord,
-    FastAnalysisScanError, FastAnalysisSummary, FilesystemChangeImpactError,
+    FastAnalysisScanError, FastAnalysisSummary, FileSpaceUsage, FilesystemChangeImpactError,
     FilesystemChangeImpactOutcome, FilesystemChangeMonitor, FilesystemChangeToken,
     LargeFileCandidateScanError, LargeFileCandidateSummary, Platform, PlatformCancellation,
     PlatformError, PlatformResult, PlatformSystemSettingChangeRequest,
@@ -215,6 +215,13 @@ impl Platform for MacOsPlatform {
 
     fn is_same_filesystem(&self, root: &fs::Metadata, candidate: &fs::Metadata) -> bool {
         root.dev() == candidate.dev()
+    }
+
+    fn file_space_usage(&self, _path: &Path, metadata: &fs::Metadata) -> FileSpaceUsage {
+        FileSpaceUsage {
+            logical_bytes: metadata.len(),
+            allocated_bytes: metadata.blocks().saturating_mul(512),
+        }
     }
 
     fn is_allowed_system_path_alias(&self, path: &Path) -> bool {

@@ -10,11 +10,12 @@ use super::{
     ApplicationUninstallRegistrationState, DirectPhysicalDirectoryEnumeration,
     DirectoryEntryIdentities, DirectoryTreeAggregate, DirectoryTreeAggregateError,
     FastAnalysisQuery, FastAnalysisRecord, FastAnalysisScanError, FastAnalysisSummary,
-    FilesystemChangeImpactError, FilesystemChangeImpactOutcome, FilesystemChangeMonitor,
-    FilesystemChangeToken, LargeFileCandidateScanError, LargeFileCandidateSummary,
-    PlatformCancellation, PlatformError, PlatformResult, ProjectMarkerCandidateProgress,
-    ProjectMarkerCandidateQuery, ProjectMarkerCandidateScanError, ProjectMarkerCandidateSummary,
-    RunningProcessIdentity, ScanPurpose, SkipReason, SystemInventory, UserDirectories, VolumeInfo,
+    FileSpaceUsage, FilesystemChangeImpactError, FilesystemChangeImpactOutcome,
+    FilesystemChangeMonitor, FilesystemChangeToken, LargeFileCandidateScanError,
+    LargeFileCandidateSummary, PlatformCancellation, PlatformError, PlatformResult,
+    ProjectMarkerCandidateProgress, ProjectMarkerCandidateQuery, ProjectMarkerCandidateScanError,
+    ProjectMarkerCandidateSummary, RunningProcessIdentity, ScanPurpose, SkipReason,
+    SystemInventory, UserDirectories, VolumeInfo,
 };
 
 pub trait Platform: Send + Sync {
@@ -151,6 +152,14 @@ pub trait Platform: Send + Sync {
     /// enforce that rule without path-name heuristics or an extra metadata call.
     fn is_same_filesystem(&self, _root: &fs::Metadata, _candidate: &fs::Metadata) -> bool {
         true
+    }
+    /// Returns both identity and volume-usage sizes from one filesystem snapshot.
+    ///
+    /// The portable fallback preserves logical size when a platform cannot expose
+    /// allocation without a substantially more expensive lookup. Native analysis
+    /// implementations should report exact allocation from their batch metadata.
+    fn file_space_usage(&self, _path: &Path, metadata: &fs::Metadata) -> FileSpaceUsage {
+        FileSpaceUsage::logical_only(metadata.len())
     }
     /// Returns stable physical identities for immediate directory entries in one native batch.
     ///

@@ -227,6 +227,35 @@ fn write_sparse_marker_file(path: &Path, bytes: u64, offset: u64, marker: [u8; 8
         .expect("the sampling marker should be written");
 }
 
+fn create_sparse_file(path: &Path, logical_bytes: u64) {
+    let file = File::create(path).expect("the sparse duplicate fixture should be created");
+    #[cfg(windows)]
+    {
+        use std::os::windows::io::AsRawHandle;
+        use windows_sys::Win32::{
+            Foundation::HANDLE,
+            System::{Ioctl::FSCTL_SET_SPARSE, IO::DeviceIoControl},
+        };
+
+        let mut returned = 0_u32;
+        let marked_sparse = unsafe {
+            DeviceIoControl(
+                file.as_raw_handle() as HANDLE,
+                FSCTL_SET_SPARSE,
+                std::ptr::null(),
+                0,
+                std::ptr::null_mut(),
+                0,
+                &mut returned,
+                std::ptr::null_mut(),
+            )
+        };
+        assert_ne!(marked_sparse, 0, "mark the duplicate fixture as sparse");
+    }
+    file.set_len(logical_bytes)
+        .expect("the sparse duplicate fixture length should be set");
+}
+
 #[test]
 fn staged_hashing_only_reports_identical_content() {
     let _operation_lock = crate::shared::operation::test_operation_lock();
@@ -275,6 +304,40 @@ fn staged_hashing_only_reports_identical_content() {
 }
 
 #[test]
+fn sparse_duplicates_report_physical_reclaimable_space() {
+    const LOGICAL_BYTES: u64 = 8 * 1024 * 1024;
+
+    let _operation_lock = crate::shared::operation::test_operation_lock();
+    let root = std::env::temp_dir().join(format!(
+        "mangodisk-sparse-duplicate-{}-{}",
+        std::process::id(),
+        now_ms()
+    ));
+    fs::create_dir_all(&root).expect("the sparse duplicate root should be created");
+    create_sparse_file(&root.join("first.bin"), LOGICAL_BYTES);
+    create_sparse_file(&root.join("second.bin"), LOGICAL_BYTES);
+
+    let result = DuplicateFileService::find_with_progress(vec![display_path(&root)], 1, |_| {})
+        .expect("the sparse duplicate scan should succeed");
+    let group = result
+        .groups
+        .first()
+        .expect("the sparse files should form one duplicate group");
+
+    assert_eq!(group.bytes_per_file, LOGICAL_BYTES);
+    assert!(
+        group
+            .entries
+            .iter()
+            .all(|entry| entry.allocated_bytes < entry.bytes),
+        "sparse holes must not inflate physical disk usage"
+    );
+    assert_eq!(result.total_duplicate_bytes, group.total_allocated_bytes());
+    assert_eq!(result.reclaimable_bytes, group.maximum_reclaimable_bytes());
+    fs::remove_dir_all(root).expect("the sparse duplicate fixture should be removed");
+}
+
+#[test]
 fn exact_duplicate_directories_replace_nested_file_groups() {
     let _operation_lock = crate::shared::operation::test_operation_lock();
     let root = std::env::temp_dir().join(format!(
@@ -308,7 +371,10 @@ fn exact_duplicate_directories_replace_nested_file_groups() {
     assert_eq!(result.groups[0].entries.len(), 2);
     assert_eq!(result.groups[0].file_count_per_entry, 2);
     assert_eq!(result.groups[0].bytes_per_file, 4114);
-    assert_eq!(result.groups[0].reclaimable_bytes, 4114);
+    assert_eq!(
+        result.groups[0].reclaimable_bytes,
+        result.groups[0].entries[0].allocated_bytes
+    );
     let selected = &result.groups[0].entries[0];
     let selected_path = PathBuf::from(&selected.path);
     let retained_path = PathBuf::from(&result.groups[0].entries[1].path);

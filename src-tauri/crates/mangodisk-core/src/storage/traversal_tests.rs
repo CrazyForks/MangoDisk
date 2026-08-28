@@ -52,6 +52,12 @@ fn isolated_analysis_scans_only_requested_root() {
     .expect("the analysis fixture directory should be created");
     fs::write(&fixture, [1_u8, 2, 3, 4, 5, 6])
         .expect("the analysis fixture file should be written");
+    let expected_allocated = current_platform()
+        .file_space_usage(
+            &fixture,
+            &fs::metadata(&fixture).expect("the analysis fixture metadata should be readable"),
+        )
+        .allocated_bytes;
 
     let result = StorageTraversal::analyze_path_with_progress(
         Some(root.to_string_lossy().into_owned()),
@@ -60,7 +66,7 @@ fn isolated_analysis_scans_only_requested_root() {
     )
     .expect("analysis of the isolated directory should succeed");
 
-    assert_eq!(result.total_bytes, 6);
+    assert_eq!(result.total_bytes, expected_allocated);
     assert_eq!(result.skipped_count, 0);
     assert_eq!(result.entries.len(), 1);
     assert_eq!(result.entries[0].name, "fingerprint-test");
@@ -82,7 +88,8 @@ fn fast_analysis_contract_validates_record_counts_before_publish() {
         .consume(
             FastAnalysisRecord::Directory {
                 path: root.join("child"),
-                bytes: 5,
+                logical_bytes: 5,
+                allocated_bytes: 5,
                 file_count: 1,
                 skipped_count: 0,
             },
@@ -93,7 +100,8 @@ fn fast_analysis_contract_validates_record_counts_before_publish() {
         .consume(
             FastAnalysisRecord::Directory {
                 path: root.to_path_buf(),
-                bytes: 5,
+                logical_bytes: 5,
+                allocated_bytes: 5,
                 file_count: 1,
                 skipped_count: 0,
             },
@@ -107,7 +115,8 @@ fn fast_analysis_contract_validates_record_counts_before_publish() {
         )
         .expect("a candidate disappearing after enumeration should not invalidate directories");
     let mut summary = FastAnalysisSummary {
-        root_bytes: 5,
+        root_logical_bytes: 5,
+        root_allocated_bytes: 5,
         root_file_count: 1,
         root_skipped_count: 0,
         page_count: 1,
@@ -261,45 +270,31 @@ fn large_file_cache_supports_switching_from_high_threshold_to_index_floor() {
         std::process::id(),
         now_ms()
     ));
-    fs::create_dir_all(&root).expect("the temporary scan directory should be created");
-    for (name, bytes) in [
-        ("60-mb.bin", 60 * 1024 * 1024),
-        ("120-mb.bin", 120 * 1024 * 1024),
-        ("600-mb.bin", 600 * 1024 * 1024),
-    ] {
-        let file =
-            fs::File::create(root.join(name)).expect("the sparse fixture file should be created");
-        file.set_len(bytes)
-            .expect("the sparse fixture file size should be set");
-    }
-
-    // Build one complete index at the fixed floor, then read the same cache with high and low
-    // thresholds. This covers lowering the setting from 500 MB to 50 MB without another
-    // traversal.
-    let progress = Arc::new(ProgressTracker::new(0, |_| {}, 0));
-    let cancelled = AtomicBool::new(false);
-    let mut sink = IndexRecordSink::memory(None);
-    let aggregate = traverse_once(
-        &root,
-        ScanPurpose::LargeFiles,
-        now_ms(),
-        &progress,
-        &cancelled,
-        &mut sink,
-    )
-    .expect("the temporary directory traversal should succeed");
-    let CompletedIndexSink {
-        directories, files, ..
-    } = sink.finish().expect("the in-memory index should complete");
-    assert_eq!(
-        files.len(),
-        3,
-        "the index floor should retain every fixture file"
-    );
+    let files = [("60-mb.bin", 60), ("120-mb.bin", 120), ("600-mb.bin", 600)]
+        .into_iter()
+        .map(|(name, mebibytes)| {
+            let bytes = mebibytes * 1024 * 1024;
+            (
+                root.join(name),
+                IndexedFile {
+                    bytes,
+                    logical_bytes: bytes,
+                    modified_at_ms: None,
+                },
+            )
+        })
+        .collect::<std::collections::HashMap<_, _>>();
+    let aggregate = DirectoryAggregate {
+        bytes: files.values().map(|file| file.bytes).sum(),
+        logical_bytes: files.values().map(|file| file.logical_bytes).sum(),
+        file_count: files.len() as u64,
+        scanned_at_ms: now_ms(),
+        ..DirectoryAggregate::default()
+    };
     cache::store_memory_only(
         &root,
         aggregate,
-        directories,
+        std::collections::HashMap::from([(root.clone(), aggregate)]),
         files,
         ScanPurpose::LargeFiles,
         true,
@@ -316,8 +311,15 @@ fn large_file_cache_supports_switching_from_high_threshold_to_index_floor() {
     assert_eq!(low_threshold.entries.len(), 3);
     assert!(low_threshold.cache_reused);
 
-    cache::remove_entry(&root, aggregate.bytes, aggregate.file_count, true);
-    fs::remove_dir_all(root).expect("the temporary scan directory should be removed");
+    cache::remove_entry(
+        &root,
+        mangodisk_platform::FileSpaceUsage {
+            logical_bytes: aggregate.logical_bytes,
+            allocated_bytes: aggregate.bytes,
+        },
+        aggregate.file_count,
+        true,
+    );
 }
 
 /// Validates platform fast scanning and recursive fallback against a real directory selected
@@ -369,7 +371,12 @@ fn real_large_file_scan_completes_fast_path_or_recursive_fallback() {
             );
         }
     }
-    cache::remove_entry(&canonical_root, 0, 0, true);
+    cache::remove_entry(
+        &canonical_root,
+        mangodisk_platform::FileSpaceUsage::logical_only(0),
+        0,
+        true,
+    );
 }
 
 /// Measures the complete in-memory analysis representation for a real directory tree.
@@ -398,8 +405,11 @@ fn real_analysis_materializes_complete_memory_index() {
         .expect("the in-memory analysis sink should finish");
 
     assert_eq!(directories.len() as u64, summary.directory_count);
-    assert_eq!(files.len() as u64, summary.candidate_count);
-    assert_eq!(aggregate.bytes, summary.root_bytes);
+    assert!(
+        files.len() as u64 <= summary.candidate_count,
+        "live allocation validation may discard logical-size candidates"
+    );
+    assert_eq!(aggregate.bytes, summary.root_allocated_bytes);
     println!(
         "real_analysis_memory strategy={} directories={} candidates={} bytes={} elapsed_ms={}",
         summary.strategy,

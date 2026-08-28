@@ -38,12 +38,12 @@ pub use processes::{
 pub(crate) use scan::FilesystemChangeMonitorBackend;
 pub use scan::{
     DirectoryEntryIdentities, FastAnalysisQuery, FastAnalysisRecord, FastAnalysisScanError,
-    FastAnalysisSummary, FilesystemChangeImpactError, FilesystemChangeImpactOutcome,
-    FilesystemChangeImpactPlan, FilesystemChangeImpactSummary, FilesystemChangeImpactUnavailable,
-    FilesystemChangeMonitor, FilesystemChangeStatus, FilesystemChangeToken,
-    LargeFileCandidateScanError, LargeFileCandidateSummary, PhysicalFileIdentity,
-    ProjectMarkerCandidateProgress, ProjectMarkerCandidateQuery, ProjectMarkerCandidateScanError,
-    ProjectMarkerCandidateSummary, ScanPurpose, SkipReason,
+    FastAnalysisSummary, FileSpaceUsage, FilesystemChangeImpactError,
+    FilesystemChangeImpactOutcome, FilesystemChangeImpactPlan, FilesystemChangeImpactSummary,
+    FilesystemChangeImpactUnavailable, FilesystemChangeMonitor, FilesystemChangeStatus,
+    FilesystemChangeToken, LargeFileCandidateScanError, LargeFileCandidateSummary,
+    PhysicalFileIdentity, ProjectMarkerCandidateProgress, ProjectMarkerCandidateQuery,
+    ProjectMarkerCandidateScanError, ProjectMarkerCandidateSummary, ScanPurpose, SkipReason,
 };
 pub use startup::{
     PlatformStartupArtifact, PlatformStartupChangeRequest, PlatformStartupChangeResult,

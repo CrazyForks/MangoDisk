@@ -97,8 +97,8 @@ const filteredGroups = computed(() => {
   return groups.value.filter(group => DuplicateFileGroupUtils.category(group) === activeCategory.value);
 });
 const selectedEntries = computed(() => DuplicateFileSelectionUtils.selectedEntries(groups.value, selectedPaths.value));
-const selectedBytes = computed(() => selectedEntries.value.reduce((total, entry) => total + entry.bytes, 0));
-const pendingDeleteBytes = computed(() => pendingDeleteEntries.value.reduce((total, entry) => total + entry.bytes, 0));
+const selectedBytes = computed(() => DuplicateFileGroupUtils.totalAllocatedBytes(selectedEntries.value));
+const pendingDeleteBytes = computed(() => DuplicateFileGroupUtils.totalAllocatedBytes(pendingDeleteEntries.value));
 const pendingSummaryLabel = computed(() => {
   if (pendingDeleteEntries.value.length === 1) return pendingDeleteEntries.value[0]?.name ?? '';
   return t(

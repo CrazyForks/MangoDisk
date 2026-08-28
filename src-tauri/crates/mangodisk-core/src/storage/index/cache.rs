@@ -6,8 +6,8 @@ use std::{
 };
 
 use mangodisk_platform::{
-    current_platform, FilesystemChangeMonitor, FilesystemChangeStatus, FilesystemChangeToken,
-    Platform, ScanPurpose,
+    current_platform, FileSpaceUsage, FilesystemChangeMonitor, FilesystemChangeStatus,
+    FilesystemChangeToken, Platform, ScanPurpose,
 };
 
 use crate::{
@@ -31,7 +31,10 @@ static ANALYSIS_CACHE: OnceLock<Mutex<AnalysisCache>> = OnceLock::new();
 
 #[derive(Clone, Copy, Default)]
 pub(crate) struct DirectoryAggregate {
+    /// Bytes charged to the containing volume and shown in storage views.
     pub(crate) bytes: u64,
+    /// Content length retained for immutable snapshot and delete preflight checks.
+    pub(crate) logical_bytes: u64,
     pub(crate) file_count: u64,
     pub(crate) skipped_count: u64,
     pub(crate) scanned_at_ms: u64,
@@ -41,6 +44,7 @@ pub(crate) struct DirectoryAggregate {
 #[derive(Clone, Copy)]
 pub(crate) struct IndexedFile {
     pub(crate) bytes: u64,
+    pub(crate) logical_bytes: u64,
     pub(crate) modified_at_ms: Option<u64>,
 }
 
@@ -228,6 +232,7 @@ fn large_file_entry(path: &Path, root: &Path, file: IndexedFile) -> LargeFileEnt
         path: display_path(path),
         parent_path: display_path(path.parent().unwrap_or(root)),
         bytes: file.bytes,
+        logical_bytes: file.logical_bytes,
         modified_at_ms: file.modified_at_ms,
     }
 }
@@ -255,7 +260,11 @@ pub(crate) fn analysis_result(root: &Path) -> Result<Option<AnalysisResult>, Str
     let cache = cache()
         .lock()
         .map_err(|_| ANALYSIS_CACHE_UNAVAILABLE_ERROR.to_string())?;
-    let mut entries = build_analysis_entries(children, |path| cache.directories.get(path).copied());
+    let mut entries = build_analysis_entries(
+        children,
+        |path| cache.directories.get(path).copied(),
+        |path| cache.files.get(path).copied(),
+    );
     entries.sort_by(|left, right| {
         right
             .bytes
@@ -277,6 +286,7 @@ pub(crate) fn analysis_result(root: &Path) -> Result<Option<AnalysisResult>, Str
 fn build_analysis_entries(
     children: Vec<(fs::DirEntry, PathBuf, fs::Metadata)>,
     mut directory_aggregate: impl FnMut(&Path) -> Option<DirectoryAggregate>,
+    mut indexed_file: impl FnMut(&Path) -> Option<IndexedFile>,
 ) -> Vec<DirectoryEntryInfo> {
     children
         .into_iter()
@@ -284,8 +294,15 @@ fn build_analysis_entries(
             let aggregate = if metadata.is_dir() {
                 directory_aggregate(&path).unwrap_or_default()
             } else {
+                let usage = indexed_file(&path)
+                    .map(|file| mangodisk_platform::FileSpaceUsage {
+                        logical_bytes: file.logical_bytes,
+                        allocated_bytes: file.bytes,
+                    })
+                    .unwrap_or_else(|| current_platform().file_space_usage(&path, &metadata));
                 DirectoryAggregate {
-                    bytes: metadata.len(),
+                    bytes: usage.allocated_bytes,
+                    logical_bytes: usage.logical_bytes,
                     file_count: u64::from(metadata.is_file()),
                     ..DirectoryAggregate::default()
                 }
@@ -294,6 +311,7 @@ fn build_analysis_entries(
                 name: entry.file_name().to_string_lossy().into_owned(),
                 path: display_path(&path),
                 bytes: aggregate.bytes,
+                logical_bytes: aggregate.logical_bytes,
                 file_count: aggregate.file_count,
                 is_directory: metadata.is_dir(),
                 modified_at_ms: modified_ms(&metadata),
@@ -345,6 +363,10 @@ pub(crate) fn store_memory_only(
                             .bytes
                             .saturating_sub(previous.bytes)
                             .saturating_add(root_aggregate.bytes);
+                        aggregate.logical_bytes = aggregate
+                            .logical_bytes
+                            .saturating_sub(previous.logical_bytes)
+                            .saturating_add(root_aggregate.logical_bytes);
                         aggregate.file_count = aggregate
                             .file_count
                             .saturating_sub(previous.file_count)
@@ -385,12 +407,32 @@ pub(crate) fn store_memory_only(
     Ok(())
 }
 
-pub(crate) fn remove_entry(target: &Path, bytes: u64, file_count: u64, is_directory: bool) {
+pub(crate) fn remove_entry(
+    target: &Path,
+    removed_usage: FileSpaceUsage,
+    file_count: u64,
+    is_directory: bool,
+) {
     let removed_monitors = {
         let Ok(mut cache) = cache().lock() else {
             log::warn!("analysis_cache_update_failed reason=poisoned_lock");
             return;
         };
+        let removed_usage = if is_directory {
+            cache
+                .directories
+                .get(target)
+                .map(|aggregate| FileSpaceUsage {
+                    logical_bytes: aggregate.logical_bytes,
+                    allocated_bytes: aggregate.bytes,
+                })
+        } else {
+            cache.files.get(target).map(|file| FileSpaceUsage {
+                logical_bytes: file.logical_bytes,
+                allocated_bytes: file.bytes,
+            })
+        }
+        .unwrap_or(removed_usage);
         let removed_monitors = if is_directory {
             cache.files.retain(|path, _| !path.starts_with(target));
             cache
@@ -408,7 +450,12 @@ pub(crate) fn remove_entry(target: &Path, bytes: u64, file_count: u64, is_direct
         };
         for (directory, aggregate) in &mut cache.directories {
             if target.starts_with(directory) {
-                aggregate.bytes = aggregate.bytes.saturating_sub(bytes);
+                aggregate.bytes = aggregate
+                    .bytes
+                    .saturating_sub(removed_usage.allocated_bytes);
+                aggregate.logical_bytes = aggregate
+                    .logical_bytes
+                    .saturating_sub(removed_usage.logical_bytes);
                 aggregate.file_count = aggregate.file_count.saturating_sub(file_count);
                 aggregate.fingerprint = None;
             }
@@ -614,6 +661,7 @@ mod tests {
                 file,
                 IndexedFile {
                     bytes: LARGE_FILE_INDEX_FLOOR_BYTES,
+                    logical_bytes: LARGE_FILE_INDEX_FLOOR_BYTES,
                     modified_at_ms: Some(5),
                 },
             )]),
@@ -627,6 +675,52 @@ mod tests {
             .expect("memory result should load");
         assert_eq!(result.total_count, 1);
         assert_eq!(result.total_bytes, LARGE_FILE_INDEX_FLOOR_BYTES);
+        clear_all().expect("cache should clear");
+    }
+
+    #[test]
+    fn uncached_file_removal_subtracts_allocated_and_logical_sizes_independently() {
+        let _operation_lock = crate::shared::operation::test_operation_lock();
+        clear_all().expect("cache should clear");
+        let root = PathBuf::from("/memory-analysis-removal");
+        let file = root.join("small.bin");
+        let aggregate = DirectoryAggregate {
+            bytes: 4_096,
+            logical_bytes: 1,
+            file_count: 1,
+            scanned_at_ms: 10,
+            ..DirectoryAggregate::default()
+        };
+        store_memory_only(
+            &root,
+            aggregate,
+            HashMap::from([(root.clone(), aggregate)]),
+            HashMap::new(),
+            ScanPurpose::Analysis,
+            true,
+            None,
+        )
+        .expect("analysis result should store");
+
+        remove_entry(
+            &file,
+            FileSpaceUsage {
+                logical_bytes: 1,
+                allocated_bytes: 4_096,
+            },
+            1,
+            false,
+        );
+
+        let cache = cache().lock().expect("cache should remain available");
+        let updated = cache
+            .directories
+            .get(&root)
+            .expect("the containing aggregate should remain cached");
+        assert_eq!(updated.bytes, 0);
+        assert_eq!(updated.logical_bytes, 0);
+        assert_eq!(updated.file_count, 0);
+        drop(cache);
         clear_all().expect("cache should clear");
     }
 

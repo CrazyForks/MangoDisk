@@ -210,7 +210,7 @@ impl StorageTraversal {
                 diagnostics.candidate_count = scan.summary.candidate_count;
                 diagnostics.consumer_ms = scan.summary.consumer_elapsed_ms;
                 log::info!(
-                    "analysis_fast_scan_finished operation_id={} platform={} root={} strategy={} pages={} entries={} directories={} candidates={} consumer_ms={} elapsed_ms={}",
+                    "analysis_fast_scan_finished operation_id={} platform={} root={} strategy={} pages={} entries={} directories={} candidates={} logical_bytes={} allocated_bytes={} consumer_ms={} elapsed_ms={}",
                     operation.id(),
                     current_platform().os_name(),
                     diagnostic_path(&root),
@@ -219,6 +219,8 @@ impl StorageTraversal {
                     scan.summary.entry_count,
                     scan.summary.directory_count,
                     scan.summary.candidate_count,
+                    scan.summary.root_logical_bytes,
+                    scan.summary.root_allocated_bytes,
                     scan.summary.consumer_elapsed_ms,
                     traversal_started.elapsed().as_millis()
                 );
@@ -573,6 +575,7 @@ fn measure_analysis_directory(
         if metadata.is_dir() {
             let child = measure_analysis_directory(&child_path, traversal)?;
             aggregate.bytes += child.bytes;
+            aggregate.logical_bytes += child.logical_bytes;
             aggregate.file_count += child.file_count;
             aggregate.skipped_count += child.skipped_count;
             if let Some(entry) =
@@ -583,12 +586,14 @@ fn measure_analysis_directory(
                 aggregate.skipped_count += 1;
             }
         } else if metadata.is_file() {
+            let usage = current_platform().file_space_usage(&child_path, &metadata);
             traversal.progress.visit_file(
                 traversal_stage(traversal.purpose),
                 &child_path,
-                metadata.len(),
+                usage.allocated_bytes,
             );
-            aggregate.bytes += metadata.len();
+            aggregate.bytes += usage.allocated_bytes;
+            aggregate.logical_bytes += usage.logical_bytes;
             aggregate.file_count += 1;
             if let Some(entry) = metadata_fingerprint_entry(&child_path, &metadata, None) {
                 fingerprint_entries.push(entry);
@@ -598,7 +603,7 @@ fn measure_analysis_directory(
             // Analysis aggregates include application and system files, but their large-file rows
             // serve `LargeFiles` queries after restart. Apply the stricter large-file boundary
             // before persistence instead of relying only on in-memory result filtering.
-            if metadata.len() >= LARGE_FILE_INDEX_FLOOR_BYTES
+            if usage.allocated_bytes >= LARGE_FILE_INDEX_FLOOR_BYTES
                 && current_platform()
                     .should_skip(&child_path, traversal.scan_root, ScanPurpose::LargeFiles)
                     .is_none()
@@ -606,7 +611,8 @@ fn measure_analysis_directory(
                 traversal.sink.push_large_file(
                     child_path,
                     IndexedFile {
-                        bytes: metadata.len(),
+                        bytes: usage.allocated_bytes,
+                        logical_bytes: usage.logical_bytes,
                         modified_at_ms: modified_ms(&metadata),
                     },
                 )?;
@@ -653,7 +659,8 @@ impl<'a> FastAnalysisStreamValidation<'a> {
         match record {
             FastAnalysisRecord::Directory {
                 path,
-                bytes,
+                logical_bytes,
+                allocated_bytes,
                 file_count,
                 skipped_count,
             } => {
@@ -676,7 +683,8 @@ impl<'a> FastAnalysisStreamValidation<'a> {
                     );
                 }
                 let aggregate = DirectoryAggregate {
-                    bytes,
+                    bytes: allocated_bytes,
+                    logical_bytes,
                     file_count,
                     skipped_count,
                     scanned_at_ms: self.scanned_at_ms,
@@ -715,16 +723,18 @@ impl<'a> FastAnalysisStreamValidation<'a> {
                 let Ok(metadata) = fs::symlink_metadata(&path) else {
                     return Ok(());
                 };
-                if !metadata.is_file()
-                    || is_link_like(&metadata)
-                    || metadata.len() < LARGE_FILE_INDEX_FLOOR_BYTES
-                {
+                if !metadata.is_file() || is_link_like(&metadata) {
+                    return Ok(());
+                }
+                let usage = current_platform().file_space_usage(&path, &metadata);
+                if usage.allocated_bytes < LARGE_FILE_INDEX_FLOOR_BYTES {
                     return Ok(());
                 }
                 sink.push_large_file(
                     path,
                     IndexedFile {
-                        bytes: metadata.len(),
+                        bytes: usage.allocated_bytes,
+                        logical_bytes: usage.logical_bytes,
                         modified_at_ms: modified_ms(&metadata),
                     },
                 )
@@ -736,7 +746,8 @@ impl<'a> FastAnalysisStreamValidation<'a> {
         let aggregate = self
             .root_aggregate
             .ok_or_else(|| "the platform analysis did not return a root aggregate".to_string())?;
-        if aggregate.bytes != summary.root_bytes
+        if aggregate.bytes != summary.root_allocated_bytes
+            || aggregate.logical_bytes != summary.root_logical_bytes
             || aggregate.file_count != summary.root_file_count
             || aggregate.skipped_count != summary.root_skipped_count
         {
@@ -842,21 +853,31 @@ impl<'a> LargeFileStreamValidation<'a> {
             self.aggregate.skipped_count += 1;
             return Ok(());
         }
-        if !metadata.is_file() || is_link_like(&metadata) || metadata.len() < self.minimum_bytes {
+        if !metadata.is_file() || is_link_like(&metadata) {
+            self.aggregate.skipped_count += 1;
+            return Ok(());
+        }
+        let usage = current_platform().file_space_usage(&path, &metadata);
+        if usage.allocated_bytes < self.minimum_bytes {
             self.aggregate.skipped_count += 1;
             return Ok(());
         }
         self.progress.visit_file(
             traversal_stage(ScanPurpose::LargeFiles),
             &path,
-            metadata.len(),
+            usage.allocated_bytes,
         );
-        self.aggregate.bytes = self.aggregate.bytes.saturating_add(metadata.len());
+        self.aggregate.bytes = self.aggregate.bytes.saturating_add(usage.allocated_bytes);
+        self.aggregate.logical_bytes = self
+            .aggregate
+            .logical_bytes
+            .saturating_add(usage.logical_bytes);
         self.aggregate.file_count += 1;
         sink.push_large_file(
             path,
             IndexedFile {
-                bytes: metadata.len(),
+                bytes: usage.allocated_bytes,
+                logical_bytes: usage.logical_bytes,
                 modified_at_ms: modified_ms(&metadata),
             },
         )?;

@@ -44,6 +44,7 @@ const dynamicKeyGroups = {
   'folderPicker.standardFolders': ['downloads', 'documents', 'pictures', 'videos', 'music'],
   fileCategories: ['all', 'video', 'audio', 'document', 'installer', 'archive', 'image', 'aiModel', 'other'],
   'cleanup.categoryTitles': [
+    'custom',
     'system',
     'userCache',
     'application',
@@ -56,6 +57,7 @@ const dynamicKeyGroups = {
     'container',
   ],
   'cleanup.categoryDescriptions': [
+    'custom',
     'system',
     'userCache',
     'application',
@@ -245,7 +247,7 @@ const dynamicKeyGroups = {
     'verificationFailed',
   ],
   'history.applicationUninstallStatuses': ['previewed', 'completed', 'failed'],
-  'cleanupRules.categories': ['ai', 'system', 'browser', 'container', 'dev', 'app'],
+  'cleanupRules.categories': ['ai', 'custom', 'system', 'browser', 'container', 'dev', 'app'],
   'cleanupRules.actionMessages': ['blocked', 'previewed', 'completed', 'partial', 'failed'],
   'cleanupRules.actionReasons': [
     'runningProcesses',

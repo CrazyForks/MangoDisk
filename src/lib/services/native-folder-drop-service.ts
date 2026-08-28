@@ -1,6 +1,8 @@
 import type { UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWebview, type DragDropEvent } from '@tauri-apps/api/webview';
 
+export type NativeFolderDropEvent = DragDropEvent;
+
 /**
  * Owns the WebView-specific folder drop subscription. Keeping this adapter
  * separate prevents ordinary folder validation and persisted-scope restoration
@@ -8,6 +10,6 @@ import { getCurrentWebview, type DragDropEvent } from '@tauri-apps/api/webview';
  */
 export class NativeFolderDropService {
   static listen(listener: (event: DragDropEvent) => void): Promise<UnlistenFn> {
-    return getCurrentWebview().onDragDropEvent(listener);
+    return getCurrentWebview().onDragDropEvent(event => listener(event.payload));
   }
 }

@@ -2,6 +2,7 @@ import { CLEANUP_RULE_IDS, type CleanupResultGroup } from '@/lib/models/cleanup'
 import { ICON_NAMES, type IconName } from '@/lib/models/ui';
 
 const CLEANUP_GROUP_ICONS: Readonly<Record<CleanupResultGroup, IconName>> = {
+  custom: ICON_NAMES.folderPlus,
   system: ICON_NAMES.cleanupSystemCache,
   userCache: ICON_NAMES.cleanupUserCache,
   application: ICON_NAMES.cleanupApplicationCache,

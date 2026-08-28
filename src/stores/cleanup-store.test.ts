@@ -252,6 +252,63 @@ describe('cleanup workflow completion', () => {
     );
   });
 
+  it('binds custom cleanup execution to the Core scan session', async () => {
+    const scanResult = {
+      customScanId: 42,
+      disk: {
+        name: 'Fixture',
+        mountPoint: '/',
+        totalBytes: 1_000,
+        availableBytes: 500,
+        usedBytes: 500,
+      },
+      rules: [],
+      safeBytes: 0,
+      reclaimableBytes: 0,
+    } as CleanupScanResult;
+    const rules = [
+      {
+        schemaVersion: 1,
+        id: 'temporary-files',
+        name: 'Temporary files',
+        roots: ['/fixture'],
+        namePatterns: ['*.tmp'],
+        minimumBytes: null,
+        maximumBytes: null,
+        modifiedTime: { mode: 'any' as const },
+        recursive: true,
+      },
+    ];
+    const scope: CleanupScanScope = {
+      mode: CLEANUP_SCAN_SCOPE_MODES.custom,
+      includeStandardRules: false,
+      rules,
+    };
+    vi.spyOn(CleanupService, 'scanWithProgress').mockResolvedValue(scanResult);
+    const execute = vi.spyOn(CleanupService, 'executeWithProgress').mockResolvedValue(previewResult);
+    const store = useCleanupStore();
+
+    expect(await store.scanCandidates(scope)).toBe(true);
+    store.selectedRuleIds = ['custom.temporary-files'];
+    expect(await store.execute(true, 'deep-cleanup-custom')).toBe(true);
+
+    const authorizedScope: CleanupScanScope = {
+      mode: CLEANUP_SCAN_SCOPE_MODES.custom,
+      includeStandardRules: false,
+      scanId: 42,
+      rules,
+    };
+    expect(store.scanScope).toEqual(authorizedScope);
+    expect(execute).toHaveBeenCalledWith(
+      ['custom.temporary-files'],
+      [],
+      true,
+      authorizedScope,
+      'deep-cleanup-custom',
+      expect.any(Function)
+    );
+  });
+
   it('reports failure so a following destructive workflow does not start', async () => {
     vi.spyOn(CleanupService, 'executeWithProgress').mockRejectedValue(new Error('fixture failure'));
     const appStore = useAppStore();

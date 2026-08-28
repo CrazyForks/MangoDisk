@@ -375,6 +375,7 @@ const fn selection_label(selection: CleanSelection) -> &'static str {
 
 const fn group_label(group: CleanupGroup) -> &'static str {
     match group {
+        CleanupGroup::Custom => "Custom cleanup",
         CleanupGroup::System => "System",
         CleanupGroup::UserCache => "User caches",
         CleanupGroup::Browser => "Browser data",
@@ -481,7 +482,8 @@ mod tests {
         limited_rule.status = ScanItemStatus::Limited;
 
         CleanupScanResult {
-            schema_version: "1.6".to_string(),
+            schema_version: "1.7".to_string(),
+            custom_scan_id: None,
             scanned_at_ms: 1,
             disk: DiskInfo {
                 name: "fixture".to_string(),

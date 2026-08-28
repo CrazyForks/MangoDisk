@@ -302,6 +302,28 @@ impl Platform for MacOsPlatform {
         Ok(())
     }
 
+    fn validate_user_selected_cleanup_root(&self, path: &Path) -> PlatformResult<()> {
+        let canonical = fs::canonicalize(path)
+            .map_err(|error| PlatformError::io("canonicalize path", &error))?;
+        if canonical.parent().is_none() {
+            return Err(PlatformError::invalid_path(
+                "cleanup of a volume root is forbidden",
+            ));
+        }
+        if directories::is_protected_cleanup_path(&canonical) {
+            return Err(PlatformError::invalid_path(
+                "cleanup of a protected macOS directory is forbidden",
+            ));
+        }
+        let user_directories = self.user_directories()?;
+        if canonical.starts_with(user_directories.home_directory().join("Applications")) {
+            return Err(PlatformError::invalid_path(
+                "cleanup of an application installation directory is forbidden",
+            ));
+        }
+        Ok(())
+    }
+
     fn fast_directory_tree_aggregate(
         &self,
         root: &Path,

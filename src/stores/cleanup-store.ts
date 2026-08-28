@@ -110,10 +110,23 @@ export const useCleanupStore = defineStore('cleanup', {
           this.scanProgress = progress;
         });
         this.scan = snapshot;
-        this.scanScope =
-          scanScope.mode === CLEANUP_SCAN_SCOPE_MODES.selectedVolumes
-            ? { mode: scanScope.mode, volumeMountPoints: [...scanScope.volumeMountPoints] }
-            : STANDARD_CLEANUP_SCAN_SCOPE;
+        if (scanScope.mode === CLEANUP_SCAN_SCOPE_MODES.selectedVolumes) {
+          this.scanScope = { mode: scanScope.mode, volumeMountPoints: [...scanScope.volumeMountPoints] };
+        } else if (scanScope.mode === CLEANUP_SCAN_SCOPE_MODES.custom) {
+          this.scanScope = {
+            mode: scanScope.mode,
+            includeStandardRules: scanScope.includeStandardRules,
+            scanId: snapshot.customScanId ?? undefined,
+            rules: scanScope.rules.map(rule => ({
+              ...rule,
+              roots: [...rule.roots],
+              namePatterns: [...rule.namePatterns],
+              modifiedTime: { ...rule.modifiedTime },
+            })),
+          };
+        } else {
+          this.scanScope = STANDARD_CLEANUP_SCAN_SCOPE;
+        }
         appStore.updateSystemDisk(snapshot.disk);
         this.selectedRuleIds = CleanupRuleSelectionUtils.defaultSelectedRuleIds(snapshot.rules);
         this.sourceSelections = [];

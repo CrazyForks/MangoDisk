@@ -321,6 +321,13 @@ impl Platform for WindowsPlatform {
         path_identity::is_same_or_child(path, root)
     }
 
+    fn relative_path(&self, path: &Path, root: &Path) -> Option<PathBuf> {
+        if path_identity::equal(path, root) {
+            return Some(PathBuf::new());
+        }
+        path_identity::relative_child_path(path, root)
+    }
+
     fn should_skip(
         &self,
         path: &Path,
@@ -444,6 +451,37 @@ impl Platform for WindowsPlatform {
                     "cleanup root contains user content",
                 ));
             }
+        }
+        Ok(())
+    }
+
+    fn validate_user_selected_cleanup_root(&self, path: &Path) -> PlatformResult<()> {
+        let canonical = fs::canonicalize(path)
+            .map_err(|error| PlatformError::io("canonicalize path", &error))?;
+        if canonical.parent().is_none()
+            || path_identity::equal(&canonical, &self.system_volume_path())
+        {
+            return Err(PlatformError::invalid_path("cleanup root is a volume root"));
+        }
+        let system_directory = directories::system_directory()?;
+        let program_files_directories = directories::program_files_directories()?;
+        if path_identity::is_same_or_child(&canonical, &system_directory)
+            || program_files_directories
+                .iter()
+                .any(|root| path_identity::is_same_or_child(&canonical, root))
+        {
+            return Err(PlatformError::invalid_path(
+                "cleanup root is system protected",
+            ));
+        }
+        let per_user_programs = self
+            .user_directories()?
+            .home_directory()
+            .join("AppData/Local/Programs");
+        if path_identity::is_same_or_child(&canonical, &per_user_programs) {
+            return Err(PlatformError::invalid_path(
+                "cleanup root is an application installation directory",
+            ));
         }
         Ok(())
     }
@@ -630,6 +668,13 @@ mod tests {
         ));
         assert!(
             !platform.path_is_same_or_child(Path::new(r"C:\Windows.old"), Path::new(r"C:\Windows"))
+        );
+        assert_eq!(
+            platform.relative_path(
+                Path::new(r"\\?\C:\Users\Developer\Cache\File.tmp"),
+                Path::new(r"c:/users/developer")
+            ),
+            Some(PathBuf::from(r"Cache\File.tmp"))
         );
     }
 

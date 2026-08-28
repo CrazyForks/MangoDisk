@@ -298,8 +298,8 @@ watch(
 </script>
 
 <template>
-  <div class="cleanup-browser">
-    <aside class="cleanup-categories scrollbar-stable">
+  <div class="cleanup-browser" :class="{ empty: !navigationItems.length }">
+    <aside v-if="navigationItems.length" class="cleanup-categories scrollbar-stable">
       <template v-for="item in navigationItems" :key="item.id">
         <button
           v-if="item.kind === 'category'"
@@ -687,8 +687,11 @@ watch(
     </section>
 
     <div v-else class="cleanup-details empty">
-      <MdIcon :name="ICON_NAMES.check" :size="28" />
-      <span>{{ t('cleanup.noCleanableInGroup') }}</span>
+      <span class="cleanup-empty-icon">
+        <MdIcon :name="ICON_NAMES.sparkles" :size="24" />
+      </span>
+      <strong>{{ t('cleanup.emptyCleanTitle') }}</strong>
+      <small>{{ t('cleanup.emptyCleanDescription') }}</small>
     </div>
   </div>
 </template>

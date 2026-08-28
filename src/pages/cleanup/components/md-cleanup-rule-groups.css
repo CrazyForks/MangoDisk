@@ -22,6 +22,10 @@
   border-radius: 0;
 }
 
+.cleanup-browser.empty {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .cleanup-categories,
 .detail-list {
   min-height: 0;
@@ -147,10 +151,35 @@
 }
 
 .cleanup-details.empty {
-  @apply text-muted-foreground;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 5px;
+  padding: 24px;
+  text-align: center;
+}
+
+.cleanup-empty-icon {
+  @apply bg-primary/10 text-primary;
+  display: inline-flex;
+  width: 48px;
+  height: 48px;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 7px;
+  border-radius: 50%;
+}
+
+.cleanup-details.empty strong {
+  @apply text-foreground;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.cleanup-details.empty small {
+  @apply text-muted-foreground;
+  max-width: 320px;
+  font-size: 12px;
+  line-height: 1.55;
 }
 
 .detail-warning {

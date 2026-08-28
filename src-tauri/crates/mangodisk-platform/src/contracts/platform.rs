@@ -209,6 +209,17 @@ pub trait Platform: Send + Sync {
     fn path_is_same_or_child(&self, path: &Path, root: &Path) -> bool {
         path.starts_with(root)
     }
+    /// Returns the lexical path below `root` using the same platform identity
+    /// semantics as `path_is_same_or_child`.
+    ///
+    /// Core uses this at policy and scan-plan boundaries so Windows verbatim
+    /// prefixes and case folding are never reimplemented by individual domains.
+    fn relative_path(&self, path: &Path, root: &Path) -> Option<PathBuf> {
+        if self.paths_equal(path, root) {
+            return Some(PathBuf::new());
+        }
+        path.strip_prefix(root).ok().map(Path::to_path_buf)
+    }
     fn validate_path_no_links(&self, path: &Path) -> PlatformResult<()> {
         let absolute = if path.is_absolute() {
             path.to_path_buf()
@@ -252,6 +263,13 @@ pub trait Platform: Send + Sync {
         purpose: ScanPurpose,
     ) -> Option<SkipReason>;
     fn validate_cleanup_root(&self, path: &Path) -> PlatformResult<()>;
+    /// Validates a cleanup root chosen explicitly by the user.
+    ///
+    /// Implementations may allow personal-content directories while retaining
+    /// volume, operating-system, and application-installation boundaries.
+    fn validate_user_selected_cleanup_root(&self, path: &Path) -> PlatformResult<()> {
+        self.validate_cleanup_root(path)
+    }
 
     /// Measures a complete directory through a platform-native bulk traversal.
     ///

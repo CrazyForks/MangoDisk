@@ -42,8 +42,9 @@ pub use cleanup::{
     CleanupCategory, CleanupExecutionProgress, CleanupExecutionStage, CleanupGroup, CleanupPlan,
     CleanupRequest, CleanupResult, CleanupScanEngineInfo, CleanupScanResult,
     CleanupSourceBlockReason, CleanupSourceDetail, CleanupSourceSelection,
-    CleanupSourceSelectionMode, RiskLevel, ScanItemStatus, ScanRuleResult,
-    CLEANUP_AUTOMATION_PROFILE_SCHEMA_VERSION, CLEANUP_PLAN_SCHEMA_VERSION,
+    CleanupSourceSelectionMode, CustomCleanupModifiedTime, CustomCleanupRule, RiskLevel,
+    ScanItemStatus, ScanRuleResult, CLEANUP_AUTOMATION_PROFILE_SCHEMA_VERSION,
+    CLEANUP_PLAN_SCHEMA_VERSION, CUSTOM_CLEANUP_RULE_SCHEMA_VERSION,
 };
 pub use cleanup::{CleanupPlanService, CleanupScanService, CleanupService};
 pub use filesystem::{

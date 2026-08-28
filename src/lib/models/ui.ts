@@ -32,6 +32,7 @@ export const ICON_NAMES = {
   grid: 'grid',
   list: 'list',
   folder: 'folder',
+  folderOpen: 'folderOpen',
   folderPlus: 'folderPlus',
   file: 'file',
   fileText: 'fileText',

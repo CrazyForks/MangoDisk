@@ -14,7 +14,7 @@ import type { ApplicationCloseMode } from '@/lib/models/application-close';
 import type { DirectoryEntryInfo } from '@/lib/models/analysis';
 import type { DuplicateFileEntry } from '@/lib/models/duplicate-file';
 import type { LargeFileEntry } from '@/lib/models/large-file';
-import { CLEANUP_OPERATION_IDS, type CleanupScanScope } from '@/lib/models/cleanup';
+import { CLEANUP_OPERATION_IDS, CLEANUP_SCAN_SCOPE_MODES, type CleanupScanScope } from '@/lib/models/cleanup';
 import { ICON_NAMES } from '@/lib/models/ui';
 import {
   createSidebarLayoutState,
@@ -29,6 +29,7 @@ import { FileManagerService } from '@/lib/services/file-manager-service';
 import { LinkService } from '@/lib/services/link-service';
 import { OperatingSystemService } from '@/lib/services/operating-system-service';
 import { CleanupRuleTextUtils, type CleanupRuleMessageResolver } from '@/lib/utils/cleanup-rule-text';
+import { CleanupScanScopeUtils } from '@/lib/utils/cleanup-scan-scope';
 import { ByteSizeService } from '@/lib/services/byte-size-service';
 import { FormatUtils } from '@/lib/utils/format';
 import { PathUtils } from '@/lib/utils/path';
@@ -128,11 +129,20 @@ const LARGE_FILE_DELETE_TOAST_ID = 'large-file-delete-result';
 const DUPLICATE_FILE_DELETE_TOAST_ID = 'duplicate-file-delete-result';
 const DEEP_CLEANUP_TOAST_ID = 'deep-cleanup-result';
 const APPLICATION_ERROR_TOAST_ID = 'application-error';
+const customCleanupRuleNames = computed<Record<string, string>>(() =>
+  cleanupStore.scanScope.mode === CLEANUP_SCAN_SCOPE_MODES.custom
+    ? Object.fromEntries(cleanupStore.scanScope.rules.map(rule => [`custom.${rule.id}`, rule.name]))
+    : {}
+);
 const localizedCleanupScan = computed(() =>
-  cleanupStore.scan ? CleanupRuleTextUtils.snapshot(cleanupStore.scan, resolveCleanupRuleMessage) : null
+  cleanupStore.scan
+    ? CleanupRuleTextUtils.snapshot(cleanupStore.scan, resolveCleanupRuleMessage, customCleanupRuleNames.value)
+    : null
 );
 const localizedCleanupResult = computed(() =>
-  cleanupStore.result ? CleanupRuleTextUtils.cleanupResult(cleanupStore.result, resolveCleanupRuleMessage) : null
+  cleanupStore.result
+    ? CleanupRuleTextUtils.cleanupResult(cleanupStore.result, resolveCleanupRuleMessage, customCleanupRuleNames.value)
+    : null
 );
 const localizedHistory = computed(() => CleanupRuleTextUtils.records(historyStore.records, resolveCleanupRuleMessage));
 const cleanupBusy = computed(
@@ -713,7 +723,12 @@ async function scanCleanup(scanScope: CleanupScanScope) {
   cleanupOrchestrating.value = true;
   try {
     const completed = await cleanupStore.scanCandidates(scanScope);
-    if (completed) await applicationStore.scanLeftovers();
+    if (!completed) return;
+    if (CleanupScanScopeUtils.includesStandardCleanup(scanScope)) {
+      await applicationStore.scanLeftovers();
+    } else {
+      applicationStore.clearLeftoverResults();
+    }
   } finally {
     cleanupOrchestrating.value = false;
   }

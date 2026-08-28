@@ -3,6 +3,7 @@ import type { CleanupRuleSelectionLevel } from '@/lib/utils/cleanup-rule-selecti
 import { CleanupRuleSelectionUtils } from '@/lib/utils/cleanup-rule-selection';
 
 const CATEGORY_ORDER: readonly CleanupResultGroup[] = [
+  'custom',
   'system',
   'userCache',
   'application',

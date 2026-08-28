@@ -45,7 +45,7 @@ const SETTINGS: &[SettingDefinition] = &[
     ),
     setting(
         "macos.finder.show-hidden-files",
-        "NSGlobalDomain",
+        "com.apple.finder",
         "AppleShowAllFiles",
         ValueKind::Boolean,
     ),
@@ -490,6 +490,58 @@ pub(crate) fn scan(
 pub(crate) fn change(
     request: &PlatformSystemSettingChangeRequest,
 ) -> PlatformResult<PlatformSystemSettingChangeResult> {
+    let result = change_without_refresh(request)?;
+    if result.changed && requires_finder_refresh(&request.setting_id) {
+        refresh_finder().map_err(PlatformError::with_possible_side_effects)?;
+        log::info!("macos_system_settings_finder_refreshed setting_count=1");
+    }
+    Ok(result)
+}
+
+pub(crate) fn change_many(
+    requests: &[PlatformSystemSettingChangeRequest],
+) -> PlatformResult<Vec<PlatformResult<PlatformSystemSettingChangeResult>>> {
+    let mut results = requests
+        .iter()
+        .map(change_without_refresh)
+        .collect::<Vec<_>>();
+    let refresh_indexes = requests
+        .iter()
+        .zip(&results)
+        .enumerate()
+        .filter_map(|(index, (request, result))| {
+            result
+                .as_ref()
+                .is_ok_and(|result| result.changed && requires_finder_refresh(&request.setting_id))
+                .then_some(index)
+        })
+        .collect::<Vec<_>>();
+    if refresh_indexes.is_empty() {
+        return Ok(results);
+    }
+
+    match refresh_finder() {
+        Ok(()) => log::info!(
+            "macos_system_settings_finder_refreshed setting_count={}",
+            refresh_indexes.len()
+        ),
+        Err(error) => {
+            log::warn!(
+                "macos_system_settings_finder_refresh_failed setting_count={} code={:?}",
+                refresh_indexes.len(),
+                error.code()
+            );
+            for index in refresh_indexes {
+                results[index] = Err(PlatformError::with_possible_side_effects(error.clone()));
+            }
+        }
+    }
+    Ok(results)
+}
+
+fn change_without_refresh(
+    request: &PlatformSystemSettingChangeRequest,
+) -> PlatformResult<PlatformSystemSettingChangeResult> {
     let definition = definition(&request.setting_id).ok_or_else(|| {
         PlatformError::new(
             PlatformErrorCode::Unsupported,
@@ -510,6 +562,44 @@ pub(crate) fn change(
         verified: after == request.desired_value,
         value: after,
     })
+}
+
+fn requires_finder_refresh(setting_id: &str) -> bool {
+    // This preference is safe to apply immediately. Other Finder settings remain restart-gated
+    // because relaunching Finder can trigger behavior such as deleting old Trash items.
+    setting_id == "macos.finder.show-hidden-files"
+}
+
+fn refresh_finder() -> PlatformResult<()> {
+    for attempt in 0..3 {
+        let status = Command::new(Path::new("/usr/bin/killall"))
+            .arg("Finder")
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .map_err(|error| PlatformError::io("refresh Finder", &error))?;
+        if status.success() || !process_is_running("Finder")? {
+            return Ok(());
+        }
+        if attempt < 2 {
+            // Finder is demand-launched. A rapid second update can race with launchd between the
+            // old process exiting and the replacement becoming signalable.
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+    }
+    Err(PlatformError::operation_failed("failed to refresh Finder"))
+}
+
+fn process_is_running(process_name: &str) -> PlatformResult<bool> {
+    Command::new(Path::new("/usr/bin/pgrep"))
+        .args(["-x", process_name])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|status| status.success())
+        .map_err(|error| PlatformError::io("inspect process state", &error))
 }
 
 fn definition(setting_id: &str) -> Option<SettingDefinition> {
@@ -675,8 +765,23 @@ mod tests {
     }
 
     #[test]
+    fn only_safe_finder_preferences_refresh_immediately() {
+        assert!(requires_finder_refresh("macos.finder.show-hidden-files"));
+        assert!(!requires_finder_refresh(
+            "macos.finder.remove-old-trash-items"
+        ));
+        assert!(!requires_finder_refresh("macos.dock.auto-hide"));
+    }
+
+    #[test]
     fn expanded_catalog_uses_expected_preference_types() {
         let cases = [
+            (
+                "macos.finder.show-hidden-files",
+                "com.apple.finder",
+                "AppleShowAllFiles",
+                ValueKind::Boolean,
+            ),
             (
                 "macos.finder.default-list-view",
                 "com.apple.finder",
@@ -765,6 +870,55 @@ mod tests {
 
         restore.expect("the original preference should always be restored");
         round_trip.expect("the expanded setting should support a verified round trip");
+        assert_eq!(
+            read_value(definition).expect("the restored preference should be readable"),
+            before
+        );
+    }
+
+    #[test]
+    #[ignore = "temporarily changes the hidden-file preference and refreshes Finder"]
+    fn actual_hidden_files_round_trip_refreshes_and_restores() {
+        let definition = definition("macos.finder.show-hidden-files")
+            .expect("the hidden-file setting should exist");
+        let before = read_value(definition).expect("the original preference should be readable");
+        let temporary = match before {
+            PlatformSystemSettingValue::Boolean(value) => {
+                PlatformSystemSettingValue::Boolean(!value)
+            }
+            _ => PlatformSystemSettingValue::Boolean(true),
+        };
+
+        let round_trip = (|| -> PlatformResult<()> {
+            let mut results = change_many(&[PlatformSystemSettingChangeRequest {
+                setting_id: definition.id.to_string(),
+                expected_value: before.clone(),
+                desired_value: temporary.clone(),
+            }])?;
+            let result = results
+                .pop()
+                .ok_or_else(|| PlatformError::operation_failed("batch result was missing"))??;
+            if !result.changed || !result.verified || read_value(definition)? != temporary {
+                return Err(PlatformError::operation_failed(
+                    "temporary hidden-file preference was not applied",
+                ));
+            }
+            Ok(())
+        })();
+        let restore = (|| -> PlatformResult<()> {
+            let mut results = change_many(&[PlatformSystemSettingChangeRequest {
+                setting_id: definition.id.to_string(),
+                expected_value: temporary,
+                desired_value: before.clone(),
+            }])?;
+            results
+                .pop()
+                .ok_or_else(|| PlatformError::operation_failed("batch result was missing"))??;
+            Ok(())
+        })();
+
+        restore.expect("the original hidden-file preference should always be restored");
+        round_trip.expect("the hidden-file preference should support a verified round trip");
         assert_eq!(
             read_value(definition).expect("the restored preference should be readable"),
             before

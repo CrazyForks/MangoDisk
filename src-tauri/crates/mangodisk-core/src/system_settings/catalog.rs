@@ -66,7 +66,7 @@ const MACOS_SETTINGS: &[SettingDefinition] = &[
         SystemSettingCategory::Productivity,
         DefinitionValue::Boolean(false),
         DefinitionValue::Boolean(true),
-        true,
+        false,
     ),
     one_click(
         "macos.finder.show-posix-path",
@@ -75,7 +75,7 @@ const MACOS_SETTINGS: &[SettingDefinition] = &[
         DefinitionValue::Boolean(true),
         true,
     ),
-    one_click(
+    custom(
         "macos.finder.disable-animations",
         SystemSettingCategory::Performance,
         DefinitionValue::Boolean(false),
@@ -218,7 +218,7 @@ const MACOS_SETTINGS: &[SettingDefinition] = &[
         DefinitionValue::Boolean(false),
         true,
     ),
-    one_click(
+    custom(
         "macos.dock.disable-launch-animation",
         SystemSettingCategory::Performance,
         DefinitionValue::Boolean(true),
@@ -260,7 +260,7 @@ const MACOS_SETTINGS: &[SettingDefinition] = &[
         DefinitionValue::Boolean(true),
         true,
     ),
-    one_click(
+    custom(
         "macos.window.disable-animations",
         SystemSettingCategory::Performance,
         DefinitionValue::Missing,
@@ -816,7 +816,7 @@ const WINDOWS_SETTINGS: &[SettingDefinition] = &[
         DefinitionValue::Integer(0),
         true,
     ),
-    one_click(
+    custom(
         "windows.taskbar.disable-animations",
         SystemSettingCategory::Performance,
         DefinitionValue::Integer(1),
@@ -861,7 +861,7 @@ const WINDOWS_SETTINGS: &[SettingDefinition] = &[
         DefinitionValue::Integer(0),
         true,
     ),
-    one_click(
+    custom(
         "windows.personalization.disable-transparency",
         SystemSettingCategory::Performance,
         DefinitionValue::Integer(1),
@@ -1256,16 +1256,16 @@ const WINDOWS_SETTINGS: &[SettingDefinition] = &[
         DefinitionValue::Integer(1),
         false,
     ),
-    one_click(
+    custom(
         "windows.desktop.reduce-menu-delay",
-        SystemSettingCategory::Productivity,
+        SystemSettingCategory::Performance,
         DefinitionValue::Text("400"),
         DefinitionValue::Text("200"),
         false,
     ),
-    one_click(
+    custom(
         "windows.desktop.reduce-hover-delay",
-        SystemSettingCategory::Productivity,
+        SystemSettingCategory::Performance,
         DefinitionValue::Text("400"),
         DefinitionValue::Text("100"),
         false,
@@ -1828,6 +1828,42 @@ mod tests {
             all_processes.recommended_value,
             DefinitionValue::Integer(100)
         ));
+    }
+
+    #[test]
+    fn visual_preferences_remain_explicit_performance_choices() {
+        for (platform, setting_ids) in [
+            (
+                SystemSettingsPlatform::Macos,
+                &[
+                    "macos.finder.disable-animations",
+                    "macos.dock.disable-launch-animation",
+                    "macos.window.disable-animations",
+                ][..],
+            ),
+            (
+                SystemSettingsPlatform::Windows,
+                &[
+                    "windows.taskbar.disable-animations",
+                    "windows.personalization.disable-transparency",
+                    "windows.desktop.reduce-menu-delay",
+                    "windows.desktop.reduce-hover-delay",
+                ][..],
+            ),
+        ] {
+            let platform_definitions = definitions(platform);
+            for setting_id in setting_ids {
+                let definition = platform_definitions
+                    .iter()
+                    .find(|definition| definition.id == *setting_id)
+                    .expect("the visual performance preference should exist");
+                assert_eq!(
+                    definition.selection_kind,
+                    SystemSettingSelectionKind::Custom
+                );
+                assert_eq!(definition.category, SystemSettingCategory::Performance);
+            }
+        }
     }
 
     #[test]

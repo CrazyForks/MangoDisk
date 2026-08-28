@@ -6,6 +6,7 @@ import { toast } from 'vue-sonner';
 import MdActionBarContainer from '@/components/custom/md-action-bar-container.vue';
 import MdCategoryFilter from '@/components/custom/md-category-filter.vue';
 import MdEmptyState from '@/components/custom/md-empty-state.vue';
+import MdIconAction from '@/components/custom/md-icon-action.vue';
 import MdOperationProgress from '@/components/custom/md-operation-progress.vue';
 import MdOperationWorkspace from '@/components/custom/md-operation-workspace.vue';
 import MdPageShell from '@/components/custom/md-page-shell.vue';
@@ -52,6 +53,9 @@ const desiredOptimized = computed(() => new Set(store.desiredOptimizedIds));
 const availableItems = computed(() => store.catalog?.items.filter(item => item.status !== 'unavailable') ?? []);
 const pendingChanges = computed(() =>
   store.catalog ? systemOptimizationPendingChanges(store.catalog, store.desiredOptimizedIds) : []
+);
+const recoveryAvailable = computed(
+  () => store.catalog?.recoveryAvailable === true && store.catalog.items.some(item => item.restoreAvailable)
 );
 const pendingById = computed(() => new Map(pendingChanges.value.map(item => [item.settingId, item.target])));
 const changeCount = computed(() => pendingChanges.value.length);
@@ -190,6 +194,7 @@ function updateCategory(value: string) {
 }
 
 function modeName(mode: SystemOptimizationMode): string {
+  if (mode === 'unchanged') return t('systemOptimization.modes.unchanged.name');
   if (mode === 'performance') return t('systemOptimization.modes.performance.name');
   if (mode === 'privacy') return t('systemOptimization.modes.privacy.name');
   if (mode === 'manual') return t('systemOptimization.modes.manual.name');
@@ -217,6 +222,12 @@ function runOptimization() {
   prepareOptimization();
 }
 
+async function restorePreviousSettings() {
+  executionRequested.value = true;
+  const plan = await store.prepareRecovery();
+  if (!plan) executionRequested.value = false;
+}
+
 function confirmHighRiskChanges() {
   riskDialogOpen.value = false;
   prepareOptimization();
@@ -230,6 +241,10 @@ onMounted(() => {
 <template>
   <MdPageShell class="optimization-page" content-mode="workspace" :title="t('systemOptimization.title')">
     <template #actions>
+      <Button v-if="recoveryAvailable" variant="outline" :disabled="busy" @click="restorePreviousSettings">
+        <MdIcon :name="ICON_NAMES.history" :size="17" />
+        {{ t('systemOptimization.restorePrevious') }}
+      </Button>
       <Button variant="outline" :disabled="busy" @click="store.scan()">
         <MdIcon :name="ICON_NAMES.refresh" :size="17" />
         {{ t('systemOptimization.rescan') }}
@@ -306,62 +321,56 @@ onMounted(() => {
         <section v-else class="optimization-list">
           <div v-for="item in visibleItems" :key="item.settingId" class="optimization-item">
             <span class="item-copy">
-              <strong>{{ itemMessage(item, 'name') }}</strong>
+              <span class="item-heading">
+                <strong>{{ itemMessage(item, 'name') }}</strong>
+                <MdIconAction
+                  v-if="item.requiresRestart"
+                  appearance="unstyled"
+                  class="item-help"
+                  :label="t('systemOptimization.statuses.requiresRestart')"
+                  tooltip-class="max-w-72 leading-relaxed"
+                >
+                  <MdIcon :name="ICON_NAMES.help" :size="13" />
+                </MdIconAction>
+                <Tooltip v-if="item.riskLevel !== 'standard'">
+                  <TooltipTrigger as-child>
+                    <span class="item-state is-caution" :class="{ 'is-high-risk': item.riskLevel === 'high' }">
+                      {{
+                        t(
+                          item.riskLevel === 'high'
+                            ? 'systemOptimization.statuses.highImpact'
+                            : 'systemOptimization.statuses.caution'
+                        )
+                      }}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" :side-offset="6">
+                    {{ riskDescription(item) }}
+                  </TooltipContent>
+                </Tooltip>
+              </span>
               <small>{{ itemMessage(item, 'description') }}</small>
             </span>
-            <span class="item-meta">
-              <Tooltip v-if="item.riskLevel !== 'standard'">
-                <TooltipTrigger as-child>
-                  <span class="item-state is-caution" :class="{ 'is-high-risk': item.riskLevel === 'high' }">
-                    {{
-                      t(
-                        item.riskLevel === 'high'
-                          ? 'systemOptimization.statuses.highImpact'
-                          : 'systemOptimization.statuses.caution'
-                      )
-                    }}
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="top" :side-offset="6">
-                  {{ riskDescription(item) }}
-                </TooltipContent>
-              </Tooltip>
-              <span v-if="pendingTarget(item)" class="item-state is-pending">
-                {{
-                  t(
-                    pendingTarget(item) === 'optimized'
-                      ? 'systemOptimization.statuses.pendingEnable'
-                      : 'systemOptimization.statuses.pendingDisable'
-                  )
-                }}
+            <span class="item-actions">
+              <span v-if="pendingTarget(item)" class="item-pending">
+                <span class="item-pending-dot" aria-hidden="true" />
+                <span>
+                  {{
+                    t(
+                      pendingTarget(item) === 'optimized'
+                        ? 'systemOptimization.statuses.pendingEnable'
+                        : 'systemOptimization.statuses.pendingDisable'
+                    )
+                  }}
+                </span>
               </span>
-              <Tooltip v-if="pendingTarget(item) && item.requiresRestart">
-                <TooltipTrigger as-child>
-                  <span class="item-restart" :aria-label="t('systemOptimization.statuses.requiresRestart')">
-                    <MdIcon :name="ICON_NAMES.refresh" :size="14" />
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="top" :side-offset="6">
-                  {{ t('systemOptimization.statuses.requiresRestart') }}
-                </TooltipContent>
-              </Tooltip>
-              <Tooltip v-if="item.requiresElevation">
-                <TooltipTrigger as-child>
-                  <span class="item-admin" :aria-label="t('systemOptimization.statuses.requiresElevation')">
-                    <MdIcon :name="ICON_NAMES.shield" :size="14" />
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="top" :side-offset="6">
-                  {{ t('systemOptimization.statuses.requiresElevation') }}
-                </TooltipContent>
-              </Tooltip>
+              <MdSwitch
+                :model-value="desiredState(item)"
+                :disabled="busy"
+                :aria-label="itemMessage(item, 'name')"
+                @update:model-value="toggleItem(item, $event)"
+              />
             </span>
-            <MdSwitch
-              :model-value="desiredState(item)"
-              :disabled="busy"
-              :aria-label="itemMessage(item, 'name')"
-              @update:model-value="toggleItem(item, $event)"
-            />
           </div>
         </section>
       </div>
@@ -478,7 +487,7 @@ onMounted(() => {
 }
 .optimization-item {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto 34px;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
   min-height: 62px;
@@ -497,9 +506,45 @@ onMounted(() => {
   flex-direction: column;
   gap: 3px;
 }
+.item-heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  overflow: hidden;
+}
 .item-copy strong {
+  min-width: 0;
+  overflow: hidden;
   font-size: var(--font-content-primary);
   font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.item-heading :deep(.item-help) {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 5px;
+  padding: 0;
+  background: transparent;
+  color: color-mix(in oklab, var(--muted-foreground) 60%, transparent);
+  cursor: help;
+  transition:
+    color 140ms ease,
+    background-color 140ms ease;
+}
+.item-heading :deep(.item-help:hover) {
+  background: color-mix(in oklab, var(--muted) 72%, transparent);
+  color: var(--foreground);
+}
+.item-heading :deep(.item-help:focus-visible) {
+  outline: 2px solid color-mix(in oklab, var(--ring) 45%, transparent);
+  outline-offset: 1px;
 }
 .item-copy small {
   overflow: hidden;
@@ -508,11 +553,28 @@ onMounted(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.item-meta {
+.item-actions {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 5px;
+  gap: 12px;
+}
+.item-pending {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  color: var(--primary);
+  font-size: 10px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.item-pending-dot {
+  width: 5px;
+  height: 5px;
+  flex: none;
+  border-radius: 999px;
+  background: currentcolor;
 }
 .item-state {
   border-radius: 999px;
@@ -522,10 +584,6 @@ onMounted(() => {
   font-size: 9px;
   white-space: nowrap;
 }
-.item-state.is-pending {
-  background: color-mix(in oklab, var(--primary) 10%, transparent);
-  color: var(--primary);
-}
 .item-state.is-caution {
   color: var(--warning-foreground);
   background: color-mix(in oklab, var(--warning) 12%, transparent);
@@ -533,14 +591,6 @@ onMounted(() => {
 .item-state.is-high-risk {
   color: var(--destructive);
   background: color-mix(in oklab, var(--destructive) 9%, transparent);
-}
-.item-admin,
-.item-restart {
-  display: grid;
-  width: 24px;
-  height: 24px;
-  place-items: center;
-  color: var(--muted-foreground);
 }
 @container (max-width: 760px) {
   .mode-control > span {

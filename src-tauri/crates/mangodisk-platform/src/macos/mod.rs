@@ -90,6 +90,13 @@ impl SystemSettingsPlatform for MacOsPlatform {
     ) -> PlatformResult<PlatformSystemSettingChangeResult> {
         system_settings::change(request)
     }
+
+    fn change_system_settings(
+        &self,
+        requests: &[PlatformSystemSettingChangeRequest],
+    ) -> PlatformResult<Vec<PlatformResult<PlatformSystemSettingChangeResult>>> {
+        system_settings::change_many(requests)
+    }
 }
 
 impl SystemMaintenancePlatform for MacOsPlatform {

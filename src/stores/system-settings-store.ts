@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 
 import type {
+  SystemSettingChangeSelectionItem,
   SystemSettingsCatalog,
   SystemSettingsChangePlan,
   SystemSettingsChangeResult,
@@ -33,7 +34,7 @@ export const useSystemSettingsStore = defineStore('system-settings', {
   state: (): SystemSettingsState => ({
     catalog: null,
     desiredOptimizedIds: [],
-    optimizationMode: 'smart',
+    optimizationMode: 'unchanged',
     scanning: false,
     cancelling: false,
     preparing: false,
@@ -50,7 +51,7 @@ export const useSystemSettingsStore = defineStore('system-settings', {
       try {
         const catalog = await SystemSettingsService.scan();
         this.catalog = catalog;
-        const mode = this.optimizationMode === 'manual' ? 'smart' : this.optimizationMode;
+        const mode = this.optimizationMode === 'manual' ? 'unchanged' : this.optimizationMode;
         this.optimizationMode = mode;
         this.desiredOptimizedIds = systemOptimizationDesiredIdsForMode(catalog, mode);
       } catch (error) {
@@ -84,17 +85,47 @@ export const useSystemSettingsStore = defineStore('system-settings', {
     async prepare() {
       if (!this.catalog || this.preparing || this.executing) return;
       const items = systemOptimizationPendingChanges(this.catalog, this.desiredOptimizedIds);
-      if (!items.length) return;
+      await this.prepareItems(items);
+    },
+    async prepareRecovery() {
+      if (!this.catalog || this.preparing || this.executing) return null;
+      const restoreIds = new Set(
+        this.catalog.items
+          .filter(item => item.status === 'optimized' && item.restoreAvailable)
+          .map(item => item.settingId)
+      );
+      if (!restoreIds.size) return null;
+      const plan = await this.prepareItems(
+        [...restoreIds].map(settingId => ({
+          settingId,
+          target: 'default',
+        }))
+      );
+      if (!plan) return null;
+      const plannedRestoreIds = new Set(
+        plan.items.filter(item => item.target === 'default').map(item => item.settingId)
+      );
+      this.desiredOptimizedIds = this.catalog.items
+        .filter(item => item.status === 'optimized' && !plannedRestoreIds.has(item.settingId))
+        .map(item => item.settingId);
+      this.optimizationMode = 'manual';
+      return plan;
+    },
+    async prepareItems(items: SystemSettingChangeSelectionItem[]) {
+      if (!this.catalog || this.preparing || this.executing || !items.length) return null;
       this.preparing = true;
       this.pendingPlan = null;
       useAppStore().clearError();
       try {
-        this.pendingPlan = await SystemSettingsService.prepareChange({
+        const plan = await SystemSettingsService.prepareChange({
           scanId: this.catalog.scanId,
           items,
         });
+        this.pendingPlan = plan;
+        return plan;
       } catch (error) {
         if (parseCommandError(error)?.code !== 'operationCancelled') useAppStore().reportError(error);
+        return null;
       } finally {
         this.preparing = false;
       }

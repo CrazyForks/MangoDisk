@@ -200,6 +200,7 @@
     "optimizing": "正在优化…",
     "checking": "正在确认设置…",
     "rescan": "重新检查",
+    "restorePrevious": "恢复优化前设置",
     "filterCategory": "筛选优化类别",
     "pendingEmpty": {
       "title": "没有待应用更改",
@@ -216,7 +217,8 @@
       "appearance": "外观偏好"
     },
     "modes": {
-      "label": "推荐方案",
+      "label": "优化方案",
+      "unchanged": { "name": "保持当前设置" },
       "smart": { "name": "智能推荐" },
       "performance": { "name": "性能优先" },
       "privacy": { "name": "隐私优先" },
@@ -225,9 +227,8 @@
     "statuses": {
       "pendingEnable": "待启用",
       "pendingDisable": "待停用",
-      "requiresElevation": "需管理员权限",
       "authorizationRequired": "应用所选更改时需要管理员授权",
-      "requiresRestart": "应用后需要重新打开相关系统组件或重新登录",
+      "requiresRestart": "应用后需要重新打开相关系统组件或重新登录才能生效",
       "caution": "需谨慎",
       "highImpact": "高影响",
       "riskDescriptions": {
@@ -261,8 +262,8 @@
       "macos_finder_show-status-bar": { "name": "显示 Finder 状态栏", "description": "显示项目数量和剩余磁盘空间" },
       "macos_finder_show-hidden-files": { "name": "显示隐藏文件", "description": "在 Finder 中直接查看隐藏项目" },
       "macos_finder_show-posix-path": {
-        "name": "标题栏显示完整路径",
-        "description": "在 Finder 标题中显示当前目录路径"
+        "name": "Finder 标题显示完整路径",
+        "description": "在窗口标题中显示当前文件夹的完整路径"
       },
       "macos_finder_disable-animations": {
         "name": "减少 Finder 动画",
@@ -295,7 +296,7 @@
         "name": "窗口最小化到应用图标",
         "description": "避免 Dock 生成额外的窗口缩略图"
       },
-      "macos_dock_use-scale-effect": { "name": "使用快速缩放效果", "description": "用更简洁的缩放动画替代神奇效果" },
+      "macos_dock_use-scale-effect": { "name": "使用缩放最小化效果", "description": "使用简洁的缩放动画替代神奇效果" },
       "macos_mission-control_keep-space-order": {
         "name": "保持桌面空间顺序",
         "description": "阻止系统按最近使用情况自动重排桌面"
@@ -327,7 +328,7 @@
         "description": "避免系统自动修改英文句首大小写"
       },
       "macos_text_disable-period-substitution": {
-        "name": "关闭双空格句号",
+        "name": "关闭双空格自动句号",
         "description": "连续输入空格时不自动插入句号"
       },
       "windows_explorer_show-file-extensions": {
@@ -361,8 +362,8 @@
         "description": "在新版本 Windows 11 中移除入口并禁止打开小组件面板"
       },
       "windows_taskbar_enable-end-task": {
-        "name": "启用任务栏结束任务",
-        "description": "右键应用图标即可结束无响应进程"
+        "name": "允许从任务栏结束任务",
+        "description": "可从应用图标的右键菜单直接结束进程"
       },
       "windows_taskbar_hide-search": {
         "name": "隐藏任务栏搜索框",
@@ -371,11 +372,11 @@
       "windows_taskbar_align-left": { "name": "任务栏图标左对齐", "description": "将开始菜单和应用图标移动到左侧" },
       "windows_taskbar_disable-animations": {
         "name": "关闭任务栏动画",
-        "description": "减少任务栏切换动画并提升响应速度"
+        "description": "减少任务栏过渡动画，让操作反馈更直接"
       },
       "windows_desktop_prefer-performance-effects": {
-        "name": "优先系统响应速度",
-        "description": "减少非必要视觉效果以改善界面响应"
+        "name": "减少 Windows 视觉效果",
+        "description": "关闭部分动画和透明效果，减少界面渲染开销"
       },
       "windows_personalization_dark-apps": { "name": "应用使用深色模式", "description": "让支持的应用使用深色界面" },
       "windows_personalization_dark-system": {
@@ -397,20 +398,20 @@
         "description": "阻止应用使用广告 ID 提供个性化广告"
       },
       "windows_privacy_disable-tailored-experiences": {
-        "name": "关闭定制体验",
-        "description": "不使用诊断数据提供个性化提示和推荐"
+        "name": "关闭诊断数据个性化建议",
+        "description": "不再根据诊断数据提供个性化提示和推荐"
       },
       "windows_privacy_disable-activity-publishing": {
-        "name": "关闭活动记录共享",
-        "description": "不向其他设备发布当前用户的活动记录"
+        "name": "停止向其他设备共享活动",
+        "description": "不再将当前用户的活动记录发布到其他设备"
       },
       "windows_privacy_disable-activity-upload": {
-        "name": "关闭活动记录上传",
-        "description": "不将当前用户的活动历史上传到云端"
+        "name": "停止上传活动历史",
+        "description": "不再将当前用户的活动历史上传到云端"
       },
       "windows_content_disable-silent-app-installs": {
-        "name": "阻止静默推荐应用",
-        "description": "减少系统自动添加的推荐应用"
+        "name": "阻止自动安装推荐应用",
+        "description": "避免 Windows 在后台为当前用户添加推荐应用"
       },
       "windows_content_disable-suggestions": {
         "name": "关闭系统建议内容",
@@ -437,20 +438,23 @@
         "description": "不再提示完成设备设置或启用附加服务"
       },
       "windows_search_disable-web-suggestions": {
-        "name": "关闭搜索框网络建议",
-        "description": "开始菜单搜索主要保留本机结果"
+        "name": "关闭开始菜单网络建议",
+        "description": "减少开始菜单搜索中的网络结果和建议"
       },
       "windows_storage_enable-storage-sense": {
         "name": "启用存储感知",
-        "description": "允许 Windows 自动维护临时文件空间"
+        "description": "允许 Windows 自动清理临时文件并释放空间"
       },
-      "windows_desktop_reduce-menu-delay": { "name": "缩短菜单响应延迟", "description": "让系统菜单更快响应鼠标停留" },
+      "windows_desktop_reduce-menu-delay": {
+        "name": "缩短菜单展开延迟",
+        "description": "让子菜单在鼠标悬停后更快展开"
+      },
       "windows_explorer_enable-auto-suggest": {
-        "name": "启用资源管理器输入建议",
-        "description": "在地址栏和运行窗口输入时显示匹配建议"
+        "name": "启用路径和命令输入建议",
+        "description": "在资源管理器地址栏和运行窗口中显示匹配建议"
       },
       "windows_explorer_disable-aero-shake": {
-        "name": "关闭摇晃窗口最小化",
+        "name": "关闭摇晃窗口自动最小化",
         "description": "避免拖动窗口时意外最小化其他窗口"
       },
       "windows_explorer_show-operation-details": {
@@ -506,8 +510,8 @@
         "description": "不使用手写内容训练个性化识别模型"
       },
       "windows_privacy_disable-feedback-requests": {
-        "name": "关闭反馈请求",
-        "description": "减少 Windows 主动弹出的使用体验问卷"
+        "name": "减少 Windows 反馈提示",
+        "description": "减少系统主动显示的体验调查和反馈请求"
       },
       "windows_privacy_disable-nearby-sharing": {
         "name": "关闭附近共享",
@@ -526,7 +530,7 @@
         "description": "不在系统中保留多个已复制项目"
       },
       "windows_content_disable-spotlight": {
-        "name": "关闭锁屏聚焦内容",
+        "name": "关闭锁屏 Windows 聚焦",
         "description": "锁屏不再自动轮换推荐图片和内容"
       },
       "windows_content_disable-phone-link-suggestions": {
@@ -566,8 +570,8 @@
         "description": "禁止 Firefox 上传遥测并停止本地遥测归档"
       },
       "windows_ai_disable-recall-snapshots": {
-        "name": "关闭 Recall 快照分析",
-        "description": "阻止 Windows AI 保存和分析屏幕活动快照"
+        "name": "关闭 Recall 屏幕快照",
+        "description": "阻止 Recall 保存和分析屏幕活动记录"
       },
       "windows_ai_disable-copilot": {
         "name": "关闭 Windows Copilot",
@@ -586,7 +590,7 @@
         "description": "键入时不显示预测文字建议"
       },
       "windows_typing_disable-double-space-period": {
-        "name": "关闭双空格句号",
+        "name": "关闭双空格自动句号",
         "description": "连续输入空格时不自动插入句号"
       },
       "windows_accessibility_disable-sticky-keys-shortcut": {
@@ -614,28 +618,28 @@
         "description": "阻止他人通过 Windows 远程协助连接这台电脑"
       },
       "windows_performance_reduce-service-shutdown-timeout": {
-        "name": "缩短服务关机等待时间",
-        "description": "减少关机时等待后台服务退出的时间，未响应服务可能被更快终止"
+        "name": "缩短关机时的服务等待时间",
+        "description": "减少关机时等待后台服务退出的时间；未响应服务可能被更快终止"
       },
       "windows_performance_disable-network-throttling": {
-        "name": "关闭多媒体网络节流",
-        "description": "降低 Windows 对多媒体网络吞吐的限制，适合低延迟网络场景"
+        "name": "取消多媒体网络吞吐限制",
+        "description": "减少 Windows 对多媒体网络流量的限制；实际效果取决于网络和应用"
       },
       "windows_performance_remove-reserved-bandwidth": {
-        "name": "取消 QoS 带宽预留",
-        "description": "取消系统为特定网络任务预留的带宽；对普通上网速度通常影响有限"
+        "name": "QoS 可保留带宽设为 0",
+        "description": "仅影响使用 QoS 的系统或应用流量，通常不会提升普通上网速度"
       },
       "windows_performance_multimedia-responsiveness": {
-        "name": "优先处理游戏和多媒体",
-        "description": "降低系统为后台任务保留的 CPU 比例，可能影响后台工作负载"
+        "name": "提高游戏和多媒体优先级",
+        "description": "减少为后台任务保留的 CPU 时间，可能影响其他后台工作"
       },
       "windows_performance_multimedia-no-lazy-mode": {
-        "name": "提高多媒体调度积极性",
-        "description": "让多媒体调度器更积极处理任务，可能增加耗电"
+        "name": "更积极地调度多媒体任务",
+        "description": "减少多媒体任务的延后调度，可能增加处理器占用和耗电"
       },
       "windows_performance_multimedia-always-on": {
-        "name": "保持多媒体调度常驻",
-        "description": "持续启用多媒体调度优化，可能增加空闲资源消耗"
+        "name": "保持多媒体调度器运行",
+        "description": "持续启用多媒体任务调度，可能增加空闲时的资源消耗"
       },
       "windows_gaming_enable-hardware-gpu-scheduling": {
         "name": "启用硬件加速 GPU 调度",
@@ -643,11 +647,11 @@
       },
       "windows_compatibility_disable-camera-frame-server": {
         "name": "使用旧版摄像头兼容模式",
-        "description": "可解决部分旧相机应用无法预览的问题，但可能影响多应用共享摄像头"
+        "description": "可解决部分旧版摄像头应用无法预览的问题，但可能影响多个应用同时使用摄像头"
       },
       "windows_services_print-spooler-manual": {
-        "name": "打印服务按需启动",
-        "description": "仅在需要打印时启动服务；打印和虚拟打印功能可能受影响"
+        "name": "将打印服务改为手动启动",
+        "description": "减少打印服务常驻；使用打印或虚拟打印功能前可能需要启动服务"
       },
       "windows_services_disable-sysmain": {
         "name": "关闭应用预加载（SysMain）",
@@ -779,7 +783,7 @@
       },
       "windows_power_disable-modern-standby": {
         "name": "关闭现代待机",
-        "description": "改用传统睡眠行为；部分设备可能不支持并出现睡眠问题"
+        "description": "尝试改用传统睡眠模式；不支持该模式的设备可能无法正常睡眠"
       },
       "windows_power_disable-hibernation": {
         "name": "关闭休眠功能",
@@ -911,7 +915,7 @@
       },
       "macos_app-store_enable-auto-updates": {
         "name": "自动更新 App Store 应用",
-        "description": "允许 App Store 自动安装已购应用的可用更新"
+        "description": "允许 App Store 自动安装已安装应用的可用更新"
       },
       "windows_explorer_show-status-bar": {
         "name": "显示资源管理器状态栏",
@@ -926,8 +930,8 @@
         "description": "重新登录时打开上次未关闭的资源管理器窗口"
       },
       "windows_explorer_disable-sharing-wizard": {
-        "name": "关闭资源管理器共享向导",
-        "description": "使用高级权限界面管理文件和文件夹共享"
+        "name": "使用高级共享设置",
+        "description": "关闭简化的共享向导，改用高级权限界面管理共享"
       },
       "windows_taskbar_hide-badges": {
         "name": "隐藏任务栏应用徽章",
@@ -1002,16 +1006,16 @@
         "description": "连接新磁盘时不再弹出 Time Machine 提示"
       },
       "macos_security_require-password-after-sleep": {
-        "name": "睡眠后需要密码",
-        "description": "防止他人在设备唤醒后直接访问"
+        "name": "唤醒后需要密码",
+        "description": "从睡眠或屏幕保护程序恢复时要求验证身份"
       },
       "macos_security_lock-immediately-after-sleep": {
-        "name": "睡眠后立即锁定",
-        "description": "唤醒设备时立即要求验证身份"
+        "name": "唤醒后立即要求密码",
+        "description": "从睡眠或屏幕保护程序恢复时不保留免验证时间"
       },
       "windows_explorer_confirm-file-delete": {
         "name": "删除文件前确认",
-        "description": "移入回收站前显示确认提示，减少误操作"
+        "description": "删除文件或将其移入回收站前显示确认提示"
       },
       "windows_explorer_use-manual-default-printer": {
         "name": "保留手动选择的默认打印机",
@@ -1058,7 +1062,7 @@
         "description": "防止插入磁盘或光盘后自动执行程序"
       },
       "windows_network_disable-llmnr": {
-        "name": "关闭 LLMNR 名称解析",
+        "name": "关闭 LLMNR 局域网名称解析",
         "description": "减少局域网名称解析欺骗和凭据泄露风险"
       },
       "windows_update_enable-microsoft-product-updates": {

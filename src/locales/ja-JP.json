@@ -200,6 +200,7 @@
     "optimizing": "最適化中…",
     "checking": "設定を確認中…",
     "rescan": "再確認",
+    "restorePrevious": "最適化前の設定に戻す",
     "filterCategory": "最適化カテゴリを絞り込む",
     "pendingEmpty": {
       "title": "適用待ちの変更はありません",
@@ -216,7 +217,8 @@
       "appearance": "外観"
     },
     "modes": {
-      "label": "おすすめ設定",
+      "label": "最適化プラン",
+      "unchanged": { "name": "現在の設定を維持" },
       "smart": { "name": "スマート推奨" },
       "performance": { "name": "パフォーマンス優先" },
       "privacy": { "name": "プライバシー優先" },
@@ -225,9 +227,8 @@
     "statuses": {
       "pendingEnable": "有効化予定",
       "pendingDisable": "無効化予定",
-      "requiresElevation": "管理者権限",
       "authorizationRequired": "選択した変更の適用には管理者認証が必要です",
-      "requiresRestart": "適用後に関連するシステム機能を開き直すか、再ログインする必要があります",
+      "requiresRestart": "適用後、関連するシステム機能を再起動するか、再度サインインすると反映されます",
       "caution": "要注意",
       "highImpact": "影響大",
       "riskDescriptions": {
@@ -258,8 +259,8 @@
         "description": "Finder で隠し項目を直接確認します"
       },
       "macos_finder_show-posix-path": {
-        "name": "タイトルにフルパスを表示",
-        "description": "Finder のタイトルに現在のパスを表示します"
+        "name": "Finder のタイトルにパス全体を表示",
+        "description": "ウインドウのタイトルに現在のフォルダのフルパスを表示します"
       },
       "macos_finder_disable-animations": {
         "name": "Finder のアニメーションを減らす",
@@ -270,8 +271,8 @@
         "description": "Dock に個別のウインドウサムネイルを追加しません"
       },
       "macos_dock_use-scale-effect": {
-        "name": "高速なスケールエフェクトを使う",
-        "description": "ジニーエフェクトを簡潔な拡大縮小に置き換えます"
+        "name": "縮小時にスケールエフェクトを使う",
+        "description": "ジニーエフェクトをシンプルな拡大縮小アニメーションに置き換えます"
       },
       "macos_mission-control_keep-space-order": {
         "name": "操作スペースの順序を固定",
@@ -323,11 +324,11 @@
       },
       "windows_taskbar_disable-animations": {
         "name": "タスクバーのアニメーションを無効化",
-        "description": "切り替え効果を減らして応答性を高めます"
+        "description": "切り替えアニメーションを減らし、操作の反応をわかりやすくします"
       },
       "windows_desktop_prefer-performance-effects": {
-        "name": "システム応答を優先",
-        "description": "不要な視覚効果を減らして画面応答を改善します"
+        "name": "Windows の視覚効果を減らす",
+        "description": "一部のアニメーションと透明効果を無効にして描画負荷を減らします"
       },
       "windows_gaming_optimize-windowed-games": {
         "name": "ウインドウゲームを最適化",
@@ -338,11 +339,11 @@
         "description": "未使用アプリの CPU とメモリ消費を減らします"
       },
       "windows_privacy_disable-activity-publishing": {
-        "name": "アクティビティ共有を無効化",
-        "description": "このユーザーの操作履歴を他の端末へ公開しません"
+        "name": "他のデバイスとのアクティビティ共有を停止",
+        "description": "このユーザーのアクティビティ履歴を他のデバイスへ公開しません"
       },
       "windows_privacy_disable-activity-upload": {
-        "name": "アクティビティ履歴の送信を無効化",
+        "name": "アクティビティ履歴のアップロードを停止",
         "description": "このユーザーの操作履歴をクラウドへ送信しません"
       },
       "windows_content_disable-welcome-experience": {
@@ -463,8 +464,8 @@
         "description": "新しい Windows 11 で入口を削除し、ウィジェット ボードを無効化します"
       },
       "windows_taskbar_enable-end-task": {
-        "name": "タスクバーのタスク終了を有効化",
-        "description": "応答しないプロセスを右クリックで終了できます"
+        "name": "タスクバーからタスクを終了できるようにする",
+        "description": "アプリアイコンの右クリックメニューからプロセスを直接終了できます"
       },
       "windows_personalization_dark-apps": {
         "name": "App をダークモードにする",
@@ -487,12 +488,12 @@
         "description": "App による個人向け広告 ID の使用を止めます"
       },
       "windows_privacy_disable-tailored-experiences": {
-        "name": "カスタマイズされたエクスペリエンスを無効化",
-        "description": "診断データを個人向けヒントに使いません"
+        "name": "診断データによる個人向け提案を無効化",
+        "description": "診断データを個人向けのヒントやおすすめに使用しません"
       },
       "windows_content_disable-silent-app-installs": {
-        "name": "おすすめ App の自動追加を抑止",
-        "description": "Windows が提案 App を追加するのを減らします"
+        "name": "おすすめアプリの自動インストールを防ぐ",
+        "description": "Windows が現在のユーザーへおすすめアプリをバックグラウンドで追加するのを防ぎます"
       },
       "windows_content_disable-suggestions": {
         "name": "システムの候補を無効化",
@@ -503,24 +504,24 @@
         "description": "ロック画面のヒントとおすすめを減らします"
       },
       "windows_search_disable-web-suggestions": {
-        "name": "Web 検索候補を無効化",
-        "description": "スタート検索をローカル結果中心にします"
+        "name": "スタートの Web 検索候補を無効化",
+        "description": "スタートメニュー検索の Web 結果と候補を減らします"
       },
       "windows_storage_enable-storage-sense": {
         "name": "ストレージセンサーを有効化",
-        "description": "Windows に一時ファイルを自動管理させます"
+        "description": "Windows が一時ファイルを自動削除して空き容量を確保できるようにします"
       },
       "windows_desktop_reduce-menu-delay": {
-        "name": "メニューの応答遅延を短縮",
-        "description": "ポインター操作への反応を速くします"
+        "name": "メニューが開くまでの遅延を短縮",
+        "description": "ポインターを合わせた後にサブメニューがより早く開くようにします"
       },
       "windows_explorer_enable-auto-suggest": {
-        "name": "エクスプローラーの入力候補を有効化",
-        "description": "パスやコマンドの入力中に一致する候補を表示します"
+        "name": "パスとコマンドの入力候補を有効化",
+        "description": "エクスプローラーのアドレスバーと「ファイル名を指定して実行」に一致する候補を表示します"
       },
       "windows_explorer_disable-aero-shake": {
-        "name": "振って最小化を無効化",
-        "description": "ウインドウ移動時に他の画面が最小化されるのを防ぎます"
+        "name": "ウインドウを振って最小化する機能を無効化",
+        "description": "ウインドウの移動中に他のウインドウが誤って最小化されるのを防ぎます"
       },
       "windows_explorer_show-operation-details": {
         "name": "ファイル操作の詳細を展開",
@@ -575,8 +576,8 @@
         "description": "手書き内容を認識モデルの学習に使用しません"
       },
       "windows_privacy_disable-feedback-requests": {
-        "name": "フィードバック要求を無効化",
-        "description": "Windows のアンケートや意見要求を減らします"
+        "name": "Windows のフィードバック通知を減らす",
+        "description": "Windows が表示する利用状況アンケートやフィードバック要求を減らします"
       },
       "windows_privacy_disable-nearby-sharing": {
         "name": "近距離共有を無効化",
@@ -595,7 +596,7 @@
         "description": "コピーした複数の項目を Windows に保持しません"
       },
       "windows_content_disable-spotlight": {
-        "name": "ロック画面の Spotlight を無効化",
+        "name": "ロック画面の Windows スポットライトを無効化",
         "description": "おすすめ画像やコンテンツの自動切り替えを停止します"
       },
       "windows_content_disable-phone-link-suggestions": {
@@ -635,8 +636,8 @@
         "description": "テレメトリの送信とローカルアーカイブを停止します"
       },
       "windows_ai_disable-recall-snapshots": {
-        "name": "Recall スナップショット解析を無効化",
-        "description": "Windows AI による画面履歴の保存と解析を防ぎます"
+        "name": "Recall の画面スナップショットを無効化",
+        "description": "Recall が画面上の操作履歴を保存、解析するのを防ぎます"
       },
       "windows_ai_disable-copilot": {
         "name": "Windows Copilot を無効化",
@@ -683,40 +684,40 @@
         "description": "Windows リモート アシスタンスによる外部接続を防ぎます"
       },
       "windows_performance_reduce-service-shutdown-timeout": {
-        "name": "サービス終了待ち時間を短縮",
-        "description": "シャットダウンを速めますが、応答しないサービスが早く終了される場合があります"
+        "name": "シャットダウン時のサービス待機時間を短縮",
+        "description": "バックグラウンドサービスの終了待ち時間を短縮し、応答しないサービスを早めに終了する場合があります"
       },
       "windows_performance_disable-network-throttling": {
-        "name": "マルチメディアのネットワーク制限を無効化",
-        "description": "低遅延ネットワーク向けに Windows の帯域制限を解除します"
+        "name": "マルチメディア通信のスループット制限を解除",
+        "description": "Windows によるマルチメディア通信の制限を減らします。効果はネットワークとアプリによって異なります"
       },
       "windows_performance_remove-reserved-bandwidth": {
-        "name": "QoS 予約帯域を解除",
-        "description": "システムが予約する非ベストエフォート帯域を 0 にします"
+        "name": "QoS の予約可能帯域を 0 に設定",
+        "description": "QoS を使用するシステムまたはアプリの通信にのみ影響し、通常のインターネット速度はほとんど向上しません"
       },
       "windows_performance_multimedia-responsiveness": {
-        "name": "マルチメディア応答性を優先",
-        "description": "バックグラウンド用 CPU を減らすため、他の処理に影響する場合があります"
+        "name": "ゲームとマルチメディアの優先度を上げる",
+        "description": "バックグラウンド処理用の CPU 時間を減らすため、他のバックグラウンド処理に影響する場合があります"
       },
       "windows_performance_multimedia-no-lazy-mode": {
-        "name": "マルチメディア遅延スケジュールを無効化",
-        "description": "処理を積極化しますが、消費電力が増える場合があります"
+        "name": "マルチメディア処理を積極的にスケジュール",
+        "description": "処理の先送りを減らしますが、CPU 使用率と消費電力が増える場合があります"
       },
       "windows_performance_multimedia-always-on": {
-        "name": "マルチメディア スケジュールを常時有効化",
-        "description": "最適化を常時維持し、アイドル時の負荷が少し増えます"
+        "name": "マルチメディア スケジューラを常時稼働",
+        "description": "マルチメディア処理のスケジュールを常時有効にし、アイドル時のリソース消費が増える場合があります"
       },
       "windows_gaming_enable-hardware-gpu-scheduling": {
         "name": "ハードウェア GPU スケジューリングを有効化",
         "description": "効果は GPU とドライバーに依存し、再起動が必要です"
       },
       "windows_compatibility_disable-camera-frame-server": {
-        "name": "カメラ フレーム サーバーを無効化",
-        "description": "古いカメラアプリに有効ですが、複数アプリでの共有に影響します"
+        "name": "従来のカメラ互換モードを使う",
+        "description": "一部の古いカメラアプリでプレビューを改善できますが、複数アプリによるカメラの同時使用に影響する場合があります"
       },
       "windows_services_print-spooler-manual": {
-        "name": "印刷スプーラーを手動起動に変更",
-        "description": "常駐を減らしますが、印刷機能に影響する場合があります"
+        "name": "印刷サービスを手動起動に変更",
+        "description": "サービスの常時稼働を抑えますが、印刷や仮想プリンターの使用前にサービスの起動が必要な場合があります"
       },
       "windows_services_disable-sysmain": {
         "name": "SysMain の事前読み込みを無効化",
@@ -848,7 +849,7 @@
       },
       "windows_power_disable-modern-standby": {
         "name": "モダン スタンバイを無効化",
-        "description": "従来のスリープを使いますが、非対応端末では問題が起きる場合があります"
+        "description": "従来のスリープへの切り替えを試みます。非対応のデバイスでは正常にスリープできない場合があります"
       },
       "windows_power_disable-hibernation": {
         "name": "休止状態を無効化",
@@ -980,7 +981,7 @@
       },
       "macos_app-store_enable-auto-updates": {
         "name": "App Store の App を自動更新",
-        "description": "購入済み App の利用可能な更新を App Store が自動でインストールします"
+        "description": "インストール済み App の利用可能な更新を App Store が自動でインストールします"
       },
       "windows_explorer_show-status-bar": {
         "name": "エクスプローラーのステータスバーを表示",
@@ -995,8 +996,8 @@
         "description": "サインアウト前に開いていたウインドウを再度開きます"
       },
       "windows_explorer_disable-sharing-wizard": {
-        "name": "共有ウィザードを無効化",
-        "description": "詳細なアクセス許可画面で共有を管理します"
+        "name": "詳細な共有設定を使う",
+        "description": "簡易共有ウィザードを無効にし、詳細なアクセス許可画面で共有を管理します"
       },
       "windows_taskbar_hide-badges": {
         "name": "タスクバーの App バッジを非表示",
@@ -1072,15 +1073,15 @@
       },
       "macos_security_require-password-after-sleep": {
         "name": "スリープ解除後にパスワードを要求",
-        "description": "Mac のスリープ解除後に第三者がアクセスするのを防ぎます"
+        "description": "スリープ解除時またはスクリーンセーバー終了時に認証を要求します"
       },
       "macos_security_lock-immediately-after-sleep": {
-        "name": "スリープ後すぐにロック",
-        "description": "Mac のスリープ解除時に直ちに認証を要求します"
+        "name": "スリープ解除後すぐにパスワードを要求",
+        "description": "スリープ解除時またはスクリーンセーバー終了時に認証不要の猶予時間を設けません"
       },
       "windows_explorer_confirm-file-delete": {
         "name": "ファイル削除前に確認",
-        "description": "ごみ箱へ移動する前に確認を表示して誤操作を防ぎます"
+        "description": "ファイルの削除時またはごみ箱への移動時に確認を表示します"
       },
       "windows_explorer_use-manual-default-printer": {
         "name": "選択した既定のプリンターを維持",
@@ -1127,8 +1128,8 @@
         "description": "メディア接続時にプログラムが自動実行されるのを防ぎます"
       },
       "windows_network_disable-llmnr": {
-        "name": "LLMNR 名前解決を無効化",
-        "description": "ローカルネットワークでの偽装と資格情報漏えいのリスクを減らします"
+        "name": "LLMNR によるローカル名前解決を無効化",
+        "description": "ローカルのマルチキャスト名前解決を無効にし、偽装と資格情報漏えいのリスクを減らします"
       },
       "windows_update_enable-microsoft-product-updates": {
         "name": "ほかの Microsoft 製品も更新",

@@ -140,13 +140,14 @@ impl SystemSettingsService {
                 ));
                 continue;
             }
-            let desired_value = match change.target {
-                SystemSettingTargetState::Optimized => item.recommended_value.clone(),
-                SystemSettingTargetState::Default => recovery_items
-                    .get(&setting_id)
-                    .filter(|recovery| valid_recovery_baseline(recovery, item))
-                    .map(|item| item.original_value.clone())
-                    .unwrap_or_else(|| item.disabled_value.clone()),
+            let Some(desired_value) =
+                desired_value_for_target(item, change.target, recovery_items.get(&setting_id))
+            else {
+                skipped_items.push(skipped(
+                    setting_id,
+                    SystemSettingChangeSkipReason::SettingChanged,
+                ));
+                continue;
             };
             let public = SystemSettingChangePlanItem {
                 setting_id: setting_id.clone(),
@@ -353,7 +354,7 @@ impl SystemSettingsService {
             }
         }
 
-        let recovery_available = reconcile_recovery(
+        let persisted_recovery_available = reconcile_recovery(
             previous_recovery.as_ref(),
             &plan_id,
             preflight_recovery,
@@ -371,6 +372,10 @@ impl SystemSettingsService {
                 Ok(session.public)
             })
             .ok();
+        let recovery_available = catalog
+            .as_ref()
+            .map(|catalog| catalog.recovery_available)
+            .unwrap_or(persisted_recovery_available);
         log::info!(
             "system_settings_change_finished operation_id={} changed_count={} failed_count={} uncertain_mutation_count={} recovery_available={}",
             operation.id(),
@@ -420,6 +425,8 @@ fn capture_catalog(operation: &OperationGuard) -> CoreResult<CatalogSession> {
         let state = states.get(definition.id);
         native_items.push(native_item(definition, state));
     }
+    let recovery = load_recovery()?;
+    let recovery_available = mark_restore_availability(&mut native_items, recovery.as_ref());
     let scanned_at_ms = now_ms();
     let catalog_revision = catalog_revision(&native_items);
     let scan_id = stable_id(
@@ -442,7 +449,7 @@ fn capture_catalog(operation: &OperationGuard) -> CoreResult<CatalogSession> {
         summary: summary(&items),
         items,
         elapsed_ms: started.elapsed().as_millis() as u64,
-        recovery_available: recovery_exists(),
+        recovery_available,
     };
     Ok(CatalogSession {
         public,
@@ -496,6 +503,7 @@ fn native_item(
             status,
             selected_by_default: status == SystemSettingStatus::Recommended
                 && definition.selection_kind == SystemSettingSelectionKind::OneClick,
+            restore_available: false,
             requires_restart: definition.requires_restart,
             requires_elevation: state
                 .map(|state| state.requires_elevation)
@@ -870,6 +878,42 @@ fn valid_recovery_baseline(recovery: &RecoveryItem, item: &CatalogNativeItem) ->
             ))
 }
 
+/// Resolves the requested target without weakening an explicit recovery operation. Manual
+/// switches may still use the catalog's disabled value, while a setting advertised as restorable
+/// must retain its exact durable baseline until the change plan is prepared.
+fn desired_value_for_target(
+    item: &CatalogNativeItem,
+    target: SystemSettingTargetState,
+    recovery: Option<&RecoveryItem>,
+) -> Option<PlatformSystemSettingValue> {
+    match target {
+        SystemSettingTargetState::Optimized => Some(item.recommended_value.clone()),
+        SystemSettingTargetState::Default => recovery
+            .filter(|recovery| valid_recovery_baseline(recovery, item))
+            .map(|recovery| recovery.original_value.clone())
+            .or_else(|| (!item.public.restore_available).then(|| item.disabled_value.clone())),
+    }
+}
+
+/// Marks only settings whose current native value still matches MangoDisk's durable baseline.
+/// A setting that another tool changed after optimization must not appear in the bulk restore
+/// action because restoring it would overwrite newer user intent.
+fn mark_restore_availability(
+    items: &mut [CatalogNativeItem],
+    recovery: Option<&RecoveryDocument>,
+) -> bool {
+    let recovery_items = recovery_items_by_id(recovery);
+    let mut available = false;
+    for item in items {
+        item.public.restore_available = item.public.status == SystemSettingStatus::Optimized
+            && recovery_items
+                .get(&item.public.setting_id)
+                .is_some_and(|recovery| valid_recovery_baseline(recovery, item));
+        available |= item.public.restore_available;
+    }
+    available
+}
+
 fn same_value_kind(left: &PlatformSystemSettingValue, right: &PlatformSystemSettingValue) -> bool {
     matches!(
         (left, right),
@@ -1157,13 +1201,19 @@ fn remove_recovery() -> CoreResult<()> {
 }
 
 fn log_catalog(operation_id: u64, catalog: &SystemSettingsCatalog) {
+    let restorable_count = catalog
+        .items
+        .iter()
+        .filter(|item| item.restore_available)
+        .count();
     log::info!(
-        "system_settings_catalog_scanned operation_id={} platform={:?} item_count={} recommended_count={} selected_count={} unavailable_count={} elapsed_ms={}",
+        "system_settings_catalog_scanned operation_id={} platform={:?} item_count={} recommended_count={} selected_count={} restorable_count={} unavailable_count={} elapsed_ms={}",
         operation_id,
         catalog.platform,
         catalog.summary.item_count,
         catalog.summary.recommended_count,
         catalog.summary.selected_count,
+        restorable_count,
         catalog.summary.unavailable_count,
         catalog.elapsed_ms
     );
@@ -1219,6 +1269,7 @@ mod tests {
                 risk_level: super::super::SystemSettingRiskLevel::Standard,
                 status: SystemSettingStatus::Recommended,
                 selected_by_default: true,
+                restore_available: false,
                 requires_restart: false,
                 requires_elevation: false,
                 diagnostic: None,
@@ -1230,6 +1281,7 @@ mod tests {
                 risk_level: super::super::SystemSettingRiskLevel::Standard,
                 status: SystemSettingStatus::Recommended,
                 selected_by_default: false,
+                restore_available: false,
                 requires_restart: false,
                 requires_elevation: false,
                 diagnostic: None,
@@ -1362,6 +1414,7 @@ mod tests {
                 risk_level: super::super::SystemSettingRiskLevel::Standard,
                 status: SystemSettingStatus::Optimized,
                 selected_by_default: false,
+                restore_available: false,
                 requires_restart: false,
                 requires_elevation: false,
                 diagnostic: None,
@@ -1405,6 +1458,69 @@ mod tests {
             ..item
         };
         assert!(valid_recovery_baseline(&snapshot_recovery, &snapshot_item));
+    }
+
+    #[test]
+    fn recovery_availability_requires_a_matching_durable_baseline() {
+        let mut items = vec![CatalogNativeItem {
+            public: SystemSettingItem {
+                setting_id: "windows.test.setting".to_string(),
+                category: super::super::SystemSettingCategory::Performance,
+                selection_kind: SystemSettingSelectionKind::Custom,
+                risk_level: super::super::SystemSettingRiskLevel::Standard,
+                status: SystemSettingStatus::Optimized,
+                selected_by_default: false,
+                restore_available: false,
+                requires_restart: false,
+                requires_elevation: false,
+                diagnostic: None,
+            },
+            current_value: PlatformSystemSettingValue::Integer(1),
+            effective_value: PlatformSystemSettingValue::Integer(1),
+            disabled_value: PlatformSystemSettingValue::Integer(0),
+            recommended_value: PlatformSystemSettingValue::Integer(1),
+        }];
+        let matching = recovery_document(vec![recovery_item("windows.test.setting", 0, 1)]);
+
+        assert!(mark_restore_availability(&mut items, Some(&matching)));
+        assert!(items[0].public.restore_available);
+
+        let stale = recovery_document(vec![recovery_item("windows.test.setting", 0, 2)]);
+        assert!(!mark_restore_availability(&mut items, Some(&stale)));
+        assert!(!items[0].public.restore_available);
+    }
+
+    #[test]
+    fn explicit_recovery_never_falls_back_to_the_catalog_default() {
+        let mut item = CatalogNativeItem {
+            public: SystemSettingItem {
+                setting_id: "windows.test.setting".to_string(),
+                category: super::super::SystemSettingCategory::Performance,
+                selection_kind: SystemSettingSelectionKind::Custom,
+                risk_level: super::super::SystemSettingRiskLevel::Standard,
+                status: SystemSettingStatus::Optimized,
+                selected_by_default: false,
+                restore_available: true,
+                requires_restart: false,
+                requires_elevation: false,
+                diagnostic: None,
+            },
+            current_value: PlatformSystemSettingValue::Integer(1),
+            effective_value: PlatformSystemSettingValue::Integer(1),
+            disabled_value: PlatformSystemSettingValue::Integer(0),
+            recommended_value: PlatformSystemSettingValue::Integer(1),
+        };
+
+        assert_eq!(
+            desired_value_for_target(&item, SystemSettingTargetState::Default, None),
+            None
+        );
+
+        item.public.restore_available = false;
+        assert_eq!(
+            desired_value_for_target(&item, SystemSettingTargetState::Default, None),
+            Some(PlatformSystemSettingValue::Integer(0))
+        );
     }
 
     #[test]

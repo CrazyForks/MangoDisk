@@ -223,6 +223,9 @@ mod windows_benchmark {
     fn format_scan_error(error: FastAnalysisScanError) -> String {
         match error {
             FastAnalysisScanError::Cancelled => "scan was cancelled unexpectedly".to_string(),
+            FastAnalysisScanError::Busy => {
+                "native analysis workers were unexpectedly busy".to_string()
+            }
             FastAnalysisScanError::Platform(error) => format!("platform scan failed: {error}"),
             FastAnalysisScanError::Consumer(error) => format!("result consumer failed: {error}"),
         }

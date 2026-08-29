@@ -23,6 +23,7 @@ interface SystemSettingsState {
   desiredOptimizedIds: string[];
   optimizationMode: SystemOptimizationMode;
   scanning: boolean;
+  scanFailed: boolean;
   cancelling: boolean;
   preparing: boolean;
   executing: boolean;
@@ -36,6 +37,7 @@ export const useSystemSettingsStore = defineStore('system-settings', {
     desiredOptimizedIds: [],
     optimizationMode: 'unchanged',
     scanning: false,
+    scanFailed: false,
     cancelling: false,
     preparing: false,
     executing: false,
@@ -46,16 +48,21 @@ export const useSystemSettingsStore = defineStore('system-settings', {
     async scan() {
       if (this.scanning || this.executing) return;
       this.scanning = true;
+      this.scanFailed = false;
       this.cancelling = false;
       useAppStore().clearError();
       try {
         const catalog = await SystemSettingsService.scan();
         this.catalog = catalog;
+        this.scanFailed = false;
         const mode = this.optimizationMode === 'manual' ? 'unchanged' : this.optimizationMode;
         this.optimizationMode = mode;
         this.desiredOptimizedIds = systemOptimizationDesiredIdsForMode(catalog, mode);
       } catch (error) {
-        if (parseCommandError(error)?.code !== 'operationCancelled') useAppStore().reportError(error);
+        if (parseCommandError(error)?.code !== 'operationCancelled') {
+          this.scanFailed = true;
+          useAppStore().reportError(error);
+        }
       } finally {
         this.scanning = false;
         this.cancelling = false;

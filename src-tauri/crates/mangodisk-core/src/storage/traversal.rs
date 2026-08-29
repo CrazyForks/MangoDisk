@@ -176,7 +176,8 @@ impl StorageTraversal {
         } else {
             cache::reuse_decision(&root, ScanPurpose::Analysis, &|| {
                 operation.cancelled().load(Ordering::Relaxed)
-            })?
+            })
+            .map_err(traversal_core_error)?
         };
         diagnostics.cache_validation_ms = cache_validation_started.elapsed().as_millis() as u64;
         match cache_decision {
@@ -191,6 +192,7 @@ impl StorageTraversal {
         }
         progress.emit(TraversalStage::Analyzing, &root);
         let scanned_at_ms = now_ms();
+        let cache_mutation_revision = cache::mutation_revision()?;
         let change_token = capture_filesystem_change_token(&root);
         let traversal_started = Instant::now();
         let fast_scan = stream_fast_analysis(
@@ -200,7 +202,9 @@ impl StorageTraversal {
             &progress,
             operation.cancelled(),
         );
-        let (root_aggregate, completed_sink) = match fast_scan? {
+        let (root_aggregate, completed_sink) = match fast_scan
+            .map_err(|error| analysis_stream_core_error(&operation, error))?
+        {
             FastAnalysisOutcome::Completed(scan) => {
                 diagnostics.fast_path = "used";
                 diagnostics.strategy = scan.summary.strategy;
@@ -236,7 +240,8 @@ impl StorageTraversal {
                     change_token,
                     &progress,
                     operation.cancelled(),
-                )?
+                )
+                .map_err(traversal_core_error)?
             }
             FastAnalysisOutcome::PlatformFailed { error } => {
                 diagnostics.fast_path = "fallback";
@@ -255,7 +260,8 @@ impl StorageTraversal {
                     change_token,
                     &progress,
                     operation.cancelled(),
-                )?
+                )
+                .map_err(traversal_core_error)?
             }
         };
         diagnostics.traversal_ms = traversal_started.elapsed().as_millis() as u64;
@@ -263,6 +269,14 @@ impl StorageTraversal {
         // adapters receive complete state and benchmarks do not record a fast scan as zero files
         // and zero bytes.
         progress.finish(TraversalStage::Analyzing, &root);
+        let result_build_started = Instant::now();
+        let result = cache::analysis_result_from_snapshot(
+            &root,
+            root_aggregate,
+            &completed_sink.directories,
+            &completed_sink.files,
+        )?;
+        diagnostics.result_build_ms = result_build_started.elapsed().as_millis() as u64;
         let cache_write_started = Instant::now();
         publish_completed_index(
             &root,
@@ -270,12 +284,10 @@ impl StorageTraversal {
             completed_sink,
             ScanPurpose::Analysis,
             refresh,
+            operation.id(),
+            cache_mutation_revision,
         )?;
         diagnostics.cache_write_ms = cache_write_started.elapsed().as_millis() as u64;
-        let result_build_started = Instant::now();
-        let result = cache::analysis_result(&root)?
-            .ok_or_else(|| "failed to read the analysis result from the scan cache".to_string())?;
-        diagnostics.result_build_ms = result_build_started.elapsed().as_millis() as u64;
         log::info!(
             "analysis_scan_finished operation_id={} root={} total_bytes={} entry_count={} skipped_count={} elapsed_ms={}",
             operation.id(),
@@ -328,7 +340,8 @@ impl StorageTraversal {
         } else {
             cache::reuse_decision(&root, ScanPurpose::LargeFiles, &|| {
                 operation.cancelled().load(Ordering::Relaxed)
-            })?
+            })
+            .map_err(traversal_core_error)?
         };
         let mut cache_reused = matches!(&cache_decision, CacheReuseDecision::Reusable);
         diagnostics.cache_validation_ms = cache_validation_started.elapsed().as_millis() as u64;
@@ -367,6 +380,7 @@ impl StorageTraversal {
         if !cache_reused {
             progress.emit(TraversalStage::Analyzing, &root);
             let scanned_at_ms = now_ms();
+            let cache_mutation_revision = cache::mutation_revision()?;
             let change_token = capture_filesystem_change_token(&root);
             let candidate_started = Instant::now();
             let fast_scan = stream_fast_large_files(
@@ -378,7 +392,9 @@ impl StorageTraversal {
                 operation.cancelled(),
             );
             diagnostics.candidate_discovery_ms = candidate_started.elapsed().as_millis() as u64;
-            let (root_aggregate, completed_sink, snapshot_purpose) = match fast_scan? {
+            let (root_aggregate, completed_sink, snapshot_purpose) = match fast_scan
+                .map_err(traversal_core_error)?
+            {
                 FastLargeFileScanOutcome::Completed(scan) => {
                     diagnostics.fast_path = "used";
                     diagnostics.validation_or_traversal_ms = scan.summary.consumer_elapsed_ms;
@@ -416,7 +432,8 @@ impl StorageTraversal {
                         change_token,
                         &progress,
                         operation.cancelled(),
-                    )?;
+                    )
+                    .map_err(|error| analysis_stream_core_error(&operation, error))?;
                     diagnostics.validation_or_traversal_ms =
                         fallback_started.elapsed().as_millis() as u64;
                     apply_large_file_fallback_diagnostics(&mut diagnostics, &result);
@@ -447,7 +464,8 @@ impl StorageTraversal {
                         change_token,
                         &progress,
                         operation.cancelled(),
-                    )?;
+                    )
+                    .map_err(|error| analysis_stream_core_error(&operation, error))?;
                     diagnostics.validation_or_traversal_ms =
                         fallback_started.elapsed().as_millis() as u64;
                     apply_large_file_fallback_diagnostics(&mut diagnostics, &result);
@@ -459,6 +477,14 @@ impl StorageTraversal {
                 }
             };
             progress.finish(TraversalStage::Analyzing, &root);
+            let result_build_started = Instant::now();
+            let result = cache::large_files_result_from_snapshot(
+                &root,
+                root_aggregate,
+                &completed_sink.files,
+                result_minimum_bytes,
+            );
+            diagnostics.result_build_ms = result_build_started.elapsed().as_millis() as u64;
             let cache_write_started = Instant::now();
             publish_completed_index(
                 &root,
@@ -466,16 +492,40 @@ impl StorageTraversal {
                 completed_sink,
                 snapshot_purpose,
                 refresh,
+                operation.id(),
+                cache_mutation_revision,
             )?;
             diagnostics.cache_write_ms = cache_write_started.elapsed().as_millis() as u64;
+            operation.complete();
+            return Ok((result, diagnostics));
         }
-        let result_build_started = Instant::now();
-        let result = cache::large_files_result(&root, result_minimum_bytes, cache_reused)?;
-        diagnostics.result_build_ms = result_build_started.elapsed().as_millis() as u64;
-        operation.complete();
-        Ok((result, diagnostics))
+        Err(CoreError::operation_failed(
+            "the large-file scan did not produce a result",
+        ))
     }
 }
+
+/// Preserves cancellation from the historical string-based fallback traversal. Native fast-path
+/// failures use `AnalysisStreamError` below and never rely on diagnostic text for control flow.
+fn traversal_core_error(error: String) -> CoreError {
+    if error == OPERATION_CANCELLED_ERROR {
+        CoreError::operation_cancelled()
+    } else {
+        CoreError::operation_failed(error)
+    }
+}
+
+fn analysis_stream_core_error(operation: &OperationGuard, error: AnalysisStreamError) -> CoreError {
+    match error {
+        AnalysisStreamError::Cancelled => CoreError::operation_cancelled(),
+        AnalysisStreamError::ResourcesReleasing => {
+            operation.defer();
+            CoreError::scan_resources_releasing()
+        }
+        AnalysisStreamError::Failed(diagnostic) => CoreError::operation_failed(diagnostic),
+    }
+}
+
 fn resolve_analysis_root(path: Option<String>) -> Result<PathBuf, String> {
     let requested = path
         .filter(|value| !value.trim().is_empty())
@@ -859,7 +909,10 @@ impl<'a> LargeFileStreamValidation<'a> {
         }
         let usage = current_platform().file_space_usage(&path, &metadata);
         if usage.allocated_bytes < self.minimum_bytes {
-            self.aggregate.skipped_count += 1;
+            // A native index may nominate a file by logical size before Core applies the current
+            // physical-space threshold. Rejecting that valid but ineligible candidate is a normal
+            // filter result, not an unreadable entry, so it must not inflate the user-visible
+            // skipped count.
             return Ok(());
         }
         self.progress.visit_file(
@@ -1010,13 +1063,26 @@ fn stream_fast_analysis_once(
     Ok(Some((aggregate, summary)))
 }
 
+#[derive(Debug)]
+enum AnalysisStreamError {
+    Cancelled,
+    ResourcesReleasing,
+    Failed(String),
+}
+
+impl From<String> for AnalysisStreamError {
+    fn from(error: String) -> Self {
+        Self::Failed(error)
+    }
+}
+
 fn stream_fast_analysis(
     root: &Path,
     scanned_at_ms: u64,
     change_token: Option<FilesystemChangeToken>,
     progress: &Arc<ProgressTracker>,
     cancelled: &AtomicBool,
-) -> Result<FastAnalysisOutcome, String> {
+) -> Result<FastAnalysisOutcome, AnalysisStreamError> {
     let mut sink = IndexRecordSink::memory(change_token);
     let attempt = stream_fast_analysis_once(root, scanned_at_ms, progress, cancelled, &mut sink);
     match attempt {
@@ -1028,15 +1094,18 @@ fn stream_fast_analysis(
             },
         ))),
         Ok(None) => Ok(FastAnalysisOutcome::Unsupported),
-        Err(FastAnalysisScanError::Cancelled) => Err(OPERATION_CANCELLED_ERROR.to_string()),
+        Err(FastAnalysisScanError::Cancelled) => Err(AnalysisStreamError::Cancelled),
+        Err(FastAnalysisScanError::Busy) => Err(AnalysisStreamError::ResourcesReleasing),
         Err(FastAnalysisScanError::Platform(error)) => {
             Ok(FastAnalysisOutcome::PlatformFailed { error })
         }
         Err(FastAnalysisScanError::Consumer(error)) => {
             if cancelled.load(Ordering::Relaxed) {
-                Err(OPERATION_CANCELLED_ERROR.to_string())
+                Err(AnalysisStreamError::Cancelled)
             } else {
-                Err(format!("failed to consume the analysis stream: {error}"))
+                Err(AnalysisStreamError::Failed(format!(
+                    "failed to consume the analysis stream: {error}"
+                )))
             }
         }
     }
@@ -1089,7 +1158,7 @@ fn scan_large_files_after_candidate_failure(
     change_token: Option<FilesystemChangeToken>,
     progress: &Arc<ProgressTracker>,
     cancelled: &AtomicBool,
-) -> Result<CompletedLargeFileFallback, String> {
+) -> Result<CompletedLargeFileFallback, AnalysisStreamError> {
     // A failed candidate provider may already have emitted progress. Reset before starting a
     // complete native stream so the final counters continue to describe one filesystem pass.
     progress.reset_scan_observations_for_retry();
@@ -1184,15 +1253,21 @@ fn publish_completed_index(
     completed: CompletedIndexSink,
     purpose: ScanPurpose,
     refresh: bool,
+    publish_generation: u64,
+    expected_mutation_revision: u64,
 ) -> Result<(), String> {
-    cache::store_memory_only(
+    let _published = cache::store_memory_only(
         root,
         root_aggregate,
         completed.directories,
         completed.files,
-        purpose,
-        refresh,
-        completed.change_token,
+        cache::SnapshotPublication::new(
+            purpose,
+            refresh,
+            completed.change_token,
+            publish_generation,
+            expected_mutation_revision,
+        ),
     )?;
     Ok(())
 }

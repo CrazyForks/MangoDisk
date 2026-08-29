@@ -79,6 +79,49 @@ describe('system maintenance store', () => {
     expect(store.catalog?.items).toHaveLength(2);
   });
 
+  it('leaves the loading state after a failed scan and recovers on retry', async () => {
+    const scan = vi
+      .spyOn(SystemMaintenanceService, 'scan')
+      .mockRejectedValueOnce(new Error('operation busy'))
+      .mockResolvedValueOnce(catalog([recommendedItem]));
+    const store = useSystemMaintenanceStore();
+
+    await store.scan();
+
+    expect(store.scanning).toBe(false);
+    expect(store.scanFailed).toBe(true);
+    expect(store.catalog).toBeNull();
+
+    await store.scan();
+
+    expect(scan).toHaveBeenCalledTimes(2);
+    expect(store.scanFailed).toBe(false);
+    expect(store.catalog?.items).toEqual([recommendedItem]);
+  });
+
+  it('shows a retry state when runtime restoration fails and restores the listener before scanning', async () => {
+    const listen = vi.spyOn(SystemMaintenanceService, 'listenJobUpdates').mockResolvedValue(() => undefined);
+    vi.spyOn(SystemMaintenanceService, 'runtime')
+      .mockRejectedValueOnce(new Error('runtime unavailable'))
+      .mockResolvedValueOnce({ catalog: null, executions: [] });
+    const scan = vi.spyOn(SystemMaintenanceService, 'scan').mockResolvedValue(catalog([recommendedItem]));
+    const store = useSystemMaintenanceStore();
+
+    await store.initialize();
+
+    expect(store.initialized).toBe(false);
+    expect(store.scanFailed).toBe(true);
+    expect(store.catalog).toBeNull();
+
+    await store.retryScan();
+
+    expect(listen).toHaveBeenCalledTimes(1);
+    expect(scan).toHaveBeenCalledTimes(1);
+    expect(store.initialized).toBe(true);
+    expect(store.scanFailed).toBe(false);
+    expect(store.catalog?.items).toEqual([recommendedItem]);
+  });
+
   it('executes one actionable task and rejects healthy or unavailable tasks at the adapter boundary', async () => {
     const availableItem = {
       ...recommendedItem,

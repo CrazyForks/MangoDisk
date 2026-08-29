@@ -190,6 +190,9 @@ pub enum ScanItemStatus {
 #[serde(rename_all = "camelCase")]
 pub struct CleanupSourceDetail {
     pub path: String,
+    /// Logical bytes matched by this rule. Cleanup sources can include sparse, compressed, shared,
+    /// or tool-reported data, so adapters must present this value as an estimate rather than an
+    /// exact change in volume free space.
     pub bytes: u64,
     pub file_count: u64,
     /// Latest modification time among content matched under this source.
@@ -270,6 +273,8 @@ pub struct CleanupScanResult {
     pub application_icons: Vec<CleanupApplicationIcon>,
     pub warning_count: u64,
     pub safe_bytes: u64,
+    /// Aggregate logical/estimated bytes from selectable cleanup results, not a physical-volume
+    /// allocation measurement. Actual free-space change can differ after cleanup.
     pub reclaimable_bytes: u64,
     /// Time spent applying low-cost applicability probes before traversal.
     pub applicability_elapsed_ms: u64,

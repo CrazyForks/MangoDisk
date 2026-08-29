@@ -1,6 +1,6 @@
 use std::sync::{
     atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering},
-    Arc, Mutex, OnceLock,
+    Arc, Condvar, Mutex, OnceLock,
 };
 use std::{
     fs::{self, File, OpenOptions},
@@ -18,6 +18,7 @@ static COORDINATOR: OnceLock<OperationCoordinator> = OnceLock::new();
 static TEST_OPERATION_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 const OPERATION_RUNNING: u8 = 0;
 const OPERATION_COMPLETED: u8 = 1;
+const OPERATION_DEFERRED: u8 = 2;
 pub(crate) const OPERATION_CANCELLED_ERROR: &str = "operation cancelled";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -27,6 +28,8 @@ pub(crate) enum CoordinatedOperationKind {
     LargeFiles,
     DuplicateFiles,
     ApplicationScan,
+    ApplicationLeftoverScan,
+    ApplicationPreparation,
     Applications,
     ApplicationLeftoverCleanup,
     ApplicationClose,
@@ -48,6 +51,8 @@ impl CoordinatedOperationKind {
             Self::LargeFiles => "large_files",
             Self::DuplicateFiles => "duplicate_files",
             Self::ApplicationScan => "application_scan",
+            Self::ApplicationLeftoverScan => "application_leftover_scan",
+            Self::ApplicationPreparation => "application_preparation",
             Self::Applications => "applications",
             Self::ApplicationLeftoverCleanup => "application_leftover_cleanup",
             Self::ApplicationClose => "application_close",
@@ -62,21 +67,106 @@ impl CoordinatedOperationKind {
         }
     }
 
-    /// Classifies operations that can change files, application state, or system configuration.
-    /// Read-only scans may overlap the dedicated maintenance session, while every mutation remains
-    /// mutually exclusive across both the in-process coordinator and the process lock boundary.
-    const fn is_mutating(self) -> bool {
-        matches!(
-            self,
-            Self::Applications
-                | Self::ApplicationLeftoverCleanup
-                | Self::ApplicationClose
-                | Self::Cleanup
-                | Self::PermanentDelete
-                | Self::StartupChange
-                | Self::SystemSettingsChange
-                | Self::SystemMaintenanceExecution
-        )
+    /// Declares only resources whose concurrent use can violate a domain invariant.
+    ///
+    /// Heavy read-only scans deliberately do not share a correctness lock. Their CPU and I/O
+    /// parallelism is bounded inside the scan engines, while immutable result sessions and live
+    /// mutation preflight keep a concurrently changing filesystem safe. Configuration domains use
+    /// shared scan claims and exclusive mutation claims so unrelated pages remain responsive.
+    fn resource_claims(self) -> Vec<ResourceClaim> {
+        match self {
+            Self::CleanupScan | Self::Analysis | Self::LargeFiles | Self::DuplicateFiles => vec![],
+            Self::ApplicationScan | Self::ApplicationLeftoverScan => vec![ResourceClaim::shared(
+                CoordinatedResource::ApplicationInventory,
+            )],
+            Self::ApplicationPreparation => vec![
+                ResourceClaim::shared(CoordinatedResource::ApplicationInventory),
+                ResourceClaim::shared(CoordinatedResource::ApplicationLifecycle),
+            ],
+            Self::Applications => vec![
+                ResourceClaim::exclusive(CoordinatedResource::ApplicationInventory),
+                ResourceClaim::exclusive(CoordinatedResource::ApplicationLifecycle),
+                ResourceClaim::exclusive(CoordinatedResource::FilesystemMutation),
+            ],
+            Self::ApplicationLeftoverCleanup | Self::Cleanup | Self::PermanentDelete => {
+                vec![ResourceClaim::exclusive(
+                    CoordinatedResource::FilesystemMutation,
+                )]
+            }
+            Self::ApplicationClose => vec![ResourceClaim::exclusive(
+                CoordinatedResource::ApplicationLifecycle,
+            )],
+            Self::StartupScan => vec![ResourceClaim::shared(
+                CoordinatedResource::StartupConfiguration,
+            )],
+            Self::StartupChange => vec![ResourceClaim::exclusive(
+                CoordinatedResource::StartupConfiguration,
+            )],
+            Self::SystemSettingsScan => vec![ResourceClaim::shared(
+                CoordinatedResource::SystemSettingsConfiguration,
+            )],
+            Self::SystemSettingsChange => vec![ResourceClaim::exclusive(
+                CoordinatedResource::SystemSettingsConfiguration,
+            )],
+            Self::SystemMaintenanceScan => vec![ResourceClaim::shared(
+                CoordinatedResource::SystemMaintenanceSession,
+            )],
+            Self::SystemMaintenanceExecution => vec![
+                ResourceClaim::exclusive(CoordinatedResource::FilesystemMutation),
+                ResourceClaim::exclusive(CoordinatedResource::SystemMaintenanceSession),
+            ],
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ResourceAccess {
+    Shared,
+    Exclusive,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum CoordinatedResource {
+    ApplicationInventory,
+    ApplicationLifecycle,
+    FilesystemMutation,
+    StartupConfiguration,
+    SystemMaintenanceSession,
+    SystemSettingsConfiguration,
+}
+
+impl CoordinatedResource {
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::ApplicationInventory => "application_inventory",
+            Self::ApplicationLifecycle => "application_lifecycle",
+            Self::FilesystemMutation => "filesystem_mutation",
+            Self::StartupConfiguration => "startup_configuration",
+            Self::SystemMaintenanceSession => "system_maintenance_session",
+            Self::SystemSettingsConfiguration => "system_settings_configuration",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct ResourceClaim {
+    resource: CoordinatedResource,
+    access: ResourceAccess,
+}
+
+impl ResourceClaim {
+    const fn shared(resource: CoordinatedResource) -> Self {
+        Self {
+            resource,
+            access: ResourceAccess::Shared,
+        }
+    }
+
+    const fn exclusive(resource: CoordinatedResource) -> Self {
+        Self {
+            resource,
+            access: ResourceAccess::Exclusive,
+        }
     }
 }
 
@@ -170,18 +260,27 @@ impl OperationCancellationToken {
 struct ActiveOperation {
     id: u64,
     kind: CoordinatedOperationKind,
+    claims: Vec<ResourceClaim>,
+    cancelled: Arc<AtomicBool>,
+}
+
+struct WaitingOperation {
+    id: u64,
+    kind: CoordinatedOperationKind,
+    claims: Vec<ResourceClaim>,
     cancelled: Arc<AtomicBool>,
 }
 
 struct OperationCoordinator {
     next_id: AtomicU64,
-    active: Mutex<ActiveOperations>,
+    state: Mutex<CoordinatorState>,
+    changed: Condvar,
 }
 
 #[derive(Default)]
-struct ActiveOperations {
-    foreground: Option<ActiveOperation>,
-    maintenance: Option<ActiveOperation>,
+struct CoordinatorState {
+    active: Vec<ActiveOperation>,
+    waiting: Vec<WaitingOperation>,
 }
 
 #[derive(Clone, Copy)]
@@ -195,16 +294,21 @@ struct ProcessOperationLock {
 }
 
 impl ProcessOperationLock {
-    fn acquire(kind: CoordinatedOperationKind) -> CoreResult<Self> {
-        Self::acquire_named("operation.lock", kind, ProcessLockMode::Exclusive)
-    }
-
     fn acquire_named(
         file_name: &str,
         kind: CoordinatedOperationKind,
         mode: ProcessLockMode,
     ) -> CoreResult<Self> {
         let directory = application_paths()?.runtime_directory();
+        Self::acquire_in_directory(directory, file_name, kind, mode)
+    }
+
+    fn acquire_in_directory(
+        directory: &std::path::Path,
+        file_name: &str,
+        kind: CoordinatedOperationKind,
+        mode: ProcessLockMode,
+    ) -> CoreResult<Self> {
         fs::create_dir_all(directory).map_err(|error| {
             CoreError::operation_failed(format!(
                 "failed to create the operation lock directory: {error}"
@@ -225,10 +329,19 @@ impl ProcessOperationLock {
         };
         match result {
             Ok(()) => Ok(Self { file }),
-            Err(error) if is_lock_contention(&error) => Err(CoreError::operation_busy(format!(
-                "another MangoDisk operation is already running; requested={} lock={file_name}",
-                kind.as_str(),
-            ))),
+            Err(error) if is_lock_contention(&error) => {
+                // Cross-process callers cannot participate in the in-memory FIFO queue. Fail fast
+                // with stable diagnostics so GUI and CLI adapters never block indefinitely while
+                // another process owns a correctness resource.
+                log::info!(
+                    "operation_process_lock_contended operation_kind={} lock={file_name}",
+                    kind.as_str()
+                );
+                Err(CoreError::operation_busy(format!(
+                    "another MangoDisk operation is already running; requested={} lock={file_name}",
+                    kind.as_str(),
+                )))
+            }
             Err(error) => Err(CoreError::operation_failed(format!(
                 "failed to acquire the operation lock: {error}"
             ))),
@@ -268,100 +381,130 @@ impl OperationCoordinator {
     fn global() -> &'static Self {
         COORDINATOR.get_or_init(|| Self {
             next_id: AtomicU64::new(1),
-            active: Mutex::new(ActiveOperations::default()),
+            state: Mutex::new(CoordinatorState::default()),
+            changed: Condvar::new(),
         })
     }
 }
 
-/// Coordinates disk-intensive and mutating operations across threads and
-/// processes. This prevents concurrent adapters from invalidating cache or
-/// cleanup state while another operation is still using it.
+/// Coordinates declared correctness resources across threads and processes.
+/// Compatible scans keep independent private snapshots. Conflicts wait in FIFO order inside one
+/// process, while process locks fail fast across GUI and CLI processes so no adapter can hang on an
+/// unobservable external queue.
 pub(crate) struct OperationGuard {
     id: u64,
     kind: CoordinatedOperationKind,
     cancelled: Arc<AtomicBool>,
     started: Instant,
     outcome: AtomicU8,
-    _foreground_lock: Option<ProcessOperationLock>,
-    _maintenance_lock: Option<ProcessOperationLock>,
-    _mutation_lock: Option<ProcessOperationLock>,
+    _process_locks: Vec<ProcessOperationLock>,
 }
 
 impl OperationGuard {
     pub(crate) fn start(kind: CoordinatedOperationKind) -> CoreResult<Self> {
         let coordinator = OperationCoordinator::global();
-        let mut active = coordinator.active.lock().map_err(|_| {
+        let claims = kind.resource_claims();
+        let id = coordinator.next_id.fetch_add(1, Ordering::Relaxed);
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let requested_at = Instant::now();
+        let mut queued = false;
+        let mut state = coordinator.state.lock().map_err(|_| {
             CoreError::operation_failed("the operation coordinator is temporarily unavailable")
         })?;
-        let conflict = if kind == CoordinatedOperationKind::SystemMaintenanceExecution {
-            active.maintenance.as_ref().or_else(|| {
-                active
-                    .foreground
-                    .as_ref()
-                    .filter(|operation| operation.kind.is_mutating())
-            })
-        } else {
-            active.foreground.as_ref().or_else(|| {
-                kind.is_mutating()
-                    .then(|| active.maintenance.as_ref())
-                    .flatten()
-            })
-        };
-        if let Some(operation) = conflict {
+
+        // A second operation of the same kind is almost always a duplicate click or a repeated
+        // adapter request. Reject it instead of queueing surprising work that starts only after the
+        // visible first request has completed.
+        if let Some((operation_id, operation_kind)) = state
+            .active
+            .iter()
+            .map(|operation| (operation.id, operation.kind))
+            .chain(
+                state
+                    .waiting
+                    .iter()
+                    .map(|operation| (operation.id, operation.kind)),
+            )
+            .find(|(_, operation_kind)| *operation_kind == kind)
+        {
             return Err(CoreError::operation_busy(format!(
                 "another MangoDisk operation is already running: {} ({})",
-                operation.kind.as_str(),
-                operation.id
+                operation_kind.as_str(),
+                operation_id
             )));
         }
 
-        // Foreground operations retain their historical single-operation lock. System maintenance
-        // uses a separate exclusive session lock and a shared mutation lock, allowing read-only
-        // scans to remain responsive while still excluding cleanup, deletion, and setting changes
-        // in this process and in another MangoDisk adapter process.
-        let foreground_lock = (kind != CoordinatedOperationKind::SystemMaintenanceExecution)
-            .then(|| ProcessOperationLock::acquire(kind))
-            .transpose()?;
-        let maintenance_lock = (kind == CoordinatedOperationKind::SystemMaintenanceExecution)
-            .then(|| {
-                ProcessOperationLock::acquire_named(
-                    "system-maintenance.lock",
+        loop {
+            if cancelled.load(Ordering::Relaxed) {
+                state.waiting.retain(|operation| operation.id != id);
+                coordinator.changed.notify_all();
+                return Err(CoreError::operation_cancelled());
+            }
+
+            let active_conflict = state.active.iter().find_map(|operation| {
+                conflicting_resource(&claims, &operation.claims)
+                    .map(|resource| (operation, resource))
+            });
+            let earlier_waiter = state
+                .waiting
+                .iter()
+                .take_while(|operation| operation.id != id)
+                .find_map(|operation| {
+                    conflicting_resource(&claims, &operation.claims)
+                        .map(|resource| (operation.kind, resource))
+                });
+            if active_conflict.is_none() && earlier_waiter.is_none() {
+                state.waiting.retain(|operation| operation.id != id);
+                state.active.push(ActiveOperation {
+                    id,
                     kind,
-                    ProcessLockMode::Exclusive,
-                )
-            })
-            .transpose()?;
-        let mutation_lock = if kind == CoordinatedOperationKind::SystemMaintenanceExecution {
-            Some(ProcessOperationLock::acquire_named(
-                "mutation.lock",
-                kind,
-                ProcessLockMode::Shared,
-            )?)
-        } else if kind.is_mutating() {
-            Some(ProcessOperationLock::acquire_named(
-                "mutation.lock",
-                kind,
-                ProcessLockMode::Exclusive,
-            )?)
-        } else {
-            None
-        };
-        let id = coordinator.next_id.fetch_add(1, Ordering::Relaxed);
-        let cancelled = Arc::new(AtomicBool::new(false));
-        let operation = ActiveOperation {
-            id,
-            kind,
-            cancelled: Arc::clone(&cancelled),
-        };
-        if kind == CoordinatedOperationKind::SystemMaintenanceExecution {
-            active.maintenance = Some(operation);
-        } else {
-            active.foreground = Some(operation);
+                    claims: claims.clone(),
+                    cancelled: Arc::clone(&cancelled),
+                });
+                break;
+            }
+
+            if !queued {
+                let (blocking_kind, resource) = active_conflict
+                    .map(|(operation, resource)| (operation.kind, resource))
+                    .or(earlier_waiter)
+                    .expect("a queued operation must have a conflicting resource");
+                state.waiting.push(WaitingOperation {
+                    id,
+                    kind,
+                    claims: claims.clone(),
+                    cancelled: Arc::clone(&cancelled),
+                });
+                queued = true;
+                log::info!(
+                    "operation_queued operation_id={} operation_kind={} blocking_kind={} resource={} queue_depth={}",
+                    id,
+                    kind.as_str(),
+                    blocking_kind.as_str(),
+                    resource.as_str(),
+                    state.waiting.len()
+                );
+            }
+            state = coordinator.changed.wait(state).map_err(|_| {
+                CoreError::operation_failed("the operation coordinator is temporarily unavailable")
+            })?;
         }
+        drop(state);
+
+        let process_locks = match acquire_process_locks(kind, &claims) {
+            Ok(locks) => locks,
+            Err(error) => {
+                release_active_operation(coordinator, id);
+                return Err(error);
+            }
+        };
         log::info!(
-            "operation_started operation_id={} operation_kind={}",
+            "operation_started operation_id={} operation_kind={} queued={} queue_wait_ms={} resource_count={}",
             id,
-            kind.as_str()
+            kind.as_str(),
+            queued,
+            requested_at.elapsed().as_millis(),
+            claims.len()
         );
         Ok(Self {
             id,
@@ -369,9 +512,7 @@ impl OperationGuard {
             cancelled,
             started: Instant::now(),
             outcome: AtomicU8::new(OPERATION_RUNNING),
-            _foreground_lock: foreground_lock,
-            _maintenance_lock: maintenance_lock,
-            _mutation_lock: mutation_lock,
+            _process_locks: process_locks,
         })
     }
 
@@ -401,58 +542,113 @@ impl OperationGuard {
         self.outcome.store(OPERATION_COMPLETED, Ordering::Relaxed);
     }
 
+    /// Records a retryable platform condition separately from a failed operation so diagnostics
+    /// do not report an expected backpressure decision as a warning.
+    pub(crate) fn defer(&self) {
+        self.outcome.store(OPERATION_DEFERRED, Ordering::Relaxed);
+    }
+
     pub(crate) fn cancel(kind: CoordinatedOperationKind) {
-        let Ok(active) = OperationCoordinator::global().active.lock() else {
+        let coordinator = OperationCoordinator::global();
+        let Ok(state) = coordinator.state.lock() else {
             log::warn!(
                 "operation_cancel_failed operation_kind={} reason=coordinator_poisoned",
                 kind.as_str()
             );
             return;
         };
-        let operation = if kind == CoordinatedOperationKind::SystemMaintenanceExecution {
-            active.maintenance.as_ref()
-        } else {
-            active.foreground.as_ref()
-        };
-        let Some(operation) = operation.filter(|operation| operation.kind == kind) else {
+        let operation = state
+            .active
+            .iter()
+            .find(|operation| operation.kind == kind)
+            .map(|operation| (operation.id, operation.kind, &operation.cancelled))
+            .or_else(|| {
+                state
+                    .waiting
+                    .iter()
+                    .find(|operation| operation.kind == kind)
+                    .map(|operation| (operation.id, operation.kind, &operation.cancelled))
+            });
+        let Some((operation_id, operation_kind, cancellation)) = operation else {
             return;
         };
-        operation.cancelled.store(true, Ordering::Relaxed);
+        cancellation.store(true, Ordering::Relaxed);
+        coordinator.changed.notify_all();
         log::info!(
             "operation_cancel_requested operation_id={} operation_kind={}",
-            operation.id,
-            operation.kind.as_str()
+            operation_id,
+            operation_kind.as_str()
         );
     }
 }
 
+fn conflicting_resource(
+    requested: &[ResourceClaim],
+    existing: &[ResourceClaim],
+) -> Option<CoordinatedResource> {
+    requested.iter().find_map(|left| {
+        existing
+            .iter()
+            .find(|right| {
+                left.resource == right.resource
+                    && (left.access == ResourceAccess::Exclusive
+                        || right.access == ResourceAccess::Exclusive)
+            })
+            .map(|_| left.resource)
+    })
+}
+
+fn acquire_process_locks(
+    kind: CoordinatedOperationKind,
+    claims: &[ResourceClaim],
+) -> CoreResult<Vec<ProcessOperationLock>> {
+    let mut requested = vec![(
+        format!("operation-kind-{}.lock", kind.as_str()),
+        ProcessLockMode::Exclusive,
+    )];
+    requested.extend(claims.iter().map(|claim| {
+        (
+            format!("operation-resource-{}.lock", claim.resource.as_str()),
+            match claim.access {
+                ResourceAccess::Shared => ProcessLockMode::Shared,
+                ResourceAccess::Exclusive => ProcessLockMode::Exclusive,
+            },
+        )
+    }));
+    requested.sort_by(|left, right| left.0.cmp(&right.0));
+    requested
+        .into_iter()
+        .map(|(file_name, mode)| ProcessOperationLock::acquire_named(&file_name, kind, mode))
+        .collect()
+}
+
+fn release_active_operation(coordinator: &OperationCoordinator, operation_id: u64) {
+    let Ok(mut state) = coordinator.state.lock() else {
+        log::warn!(
+            "operation_release_failed operation_id={operation_id} reason=coordinator_poisoned"
+        );
+        return;
+    };
+    state
+        .active
+        .retain(|operation| operation.id != operation_id);
+    coordinator.changed.notify_all();
+}
+
 impl Drop for OperationGuard {
     fn drop(&mut self) {
-        let Ok(mut active) = OperationCoordinator::global().active.lock() else {
-            log::warn!(
-                "operation_release_failed operation_id={} operation_kind={} reason=coordinator_poisoned",
-                self.id,
-                self.kind.as_str()
-            );
-            return;
-        };
-        let slot = if self.kind == CoordinatedOperationKind::SystemMaintenanceExecution {
-            &mut active.maintenance
-        } else {
-            &mut active.foreground
-        };
-        if slot
-            .as_ref()
-            .is_some_and(|operation| operation.id == self.id)
-        {
-            *slot = None;
-        }
+        // File locks must be released before waking a locally queued operation. Rust drops fields
+        // only after this method returns; relying on implicit field drop would create a narrow race
+        // where the awakened waiter reserves the local resource but still sees the old process lock.
+        self._process_locks.clear();
+        release_active_operation(OperationCoordinator::global(), self.id);
         let cancelled = self.cancelled.load(Ordering::Relaxed);
         let status = if cancelled {
             "cancelled"
         } else {
             match self.outcome.load(Ordering::Relaxed) {
                 OPERATION_COMPLETED => "completed",
+                OPERATION_DEFERRED => "deferred",
                 _ => "failed",
             }
         };
@@ -494,6 +690,23 @@ mod tests {
     use super::*;
     use crate::CoreErrorCode;
 
+    fn wait_until_queued(kind: CoordinatedOperationKind) {
+        for _ in 0..1_000 {
+            if OperationCoordinator::global()
+                .state
+                .lock()
+                .expect("the test coordinator should remain available")
+                .waiting
+                .iter()
+                .any(|operation| operation.kind == kind)
+            {
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+        panic!("the operation did not enter the coordinator queue");
+    }
+
     #[test]
     fn cancellation_token_stops_the_matching_operation() {
         let _test_guard = test_operation_lock();
@@ -508,6 +721,20 @@ mod tests {
                 .expect_err("the operation should be cancelled")
                 .code(),
             CoreErrorCode::OperationCancelled
+        );
+    }
+
+    #[test]
+    fn retryable_backpressure_records_a_deferred_outcome() {
+        let _test_guard = test_operation_lock();
+        let operation = OperationGuard::start(CoordinatedOperationKind::Analysis)
+            .expect("the isolated operation should start");
+
+        operation.defer();
+
+        assert_eq!(
+            operation.outcome.load(Ordering::Relaxed),
+            OPERATION_DEFERRED
         );
     }
 
@@ -527,48 +754,124 @@ mod tests {
     #[test]
     fn process_lock_is_released_when_the_guard_drops() {
         let _test_guard = test_operation_lock();
-        let first = ProcessOperationLock::acquire(CoordinatedOperationKind::Analysis)
-            .expect("the first process lock should succeed");
-        let error = ProcessOperationLock::acquire(CoordinatedOperationKind::Analysis)
-            .err()
-            .expect("a second process lock should be rejected");
+        let first = ProcessOperationLock::acquire_named(
+            "operation-coordinator-test.lock",
+            CoordinatedOperationKind::Analysis,
+            ProcessLockMode::Exclusive,
+        )
+        .expect("the first process lock should succeed");
+        let error = ProcessOperationLock::acquire_named(
+            "operation-coordinator-test.lock",
+            CoordinatedOperationKind::Analysis,
+            ProcessLockMode::Exclusive,
+        )
+        .err()
+        .expect("a second process lock should be rejected");
         assert_eq!(error.code(), CoreErrorCode::OperationBusy);
 
         drop(first);
-        let second = ProcessOperationLock::acquire(CoordinatedOperationKind::Analysis)
-            .expect("the process lock should be reusable after release");
+        let second = ProcessOperationLock::acquire_named(
+            "operation-coordinator-test.lock",
+            CoordinatedOperationKind::Analysis,
+            ProcessLockMode::Exclusive,
+        )
+        .expect("the process lock should be reusable after release");
         drop(second);
     }
 
     #[test]
-    fn mutation_lock_allows_maintenance_readers_and_rejects_a_writer() {
+    fn process_lock_contention_is_reported_across_processes() {
         let _test_guard = test_operation_lock();
-        let first = ProcessOperationLock::acquire_named(
-            "mutation.lock",
-            CoordinatedOperationKind::SystemMaintenanceExecution,
-            ProcessLockMode::Shared,
+        let lock_name = "operation-cross-process-test.lock";
+        let lock_directory = std::env::temp_dir().join(format!(
+            "mangodisk-operation-cross-process-test-{}",
+            std::process::id()
+        ));
+        let first = ProcessOperationLock::acquire_in_directory(
+            &lock_directory,
+            lock_name,
+            CoordinatedOperationKind::Analysis,
+            ProcessLockMode::Exclusive,
         )
-        .expect("the first maintenance reader should acquire the mutation lock");
-        let second = ProcessOperationLock::acquire_named(
-            "mutation.lock",
-            CoordinatedOperationKind::SystemMaintenanceExecution,
-            ProcessLockMode::Shared,
+        .expect("the parent process should acquire the lock");
+        let output = std::process::Command::new(
+            std::env::current_exe().expect("the test executable should be available"),
         )
-        .expect("a second maintenance reader should share the mutation lock");
-        let error = ProcessOperationLock::acquire_named(
-            "mutation.lock",
-            CoordinatedOperationKind::Cleanup,
+        .args([
+            "--exact",
+            "shared::operation::tests::cross_process_lock_probe",
+            "--nocapture",
+        ])
+        .env(
+            "MANGODISK_CROSS_PROCESS_LOCK_PROBE",
+            lock_directory.join(lock_name),
+        )
+        .output()
+        .expect("the lock probe process should start");
+
+        drop(first);
+        let _ = fs::remove_file(lock_directory.join(lock_name));
+        let _ = fs::remove_dir(lock_directory);
+        assert!(
+            output.status.success(),
+            "the child process should observe contention\nstdout: {}\nstderr: {}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    #[test]
+    fn cross_process_lock_probe() {
+        let Ok(lock_path) = std::env::var("MANGODISK_CROSS_PROCESS_LOCK_PROBE") else {
+            return;
+        };
+        let lock_path = std::path::PathBuf::from(lock_path);
+        let error = ProcessOperationLock::acquire_in_directory(
+            lock_path
+                .parent()
+                .expect("the probe lock path should have a parent"),
+            lock_path
+                .file_name()
+                .and_then(std::ffi::OsStr::to_str)
+                .expect("the probe lock name should be valid UTF-8"),
+            CoordinatedOperationKind::Analysis,
             ProcessLockMode::Exclusive,
         )
         .err()
-        .expect("a mutation writer must be rejected while maintenance is active");
+        .expect("the parent process should still own the lock");
+
+        assert_eq!(error.code(), CoreErrorCode::OperationBusy);
+    }
+
+    #[test]
+    fn shared_process_locks_allow_readers_and_reject_a_writer() {
+        let _test_guard = test_operation_lock();
+        let first = ProcessOperationLock::acquire_named(
+            "operation-shared-test.lock",
+            CoordinatedOperationKind::SystemSettingsScan,
+            ProcessLockMode::Shared,
+        )
+        .expect("the first reader should acquire the resource lock");
+        let second = ProcessOperationLock::acquire_named(
+            "operation-shared-test.lock",
+            CoordinatedOperationKind::SystemSettingsScan,
+            ProcessLockMode::Shared,
+        )
+        .expect("a second reader should share the resource lock");
+        let error = ProcessOperationLock::acquire_named(
+            "operation-shared-test.lock",
+            CoordinatedOperationKind::SystemSettingsChange,
+            ProcessLockMode::Exclusive,
+        )
+        .err()
+        .expect("a writer must be rejected while readers are active");
         assert_eq!(error.code(), CoreErrorCode::OperationBusy);
 
         drop(second);
         drop(first);
         let writer = ProcessOperationLock::acquire_named(
-            "mutation.lock",
-            CoordinatedOperationKind::Cleanup,
+            "operation-shared-test.lock",
+            CoordinatedOperationKind::SystemSettingsChange,
             ProcessLockMode::Exclusive,
         )
         .expect("the mutation writer should start after maintenance readers finish");
@@ -589,29 +892,184 @@ mod tests {
     }
 
     #[test]
-    fn maintenance_execution_blocks_foreground_mutations() {
+    fn independent_scan_and_mutation_domains_run_together() {
         let _test_guard = test_operation_lock();
         let maintenance =
             OperationGuard::start(CoordinatedOperationKind::SystemMaintenanceExecution)
                 .expect("maintenance should start in isolation");
-        let error = OperationGuard::start(CoordinatedOperationKind::SystemSettingsChange)
-            .err()
-            .expect("a settings mutation must not overlap system maintenance");
+        let settings = OperationGuard::start(CoordinatedOperationKind::SystemSettingsChange)
+            .expect("an unrelated settings mutation should start");
+        let analysis = OperationGuard::start(CoordinatedOperationKind::Analysis)
+            .expect("an unrelated disk analysis should start");
 
-        assert_eq!(error.code(), CoreErrorCode::OperationBusy);
+        drop(analysis);
+        drop(settings);
         drop(maintenance);
     }
 
     #[test]
-    fn foreground_mutations_block_maintenance_execution() {
+    fn duplicate_kind_is_rejected_instead_of_queued() {
         let _test_guard = test_operation_lock();
-        let mutation = OperationGuard::start(CoordinatedOperationKind::Cleanup)
-            .expect("cleanup should start in isolation");
-        let error = OperationGuard::start(CoordinatedOperationKind::SystemMaintenanceExecution)
+        let first = OperationGuard::start(CoordinatedOperationKind::Analysis)
+            .expect("the first analysis should start");
+        let error = OperationGuard::start(CoordinatedOperationKind::Analysis)
             .err()
-            .expect("system maintenance must not overlap cleanup mutation");
+            .expect("a duplicate analysis must be rejected");
 
         assert_eq!(error.code(), CoreErrorCode::OperationBusy);
-        drop(mutation);
+        drop(first);
+    }
+
+    #[test]
+    fn shared_application_inventory_scans_run_together() {
+        let _test_guard = test_operation_lock();
+        let catalog = OperationGuard::start(CoordinatedOperationKind::ApplicationScan)
+            .expect("the application catalog should start");
+        let leftovers = OperationGuard::start(CoordinatedOperationKind::ApplicationLeftoverScan)
+            .expect("the leftover scan should share inventory access");
+        let preparation = OperationGuard::start(CoordinatedOperationKind::ApplicationPreparation)
+            .expect("application preparation should share inventory access");
+
+        drop(preparation);
+        drop(leftovers);
+        drop(catalog);
+    }
+
+    #[test]
+    fn application_close_waits_for_uninstall_preparation() {
+        let _test_guard = test_operation_lock();
+        let preparation = OperationGuard::start(CoordinatedOperationKind::ApplicationPreparation)
+            .expect("application preparation should start");
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            let result = OperationGuard::start(CoordinatedOperationKind::ApplicationClose).map(
+                |operation| {
+                    operation.complete();
+                },
+            );
+            sender.send(result.map_err(|error| error.code())).unwrap();
+        });
+
+        assert!(
+            receiver
+                .recv_timeout(std::time::Duration::from_millis(50))
+                .is_err(),
+            "closing an application must not invalidate a running-state preparation snapshot"
+        );
+        drop(preparation);
+        assert_eq!(
+            receiver
+                .recv_timeout(std::time::Duration::from_secs(1))
+                .expect("the close operation should start after preparation finishes"),
+            Ok(())
+        );
+        worker.join().expect("the close worker should finish");
+    }
+
+    #[test]
+    fn conflicting_configuration_change_waits_for_scan() {
+        let _test_guard = test_operation_lock();
+        let scan = OperationGuard::start(CoordinatedOperationKind::SystemSettingsScan)
+            .expect("the settings scan should start");
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            let result = OperationGuard::start(CoordinatedOperationKind::SystemSettingsChange).map(
+                |operation| {
+                    operation.complete();
+                },
+            );
+            sender.send(result.map_err(|error| error.code())).unwrap();
+        });
+
+        assert!(
+            receiver
+                .recv_timeout(std::time::Duration::from_millis(50))
+                .is_err(),
+            "the conflicting mutation must remain queued while the scan owns a shared claim"
+        );
+        drop(scan);
+        assert_eq!(
+            receiver
+                .recv_timeout(std::time::Duration::from_secs(1))
+                .expect("the queued mutation should start after the scan finishes"),
+            Ok(())
+        );
+        worker.join().expect("the queued worker should finish");
+    }
+
+    #[test]
+    fn queued_operation_can_be_cancelled_before_it_starts() {
+        let _test_guard = test_operation_lock();
+        let cleanup = OperationGuard::start(CoordinatedOperationKind::Cleanup)
+            .expect("cleanup should own the filesystem mutation resource");
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            let result = OperationGuard::start(CoordinatedOperationKind::PermanentDelete)
+                .map(|_| ())
+                .map_err(|error| error.code());
+            sender.send(result).unwrap();
+        });
+
+        wait_until_queued(CoordinatedOperationKind::PermanentDelete);
+        OperationGuard::cancel(CoordinatedOperationKind::PermanentDelete);
+        assert_eq!(
+            receiver
+                .recv_timeout(std::time::Duration::from_secs(1))
+                .expect("the cancelled waiter should return"),
+            Err(CoreErrorCode::OperationCancelled)
+        );
+        worker.join().expect("the cancelled worker should finish");
+        drop(cleanup);
+    }
+
+    #[test]
+    fn conflicting_waiters_start_in_queue_order() {
+        let _test_guard = test_operation_lock();
+        let cleanup = OperationGuard::start(CoordinatedOperationKind::Cleanup)
+            .expect("cleanup should own the filesystem mutation resource");
+        let (started_sender, started_receiver) = std::sync::mpsc::channel();
+        let (release_sender, release_receiver) = std::sync::mpsc::channel();
+        let first_started_sender = started_sender.clone();
+        let first = std::thread::spawn(move || {
+            let operation = OperationGuard::start(CoordinatedOperationKind::PermanentDelete)
+                .expect("the first waiter should eventually start");
+            first_started_sender.send("permanent_delete").unwrap();
+            release_receiver.recv().unwrap();
+            operation.complete();
+        });
+        wait_until_queued(CoordinatedOperationKind::PermanentDelete);
+
+        let second = std::thread::spawn(move || {
+            let operation = OperationGuard::start(CoordinatedOperationKind::Applications)
+                .expect("the second waiter should eventually start");
+            started_sender.send("applications").unwrap();
+            operation.complete();
+        });
+        wait_until_queued(CoordinatedOperationKind::Applications);
+        drop(cleanup);
+
+        assert_eq!(
+            started_receiver
+                .recv_timeout(std::time::Duration::from_secs(1))
+                .expect("the first queued operation should start"),
+            "permanent_delete"
+        );
+        assert!(
+            started_receiver
+                .recv_timeout(std::time::Duration::from_millis(50))
+                .is_err(),
+            "the second conflicting waiter must remain queued until the first finishes"
+        );
+        release_sender.send(()).unwrap();
+        assert_eq!(
+            started_receiver
+                .recv_timeout(std::time::Duration::from_secs(1))
+                .expect("the second queued operation should start after the first finishes"),
+            "applications"
+        );
+        first.join().expect("the first queued worker should finish");
+        second
+            .join()
+            .expect("the second queued worker should finish");
     }
 }

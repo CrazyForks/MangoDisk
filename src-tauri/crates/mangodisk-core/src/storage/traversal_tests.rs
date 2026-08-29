@@ -16,6 +16,67 @@ impl Drop for DirectoryCleanup {
     }
 }
 
+#[test]
+fn traversal_cancellation_preserves_the_typed_error_code() {
+    let error = traversal_core_error(OPERATION_CANCELLED_ERROR.to_string());
+
+    assert_eq!(
+        error.code(),
+        crate::shared::CoreErrorCode::OperationCancelled
+    );
+}
+
+#[test]
+fn native_worker_shutdown_preserves_the_retryable_busy_code() {
+    let operation = OperationGuard::start(CoordinatedOperationKind::Analysis)
+        .expect("the isolated analysis operation should start");
+    let error = analysis_stream_core_error(&operation, AnalysisStreamError::ResourcesReleasing);
+
+    assert_eq!(error.code(), crate::shared::CoreErrorCode::OperationBusy);
+    assert_eq!(
+        error.reason(),
+        Some(crate::shared::CoreErrorReason::ScanResourcesReleasing)
+    );
+}
+
+#[test]
+fn native_large_file_candidate_below_physical_threshold_is_not_skipped() {
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    let root = std::env::temp_dir().join(format!(
+        "MangoDisk-Large-Candidate-{}-{unique}",
+        std::process::id()
+    ));
+    let _sandbox_cleanup = DirectoryCleanup(root.clone());
+    fs::create_dir_all(&root).expect("create the large-file candidate fixture");
+    let path = root.join("candidate.bin");
+    fs::write(&path, [1_u8, 2, 3, 4]).expect("write the large-file candidate fixture");
+    let metadata = fs::metadata(&path).expect("read the large-file candidate metadata");
+    let allocated = current_platform()
+        .file_space_usage(&path, &metadata)
+        .allocated_bytes;
+    let progress = Arc::new(ProgressTracker::new(0, |_| {}, 0));
+    let cancelled = AtomicBool::new(false);
+    let mut validation = LargeFileStreamValidation::new(
+        &root,
+        allocated.saturating_add(1),
+        now_ms(),
+        &progress,
+        &cancelled,
+    )
+    .expect("prepare native large-file validation");
+    let mut sink = IndexRecordSink::memory(None);
+
+    validation
+        .consume(path, &mut sink)
+        .expect("filter the ineligible native candidate");
+
+    assert_eq!(validation.valid_count, 0);
+    assert_eq!(validation.aggregate.skipped_count, 0);
+}
+
 #[cfg(target_os = "macos")]
 #[test]
 fn analysis_filesystem_boundary_keeps_firmlinks_and_rejects_mounts() {
@@ -296,9 +357,13 @@ fn large_file_cache_supports_switching_from_high_threshold_to_index_floor() {
         aggregate,
         std::collections::HashMap::from([(root.clone(), aggregate)]),
         files,
-        ScanPurpose::LargeFiles,
-        true,
-        None,
+        cache::SnapshotPublication::new(
+            ScanPurpose::LargeFiles,
+            true,
+            None,
+            1,
+            cache::mutation_revision().expect("the cache revision should load"),
+        ),
     )
     .expect("the large-file index should be stored in the cache");
 

@@ -1,3 +1,4 @@
+mod allocated_content;
 mod change_tracking;
 mod directories;
 mod directory_aggregate;
@@ -284,6 +285,14 @@ impl Platform for WindowsPlatform {
 
     fn file_space_usage(&self, path: &Path, metadata: &fs::Metadata) -> FileSpaceUsage {
         file_space::usage(path, metadata)
+    }
+
+    fn file_has_allocated_content(
+        &self,
+        file: &fs::File,
+        logical_bytes: u64,
+    ) -> PlatformResult<Option<bool>> {
+        allocated_content::has_allocated_content(file, logical_bytes)
     }
 
     fn directory_entry_identities(

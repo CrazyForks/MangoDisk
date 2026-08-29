@@ -169,7 +169,7 @@ pub fn run(
         )
     } else {
         format!(
-            "{action}: {} reclaimed, {} item(s) affected, {} item(s) skipped or failed.",
+            "{action}: {} removed, {} item(s) affected, {} item(s) skipped or failed.",
             format_bytes(result.released_bytes),
             result.affected_item_count,
             result.failed_item_count
@@ -338,7 +338,7 @@ fn render_scan_summary(scan: &CleanupScanResult, color_enabled: bool) -> String 
         .sum::<u64>();
 
     format!(
-        "{} candidate(s), {} reclaimable, {} recommended, completed in {}.",
+        "{} candidate(s), {} estimated cleanable data, {} recommended, completed in {}.",
         scan.rules
             .iter()
             .filter(|rule| rule.selectable && rule.bytes > 0)
@@ -533,7 +533,7 @@ mod tests {
     fn human_scan_hides_review_markers_and_repeats_the_summary() {
         let output = render_scan(&scan_result(), false, false, false);
         let summary =
-            "2 candidate(s), 2.00 MB reclaimable, 1.00 MB recommended, completed in 1.5 s.";
+            "2 candidate(s), 2.00 MB estimated cleanable data, 1.00 MB recommended, completed in 1.5 s.";
 
         assert!(output.contains("npm Cache"));
         assert!(output.contains("recommended"));

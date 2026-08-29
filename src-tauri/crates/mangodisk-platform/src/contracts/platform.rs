@@ -161,6 +161,19 @@ pub trait Platform: Send + Sync {
     fn file_space_usage(&self, _path: &Path, metadata: &fs::Metadata) -> FileSpaceUsage {
         FileSpaceUsage::logical_only(metadata.len())
     }
+    /// Reports whether an already-open file has any physically allocated content range.
+    ///
+    /// `Some(false)` is an authoritative platform guarantee that the complete logical range is a
+    /// hole and therefore reads as zero. `Some(true)` means at least one allocated range exists;
+    /// it does not classify the remaining ranges. `None` selects ordinary content reading. Core
+    /// validates the open object and current path before trusting this layout-only fact.
+    fn file_has_allocated_content(
+        &self,
+        _file: &fs::File,
+        _logical_bytes: u64,
+    ) -> PlatformResult<Option<bool>> {
+        Ok(None)
+    }
     /// Returns stable physical identities for immediate directory entries in one native batch.
     ///
     /// Core treats these values only as hints and retains live metadata, link, and open-handle

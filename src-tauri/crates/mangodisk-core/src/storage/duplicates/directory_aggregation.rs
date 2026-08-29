@@ -104,9 +104,10 @@ impl Hash for DirectoryFingerprint {
 pub(super) fn aggregate_exact_directories(
     roots: &[PathBuf],
     file_groups: Vec<DuplicateGroup>,
+    excluded_file_hashes: &HashSet<String>,
     operation: &OperationGuard,
 ) -> Result<DirectoryAggregationResult, String> {
-    let known_files = known_files(&file_groups);
+    let known_files = known_files(&file_groups, excluded_file_hashes);
     let seeds = directory_seeds(roots, &known_files);
     let candidate_directory_count = u64::try_from(seeds.len()).unwrap_or(u64::MAX);
     let mut seed_groups = HashMap::<DirectorySeed, Vec<PathBuf>>::new();
@@ -245,9 +246,19 @@ pub(super) fn verify_live_directory(
     })
 }
 
-fn known_files(groups: &[DuplicateGroup]) -> HashMap<PathBuf, KnownFile> {
+fn known_files(
+    groups: &[DuplicateGroup],
+    excluded_file_hashes: &HashSet<String>,
+) -> HashMap<PathBuf, KnownFile> {
     let mut files = HashMap::new();
     for group in groups {
+        // A fully sparse group is exact because every member was certified as a complete hole,
+        // but its layout-derived digest is deliberately not a reusable byte-content hash. Keeping
+        // those files out of directory fingerprints prevents creation of a directory group whose
+        // later live content verification would use a different hash representation.
+        if excluded_file_hashes.contains(&group.hash) {
+            continue;
+        }
         for entry in &group.entries {
             files.insert(
                 PathBuf::from(&entry.path),
@@ -575,8 +586,13 @@ mod tests {
         ];
         let operation = OperationGuard::start(CoordinatedOperationKind::DuplicateFiles)
             .expect("start operation");
-        let result = aggregate_exact_directories(std::slice::from_ref(&root), groups, &operation)
-            .expect("aggregate directories");
+        let result = aggregate_exact_directories(
+            std::slice::from_ref(&root),
+            groups,
+            &HashSet::new(),
+            &operation,
+        )
+        .expect("aggregate directories");
         operation.complete();
 
         assert_eq!(result.groups.len(), 1);
@@ -605,8 +621,13 @@ mod tests {
         )];
         let operation = OperationGuard::start(CoordinatedOperationKind::DuplicateFiles)
             .expect("start operation");
-        let result = aggregate_exact_directories(std::slice::from_ref(&root), groups, &operation)
-            .expect("aggregate directories");
+        let result = aggregate_exact_directories(
+            std::slice::from_ref(&root),
+            groups,
+            &HashSet::new(),
+            &operation,
+        )
+        .expect("aggregate directories");
         operation.complete();
 
         assert_eq!(result.groups.len(), 1);
@@ -634,8 +655,13 @@ mod tests {
         )];
         let operation = OperationGuard::start(CoordinatedOperationKind::DuplicateFiles)
             .expect("start operation");
-        let result = aggregate_exact_directories(std::slice::from_ref(&root), groups, &operation)
-            .expect("aggregate wrapper directories");
+        let result = aggregate_exact_directories(
+            std::slice::from_ref(&root),
+            groups,
+            &HashSet::new(),
+            &operation,
+        )
+        .expect("aggregate wrapper directories");
         operation.complete();
 
         assert_eq!(result.groups.len(), 1);

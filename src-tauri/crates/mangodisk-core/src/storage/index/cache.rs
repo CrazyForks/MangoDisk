@@ -53,6 +53,12 @@ struct AnalysisCache {
     directories: HashMap<PathBuf, DirectoryAggregate>,
     files: HashMap<PathBuf, IndexedFile>,
     scan_roots: HashMap<PathBuf, ScanPurpose>,
+    /// Monotonic operation identifiers prevent an older concurrent scan from replacing a newer
+    /// snapshot of the same root after it finishes later.
+    publish_generations: HashMap<PathBuf, u64>,
+    /// Destructive cache updates increment this revision. A scan captures it before traversal and
+    /// skips cache publication if a deletion happened while its private snapshot was being built.
+    mutation_revision: u64,
     /// Orders cached roots from least recently used to most recently used.
     ///
     /// Directory and file maps are intentionally shared across roots to keep lookup inexpensive.
@@ -76,6 +82,34 @@ enum ChangeValidation {
 pub(crate) enum CacheReuseDecision {
     Reusable,
     Miss,
+}
+
+/// Groups publication-only metadata so callers cannot confuse snapshot data with cache ordering
+/// controls. The scan response is built from its private snapshot before this policy is applied.
+pub(crate) struct SnapshotPublication {
+    purpose: ScanPurpose,
+    refresh: bool,
+    change_token: Option<FilesystemChangeToken>,
+    generation: u64,
+    expected_mutation_revision: u64,
+}
+
+impl SnapshotPublication {
+    pub(crate) const fn new(
+        purpose: ScanPurpose,
+        refresh: bool,
+        change_token: Option<FilesystemChangeToken>,
+        generation: u64,
+        expected_mutation_revision: u64,
+    ) -> Self {
+        Self {
+            purpose,
+            refresh,
+            change_token,
+            generation,
+            expected_mutation_revision,
+        }
+    }
 }
 
 impl ChangeValidation {
@@ -186,8 +220,23 @@ pub(crate) fn large_files_result(
         .get(root)
         .copied()
         .ok_or_else(|| "the large-file scan result is no longer available".to_string())?;
-    let mut entries = cache
-        .files
+    Ok(build_large_files_result(
+        root,
+        root_aggregate,
+        &cache.files,
+        minimum_bytes,
+        cache_reused,
+    ))
+}
+
+fn build_large_files_result(
+    root: &Path,
+    root_aggregate: DirectoryAggregate,
+    files: &HashMap<PathBuf, IndexedFile>,
+    minimum_bytes: u64,
+    cache_reused: bool,
+) -> LargeFilesResult {
+    let mut entries = files
         .iter()
         .filter(|(path, file)| path.starts_with(root) && file.bytes >= minimum_bytes)
         .filter(|(path, _)| {
@@ -208,7 +257,7 @@ pub(crate) fn large_files_result(
     entries.truncate(LARGE_FILE_RESULT_LIMIT);
     let returned_count = entries.len() as u64;
 
-    Ok(LargeFilesResult {
+    LargeFilesResult {
         scan_id: 0,
         root: display_path(root),
         scanned_at_ms: root_aggregate.scanned_at_ms,
@@ -220,7 +269,16 @@ pub(crate) fn large_files_result(
         skipped_count: root_aggregate.skipped_count,
         cache_reused,
         entries,
-    })
+    }
+}
+
+pub(crate) fn large_files_result_from_snapshot(
+    root: &Path,
+    root_aggregate: DirectoryAggregate,
+    files: &HashMap<PathBuf, IndexedFile>,
+    minimum_bytes: u64,
+) -> LargeFilesResult {
+    build_large_files_result(root, root_aggregate, files, minimum_bytes, false)
 }
 
 fn large_file_entry(path: &Path, root: &Path, file: IndexedFile) -> LargeFileEntry {
@@ -248,7 +306,39 @@ pub(crate) fn analysis_result(root: &Path) -> Result<Option<AnalysisResult>, Str
         return Ok(None);
     };
 
-    let children = fs::read_dir(root)
+    let children = read_analysis_children(root)?;
+    let cache = cache()
+        .lock()
+        .map_err(|_| ANALYSIS_CACHE_UNAVAILABLE_ERROR.to_string())?;
+    Ok(Some(build_analysis_result(
+        root,
+        root_aggregate,
+        children,
+        |path| cache.directories.get(path).copied(),
+        |path| cache.files.get(path).copied(),
+    )))
+}
+
+pub(crate) fn analysis_result_from_snapshot(
+    root: &Path,
+    root_aggregate: DirectoryAggregate,
+    directories: &HashMap<PathBuf, DirectoryAggregate>,
+    files: &HashMap<PathBuf, IndexedFile>,
+) -> Result<AnalysisResult, String> {
+    let children = read_analysis_children(root)?;
+    Ok(build_analysis_result(
+        root,
+        root_aggregate,
+        children,
+        |path| directories.get(path).copied(),
+        |path| files.get(path).copied(),
+    ))
+}
+
+fn read_analysis_children(
+    root: &Path,
+) -> Result<Vec<(fs::DirEntry, PathBuf, fs::Metadata)>, String> {
+    Ok(fs::read_dir(root)
         .map_err(|error| format!("failed to read the analysis root: {error}"))?
         .filter_map(Result::ok)
         .filter_map(|entry| {
@@ -256,15 +346,17 @@ pub(crate) fn analysis_result(root: &Path) -> Result<Option<AnalysisResult>, Str
             let metadata = fs::symlink_metadata(&path).ok()?;
             (!is_link_like(&metadata)).then_some((entry, path, metadata))
         })
-        .collect::<Vec<_>>();
-    let cache = cache()
-        .lock()
-        .map_err(|_| ANALYSIS_CACHE_UNAVAILABLE_ERROR.to_string())?;
-    let mut entries = build_analysis_entries(
-        children,
-        |path| cache.directories.get(path).copied(),
-        |path| cache.files.get(path).copied(),
-    );
+        .collect())
+}
+
+fn build_analysis_result(
+    root: &Path,
+    root_aggregate: DirectoryAggregate,
+    children: Vec<(fs::DirEntry, PathBuf, fs::Metadata)>,
+    directory_aggregate: impl FnMut(&Path) -> Option<DirectoryAggregate>,
+    indexed_file: impl FnMut(&Path) -> Option<IndexedFile>,
+) -> AnalysisResult {
+    let mut entries = build_analysis_entries(children, directory_aggregate, indexed_file);
     entries.sort_by(|left, right| {
         right
             .bytes
@@ -273,14 +365,14 @@ pub(crate) fn analysis_result(root: &Path) -> Result<Option<AnalysisResult>, Str
     });
     entries.truncate(80);
 
-    Ok(Some(AnalysisResult {
+    AnalysisResult {
         scan_id: 0,
         root: display_path(root),
         scanned_at_ms: root_aggregate.scanned_at_ms,
         total_bytes: root_aggregate.bytes,
         skipped_count: root_aggregate.skipped_count,
         entries,
-    }))
+    }
 }
 
 fn build_analysis_entries(
@@ -329,33 +421,50 @@ pub(crate) fn store_memory_only(
     root_aggregate: DirectoryAggregate,
     scanned_directories: HashMap<PathBuf, DirectoryAggregate>,
     scanned_files: HashMap<PathBuf, IndexedFile>,
-    purpose: ScanPurpose,
-    refresh: bool,
-    change_token: Option<FilesystemChangeToken>,
-) -> Result<(), String> {
+    publication: SnapshotPublication,
+) -> Result<bool, String> {
     let removed_monitors = {
         let mut cache = cache()
             .lock()
             .map_err(|_| ANALYSIS_CACHE_UNAVAILABLE_ERROR.to_string())?;
-        let mut removed_monitors = Vec::new();
-        while !cache.scan_roots.contains_key(root)
-            && cache.scan_roots.len() >= ANALYSIS_CACHE_ROOT_LIMIT
-        {
-            let least_recent_root = cache
-                .root_recency
-                .front()
-                .cloned()
-                .ok_or_else(|| "the analysis cache root recency is inconsistent".to_string())?;
-            let roots_before = cache.scan_roots.len();
-            removed_monitors.extend(evict_cached_root(&mut cache, &least_recent_root));
+        if cache.mutation_revision != publication.expected_mutation_revision {
             log::info!(
-                "analysis_cache_root_evicted roots_before={} roots_after={} root_limit={}",
-                roots_before,
-                cache.scan_roots.len(),
-                ANALYSIS_CACHE_ROOT_LIMIT
+                "analysis_cache_publish_skipped generation={} reason=concurrent_mutation expected_revision={} actual_revision={}",
+                publication.generation,
+                publication.expected_mutation_revision,
+                cache.mutation_revision
             );
+            return Ok(false);
         }
-        if refresh {
+        // Refreshing an ancestor removes descendant snapshots, and refreshing a descendant
+        // rewrites entries that also belong to an ancestor snapshot. Compare every overlapping
+        // root so a slower older scan cannot erase or partially mix a newer concurrent result.
+        if cache
+            .publish_generations
+            .iter()
+            .any(|(cached_root, generation)| {
+                (cached_root.starts_with(root) || root.starts_with(cached_root))
+                    && *generation > publication.generation
+            })
+        {
+            log::info!(
+                "analysis_cache_publish_skipped generation={} reason=newer_snapshot",
+                publication.generation
+            );
+            return Ok(false);
+        }
+        let mut removed_monitors = Vec::new();
+        // The directory and file maps are flattened across cached roots. Any overlapping
+        // publication must therefore replace its subtree atomically, even when the caller did not
+        // request an explicit refresh. This occurs when two compatible scan kinds finish out of
+        // order on an ancestor and descendant. Leaving the old nested root metadata behind would
+        // let its older change token evict records now owned by the newer ancestor snapshot.
+        let replaces_overlapping_snapshot = publication.refresh
+            || cache
+                .scan_roots
+                .keys()
+                .any(|cached_root| cached_root.starts_with(root) || root.starts_with(cached_root));
+        if replaces_overlapping_snapshot {
             if let Some(previous) = cache.directories.get(root).copied() {
                 for (path, aggregate) in &mut cache.directories {
                     if path != root && root.starts_with(path) {
@@ -382,6 +491,9 @@ pub(crate) fn store_memory_only(
             cache.directories.retain(|path, _| !path.starts_with(root));
             cache.files.retain(|path, _| !path.starts_with(root));
             cache.scan_roots.retain(|path, _| !path.starts_with(root));
+            cache
+                .publish_generations
+                .retain(|path, _| !path.starts_with(root));
             cache.root_recency.retain(|path| !path.starts_with(root));
             cache
                 .change_tokens
@@ -390,21 +502,54 @@ pub(crate) fn store_memory_only(
         } else if cache
             .change_monitors
             .get(root)
-            .is_some_and(|cached| Some(cached.token) != change_token)
+            .is_some_and(|cached| Some(cached.token) != publication.change_token)
         {
             if let Some(cached) = cache.change_monitors.remove(root) {
                 removed_monitors.push(cached.monitor);
             }
         }
+        // Overlapping roots are removed before applying the capacity limit so replacing a cached
+        // descendant with its ancestor reuses that slot instead of evicting an unrelated root.
+        while !cache.scan_roots.contains_key(root)
+            && cache.scan_roots.len() >= ANALYSIS_CACHE_ROOT_LIMIT
+        {
+            let least_recent_root = cache
+                .root_recency
+                .front()
+                .cloned()
+                .ok_or_else(|| "the analysis cache root recency is inconsistent".to_string())?;
+            let roots_before = cache.scan_roots.len();
+            removed_monitors.extend(evict_cached_root(&mut cache, &least_recent_root));
+            log::info!(
+                "analysis_cache_root_evicted roots_before={} roots_after={} root_limit={}",
+                roots_before,
+                cache.scan_roots.len(),
+                ANALYSIS_CACHE_ROOT_LIMIT
+            );
+        }
         cache.directories.extend(scanned_directories);
         cache.files.extend(scanned_files);
-        cache.scan_roots.insert(root.to_path_buf(), purpose);
+        cache
+            .scan_roots
+            .insert(root.to_path_buf(), publication.purpose);
+        cache
+            .publish_generations
+            .insert(root.to_path_buf(), publication.generation);
         touch_root(&mut cache, root);
-        cache.change_tokens.insert(root.to_path_buf(), change_token);
+        cache
+            .change_tokens
+            .insert(root.to_path_buf(), publication.change_token);
         removed_monitors
     };
     drop(removed_monitors);
-    Ok(())
+    Ok(true)
+}
+
+pub(crate) fn mutation_revision() -> Result<u64, String> {
+    cache()
+        .lock()
+        .map(|cache| cache.mutation_revision)
+        .map_err(|_| ANALYSIS_CACHE_UNAVAILABLE_ERROR.to_string())
 }
 
 pub(crate) fn remove_entry(
@@ -418,6 +563,7 @@ pub(crate) fn remove_entry(
             log::warn!("analysis_cache_update_failed reason=poisoned_lock");
             return;
         };
+        cache.mutation_revision = cache.mutation_revision.saturating_add(1);
         let removed_usage = if is_directory {
             cache
                 .directories
@@ -439,6 +585,9 @@ pub(crate) fn remove_entry(
                 .directories
                 .retain(|path, _| !path.starts_with(target));
             cache.scan_roots.retain(|path, _| !path.starts_with(target));
+            cache
+                .publish_generations
+                .retain(|path, _| !path.starts_with(target));
             cache.root_recency.retain(|path| !path.starts_with(target));
             cache
                 .change_tokens
@@ -470,7 +619,11 @@ pub(crate) fn clear_all() -> Result<(), String> {
         let mut cache = cache()
             .lock()
             .map_err(|_| ANALYSIS_CACHE_UNAVAILABLE_ERROR.to_string())?;
-        std::mem::take(&mut *cache)
+        let next_revision = cache.mutation_revision.saturating_add(1);
+        let mut previous = std::mem::take(&mut *cache);
+        cache.mutation_revision = next_revision;
+        previous.mutation_revision = 0;
+        previous
     };
     drop(previous);
     Ok(())
@@ -605,6 +758,9 @@ fn evict_cached_root(cache: &mut AnalysisCache, root: &Path) -> Vec<FilesystemCh
     cache.directories.retain(|path, _| !path.starts_with(root));
     cache.files.retain(|path, _| !path.starts_with(root));
     cache.scan_roots.retain(|path, _| !path.starts_with(root));
+    cache
+        .publish_generations
+        .retain(|path, _| !path.starts_with(root));
     cache.root_recency.retain(|path| !path.starts_with(root));
     cache
         .change_tokens
@@ -626,9 +782,13 @@ mod tests {
             aggregate,
             HashMap::from([(root.to_path_buf(), aggregate)]),
             HashMap::new(),
-            ScanPurpose::Analysis,
-            true,
-            None,
+            SnapshotPublication::new(
+                ScanPurpose::Analysis,
+                true,
+                None,
+                scanned_at_ms,
+                mutation_revision().expect("test cache revision should load"),
+            ),
         )
         .expect("test analysis result should store");
     }
@@ -665,9 +825,13 @@ mod tests {
                     modified_at_ms: Some(5),
                 },
             )]),
-            ScanPurpose::LargeFiles,
-            true,
-            None,
+            SnapshotPublication::new(
+                ScanPurpose::LargeFiles,
+                true,
+                None,
+                7,
+                mutation_revision().expect("test cache revision should load"),
+            ),
         )
         .expect("memory result should store");
 
@@ -696,9 +860,13 @@ mod tests {
             aggregate,
             HashMap::from([(root.clone(), aggregate)]),
             HashMap::new(),
-            ScanPurpose::Analysis,
-            true,
-            None,
+            SnapshotPublication::new(
+                ScanPurpose::Analysis,
+                true,
+                None,
+                10,
+                mutation_revision().expect("test cache revision should load"),
+            ),
         )
         .expect("analysis result should store");
 
@@ -740,9 +908,13 @@ mod tests {
             aggregate,
             HashMap::from([(root.clone(), aggregate)]),
             HashMap::new(),
-            ScanPurpose::Analysis,
-            true,
-            None,
+            SnapshotPublication::new(
+                ScanPurpose::Analysis,
+                true,
+                None,
+                8,
+                mutation_revision().expect("test cache revision should load"),
+            ),
         )
         .expect("analysis result should store");
 
@@ -766,15 +938,223 @@ mod tests {
             aggregate,
             HashMap::from([(root.clone(), aggregate)]),
             HashMap::new(),
-            ScanPurpose::Analysis,
-            true,
-            None,
+            SnapshotPublication::new(
+                ScanPurpose::Analysis,
+                true,
+                None,
+                9,
+                mutation_revision().expect("test cache revision should load"),
+            ),
         )
         .expect("memory result should store");
         clear_all().expect("cache should clear");
         assert!(analysis_result(&root)
             .expect("cache lookup should succeed")
             .is_none());
+    }
+
+    #[test]
+    fn older_concurrent_snapshot_cannot_replace_a_newer_generation() {
+        let _operation_lock = crate::shared::operation::test_operation_lock();
+        clear_all().expect("cache should clear");
+        let root = PathBuf::from("/memory-generation-order");
+        let newer = DirectoryAggregate {
+            bytes: 2,
+            logical_bytes: 2,
+            file_count: 1,
+            scanned_at_ms: 2,
+            ..DirectoryAggregate::default()
+        };
+        let revision = mutation_revision().expect("cache revision should load");
+        assert!(store_memory_only(
+            &root,
+            newer,
+            HashMap::from([(root.clone(), newer)]),
+            HashMap::new(),
+            SnapshotPublication::new(ScanPurpose::Analysis, true, None, 20, revision),
+        )
+        .expect("newer snapshot should publish"));
+
+        let older = DirectoryAggregate {
+            bytes: 1,
+            logical_bytes: 1,
+            file_count: 1,
+            scanned_at_ms: 1,
+            ..DirectoryAggregate::default()
+        };
+        assert!(!store_memory_only(
+            &root,
+            older,
+            HashMap::from([(root.clone(), older)]),
+            HashMap::new(),
+            SnapshotPublication::new(ScanPurpose::Analysis, true, None, 10, revision),
+        )
+        .expect("older snapshot should be skipped safely"));
+        assert_eq!(
+            cache()
+                .lock()
+                .expect("cache should remain available")
+                .directories
+                .get(&root)
+                .expect("newer root should remain")
+                .scanned_at_ms,
+            2
+        );
+        clear_all().expect("cache should clear");
+    }
+
+    #[test]
+    fn older_ancestor_snapshot_cannot_erase_a_newer_descendant() {
+        let _operation_lock = crate::shared::operation::test_operation_lock();
+        clear_all().expect("cache should clear");
+        let root = PathBuf::from("/memory-overlapping-generation");
+        let descendant = root.join("nested");
+        let newer = DirectoryAggregate {
+            bytes: 2,
+            logical_bytes: 2,
+            file_count: 1,
+            scanned_at_ms: 2,
+            ..DirectoryAggregate::default()
+        };
+        let revision = mutation_revision().expect("cache revision should load");
+        assert!(store_memory_only(
+            &descendant,
+            newer,
+            HashMap::from([(descendant.clone(), newer)]),
+            HashMap::new(),
+            SnapshotPublication::new(ScanPurpose::Analysis, true, None, 20, revision),
+        )
+        .expect("newer descendant should publish"));
+
+        let older = DirectoryAggregate {
+            bytes: 1,
+            logical_bytes: 1,
+            file_count: 1,
+            scanned_at_ms: 1,
+            ..DirectoryAggregate::default()
+        };
+        assert!(!store_memory_only(
+            &root,
+            older,
+            HashMap::from([(root.clone(), older)]),
+            HashMap::new(),
+            SnapshotPublication::new(ScanPurpose::Analysis, true, None, 10, revision),
+        )
+        .expect("older ancestor should be skipped safely"));
+        let cache = cache().lock().expect("cache should remain available");
+        assert!(cache.directories.contains_key(&descendant));
+        assert!(!cache.directories.contains_key(&root));
+        drop(cache);
+        clear_all().expect("cache should clear");
+    }
+
+    #[test]
+    fn newer_ancestor_replaces_cached_descendant_without_an_explicit_refresh() {
+        let _operation_lock = crate::shared::operation::test_operation_lock();
+        clear_all().expect("cache should clear");
+        let root = PathBuf::from("/memory-overlapping-replacement");
+        let descendant = root.join("nested");
+        let unrelated = PathBuf::from("/memory-overlapping-unrelated");
+        let stale_file = descendant.join("stale.bin");
+        store_test_analysis_root(&unrelated, 5);
+        let old = DirectoryAggregate {
+            bytes: 1,
+            logical_bytes: 1,
+            file_count: 1,
+            scanned_at_ms: 1,
+            ..DirectoryAggregate::default()
+        };
+        let revision = mutation_revision().expect("cache revision should load");
+        assert!(store_memory_only(
+            &descendant,
+            old,
+            HashMap::from([(descendant.clone(), old)]),
+            HashMap::from([(
+                stale_file.clone(),
+                IndexedFile {
+                    bytes: 1,
+                    logical_bytes: 1,
+                    modified_at_ms: None,
+                },
+            )]),
+            SnapshotPublication::new(ScanPurpose::Analysis, true, None, 10, revision),
+        )
+        .expect("descendant snapshot should publish"));
+
+        let replacement = DirectoryAggregate {
+            bytes: 2,
+            logical_bytes: 2,
+            file_count: 1,
+            scanned_at_ms: 2,
+            ..DirectoryAggregate::default()
+        };
+        assert!(store_memory_only(
+            &root,
+            replacement,
+            HashMap::from([
+                (root.clone(), replacement),
+                (descendant.clone(), replacement),
+            ]),
+            HashMap::new(),
+            SnapshotPublication::new(ScanPurpose::Analysis, false, None, 20, revision),
+        )
+        .expect("newer ancestor snapshot should publish"));
+
+        let cache = cache().lock().expect("cache should remain available");
+        assert_eq!(cache.scan_roots.len(), 2);
+        assert!(cache.scan_roots.contains_key(&root));
+        assert!(cache.scan_roots.contains_key(&unrelated));
+        assert!(!cache.scan_roots.contains_key(&descendant));
+        assert!(!cache.files.contains_key(&stale_file));
+        assert_eq!(
+            cache
+                .directories
+                .get(&descendant)
+                .expect("replacement descendant should remain")
+                .scanned_at_ms,
+            2
+        );
+        drop(cache);
+        clear_all().expect("cache should clear");
+    }
+
+    #[test]
+    fn concurrent_mutation_prevents_stale_snapshot_publication() {
+        let _operation_lock = crate::shared::operation::test_operation_lock();
+        clear_all().expect("cache should clear");
+        let root = PathBuf::from("/memory-concurrent-mutation");
+        let aggregate = DirectoryAggregate {
+            bytes: 1,
+            logical_bytes: 1,
+            file_count: 1,
+            scanned_at_ms: 1,
+            ..DirectoryAggregate::default()
+        };
+        let revision = mutation_revision().expect("cache revision should load");
+        remove_entry(
+            &root.join("removed.bin"),
+            FileSpaceUsage {
+                logical_bytes: 1,
+                allocated_bytes: 1,
+            },
+            1,
+            false,
+        );
+
+        assert!(!store_memory_only(
+            &root,
+            aggregate,
+            HashMap::from([(root.clone(), aggregate)]),
+            HashMap::new(),
+            SnapshotPublication::new(ScanPurpose::Analysis, true, None, 1, revision),
+        )
+        .expect("stale publication should be skipped safely"));
+        assert!(!cache()
+            .lock()
+            .expect("cache should remain available")
+            .directories
+            .contains_key(&root));
+        clear_all().expect("cache should clear");
     }
 
     #[test]

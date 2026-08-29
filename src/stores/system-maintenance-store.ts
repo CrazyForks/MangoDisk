@@ -16,6 +16,7 @@ interface SystemMaintenanceState {
   catalog: SystemMaintenanceCatalog | null;
   executions: Record<string, SystemMaintenanceJob>;
   scanning: boolean;
+  scanFailed: boolean;
   cancellingScan: boolean;
   initialized: boolean;
   listenerReady: boolean;
@@ -61,6 +62,7 @@ export const useSystemMaintenanceStore = defineStore('system-maintenance', {
     catalog: null,
     executions: {},
     scanning: false,
+    scanFailed: false,
     cancellingScan: false,
     initialized: false,
     listenerReady: false,
@@ -104,6 +106,7 @@ export const useSystemMaintenanceStore = defineStore('system-maintenance', {
         if (!this.catalog && !this.executing) await this.scan();
       } catch (error) {
         this.initialized = false;
+        this.scanFailed = true;
         LoggerService.error(
           LOG_DOMAINS.systemMaintenance,
           LOG_EVENTS.systemMaintenanceRuntimeRestoreFailed,
@@ -111,6 +114,16 @@ export const useSystemMaintenanceStore = defineStore('system-maintenance', {
         );
         useAppStore().reportError(error);
       }
+    },
+    async retryScan() {
+      // A first-load failure may occur before the runtime listener is ready. Re-enter the complete
+      // initialization path in that case so a successful catalog scan is not left without job
+      // updates. Ordinary scan failures keep the initialized runtime and retry only the scan.
+      if (!this.initialized) {
+        await this.initialize();
+        return;
+      }
+      await this.scan();
     },
     applyJob(job: SystemMaintenanceJob, refreshWhenIdle = true) {
       const previous = this.executions[job.executionId];
@@ -156,12 +169,14 @@ export const useSystemMaintenanceStore = defineStore('system-maintenance', {
     async scan() {
       if (this.scanning || this.executing) return;
       this.scanning = true;
+      this.scanFailed = false;
       this.cancellingScan = false;
       useAppStore().clearError();
       LoggerService.info(LOG_DOMAINS.systemMaintenance, LOG_EVENTS.systemMaintenanceScanStarted);
       try {
         const catalog = await SystemMaintenanceService.scan();
         this.catalog = catalog;
+        this.scanFailed = false;
         LoggerService.info(LOG_DOMAINS.systemMaintenance, LOG_EVENTS.systemMaintenanceScanCompleted, {
           itemCount: catalog.summary.itemCount,
           recommendedCount: catalog.summary.recommendedCount,
@@ -170,6 +185,7 @@ export const useSystemMaintenanceStore = defineStore('system-maintenance', {
         });
       } catch (error) {
         if (parseCommandError(error)?.code !== 'operationCancelled') {
+          this.scanFailed = true;
           LoggerService.error(
             LOG_DOMAINS.systemMaintenance,
             LOG_EVENTS.systemMaintenanceScanFailed,

@@ -156,6 +156,7 @@ struct HashWorkerConfig {
 
 struct HashPipelineResult {
     full_groups: HashMap<(u64, blake3::Hash), Vec<usize>>,
+    fully_sparse_group_hashes: HashSet<blake3::Hash>,
     sample_hashes: Vec<Option<blake3::Hash>>,
     full_hashes: Vec<Option<blake3::Hash>>,
     skipped_count: u64,
@@ -186,6 +187,10 @@ struct HashPipelineDiagnostics {
     full_hash_worker_count: u64,
     full_hash_peak_in_flight: u64,
     hash_result_queue_capacity: u64,
+    fully_sparse_candidate_count: u64,
+    fully_sparse_group_count: u64,
+    fully_sparse_logical_bytes_skipped: u64,
+    allocated_range_query_fallback_count: u64,
 }
 
 #[derive(Default)]
@@ -229,6 +234,8 @@ struct DuplicateProgress {
     last_emit_ms: AtomicU64,
     items_scanned: AtomicU64,
     bytes_scanned: AtomicU64,
+    completed_steps: AtomicU64,
+    total_steps: AtomicU64,
 }
 
 #[derive(Debug)]
@@ -263,6 +270,10 @@ pub(crate) struct DuplicateScanDiagnostics {
     pub(crate) full_hash_worker_count: u64,
     pub(crate) full_hash_peak_in_flight: u64,
     pub(crate) hash_result_queue_capacity: u64,
+    pub(crate) fully_sparse_candidate_count: u64,
+    pub(crate) fully_sparse_group_count: u64,
+    pub(crate) fully_sparse_logical_bytes_skipped: u64,
+    pub(crate) allocated_range_query_fallback_count: u64,
     pub(crate) cache_snapshot_found: u64,
     pub(crate) cache_candidate_match_count: u64,
     pub(crate) sample_hash_cache_hit_count: u64,
@@ -310,6 +321,10 @@ impl Default for DuplicateScanDiagnostics {
             full_hash_worker_count: 0,
             full_hash_peak_in_flight: 0,
             hash_result_queue_capacity: 0,
+            fully_sparse_candidate_count: 0,
+            fully_sparse_group_count: 0,
+            fully_sparse_logical_bytes_skipped: 0,
+            allocated_range_query_fallback_count: 0,
             cache_snapshot_found: 0,
             cache_candidate_match_count: 0,
             sample_hash_cache_hit_count: 0,
@@ -338,6 +353,8 @@ impl DuplicateProgress {
             last_emit_ms: AtomicU64::new(0),
             items_scanned: AtomicU64::new(0),
             bytes_scanned: AtomicU64::new(0),
+            completed_steps: AtomicU64::new(0),
+            total_steps: AtomicU64::new(0),
         }
     }
 
@@ -366,6 +383,41 @@ impl DuplicateProgress {
         self.items_scanned.store(observations.0, Ordering::Relaxed);
         self.bytes_scanned.store(observations.1, Ordering::Relaxed);
         self.last_emit_ms.store(0, Ordering::Relaxed);
+    }
+
+    /// Publishes the complete enumeration counters before another stage changes their meaning.
+    ///
+    /// Small scans can finish inside the normal progress throttle interval. Without this forced
+    /// boundary event, the UI and benchmark evidence would jump from zero directly to hashing and
+    /// never expose the logical amount of candidate data that was discovered.
+    fn finish_enumeration(&self, path: &Path) {
+        self.emit(TraversalStage::Analyzing, path, true, 0, 0);
+    }
+
+    /// Starts or extends content verification without losing earlier hash work.
+    ///
+    /// Enumeration bytes are logical candidate sizes, while hashing bytes are bytes actually read
+    /// from files. The first hash stage replaces enumeration counters; later stages add their work
+    /// to the same totals so the UI never drops already completed sample reads when full hashing
+    /// begins.
+    fn extend_hash_stage(&self, path: &Path, additional_steps: u64) {
+        let previous_total = self.total_steps.load(Ordering::Relaxed);
+        if previous_total == 0 {
+            self.bytes_scanned.store(0, Ordering::Relaxed);
+            self.completed_steps.store(0, Ordering::Relaxed);
+        }
+        self.total_steps.store(
+            previous_total.saturating_add(additional_steps),
+            Ordering::Relaxed,
+        );
+        self.emit(TraversalStage::HashingFiles, path, true, 0, 0);
+    }
+
+    fn complete_hash_step(&self, path: &Path, bytes_read: u64) {
+        self.bytes_scanned.fetch_add(bytes_read, Ordering::Relaxed);
+        let completed = self.completed_steps.fetch_add(1, Ordering::Relaxed) + 1;
+        let total = self.total_steps.load(Ordering::Relaxed);
+        self.emit(TraversalStage::HashingFiles, path, completed >= total, 0, 0);
     }
 
     fn emit(
@@ -398,8 +450,8 @@ impl DuplicateProgress {
             current_path: display_path(path),
             items_scanned: self.items_scanned.load(Ordering::Relaxed),
             bytes_scanned: self.bytes_scanned.load(Ordering::Relaxed),
-            completed_steps: 0,
-            total_steps: 0,
+            completed_steps: self.completed_steps.load(Ordering::Relaxed),
+            total_steps: self.total_steps.load(Ordering::Relaxed),
             found_items,
             found_bytes,
             elapsed_ms: current_ms.saturating_sub(self.started_at_ms),
@@ -808,6 +860,10 @@ impl DuplicateFileService {
                 Err(FastAnalysisScanError::Cancelled) => {
                     return Err(crate::shared::CoreError::operation_cancelled());
                 }
+                Err(FastAnalysisScanError::Busy) => {
+                    operation.defer();
+                    return Err(crate::shared::CoreError::scan_resources_releasing());
+                }
                 Err(FastAnalysisScanError::Platform(error)) => {
                     log::warn!(
                         "duplicate_candidate_enumeration_fallback operation_id={} platform={} root={} reason=native_failed error_digest={}",
@@ -847,6 +903,7 @@ impl DuplicateFileService {
             })
             .scan(root, root)?;
         }
+        progress.finish_enumeration(&roots[roots.len() - 1]);
         diagnostics.enumeration_and_size_group_ms =
             enumeration_started.elapsed().as_millis() as u64;
         diagnostics.size_group_candidate_count = size_groups
@@ -1084,6 +1141,11 @@ impl DuplicateFileService {
             }
         }
 
+        let excluded_directory_hashes = pipeline
+            .fully_sparse_group_hashes
+            .iter()
+            .map(|hash| hash.to_hex().to_string())
+            .collect::<HashSet<_>>();
         let full_groups = pipeline.full_groups;
         let mut groups = Vec::new();
         let allocation_measurement_started = Instant::now();
@@ -1100,7 +1162,8 @@ impl DuplicateFileService {
         }
         diagnostics.allocation_measurement_ms = elapsed_ms(allocation_measurement_started);
         let directory_aggregation_started = Instant::now();
-        let aggregation = aggregate_exact_directories(&roots, groups, &operation)?;
+        let aggregation =
+            aggregate_exact_directories(&roots, groups, &excluded_directory_hashes, &operation)?;
         diagnostics.directory_aggregation_ms = elapsed_ms(directory_aggregation_started);
         diagnostics.directory_aggregation_candidate_count =
             aggregation.diagnostics.candidate_directory_count;
@@ -1152,8 +1215,14 @@ impl DuplicateFileService {
         diagnostics.streamed_group_batch_count = streamed_batch_count;
         diagnostics.streamed_group_count = streamed_group_count;
         diagnostics.first_streamed_group_ms = first_streamed_group_ms;
+        let final_progress_stage =
+            if diagnostics.sample_hash_worker_count > 0 || diagnostics.full_hash_worker_count > 0 {
+                TraversalStage::HashingFiles
+            } else {
+                TraversalStage::Analyzing
+            };
         progress.emit(
-            TraversalStage::Analyzing,
+            final_progress_stage,
             &roots[0],
             true,
             duplicate_file_count,
@@ -1165,7 +1234,7 @@ impl DuplicateFileService {
             .map(|path| diagnostic_path(path))
             .collect::<Vec<_>>();
         log::info!(
-            "duplicate_scan_finished operation_id={} root_count={} root_sample={:?} candidate_strategy={} scanned_files={} duplicate_groups={} returned_groups={} duplicate_files={} reclaimable_allocated_bytes={} skipped_count={} enumeration_ms={} group_identity_ms={} identity_hints={} identity_hints_verified={} identity_hint_fallback_directories={} identity_workers={} identity_peak_in_flight={} sample_hash_ms={} full_hash_ms={} allocation_measurement_ms={} allocation_measurement_fallbacks={} result_sort_ms={} sample_plan={} size_candidates={} aliases_filtered={} identity_unavailable={} sample_candidates={} sample_logical_bytes={} sample_workers={} sample_peak_in_flight={} full_candidates={} full_logical_bytes={} full_workers={} full_peak_in_flight={} hash_queue_capacity={} cache_snapshot_found={} cache_candidate_matches={} sample_cache_hits={} full_cache_hits={} cache_load_ms={} cache_validation_ms={} cache_fallbacks={} cache_write_entries={} cache_write_ms={} directory_candidates={} directory_groups={} aggregated_file_entries={} directory_aggregation_ms={} stream_batches={} streamed_groups={} first_stream_group_ms={:?} elapsed_ms={}",
+            "duplicate_scan_finished operation_id={} root_count={} root_sample={:?} candidate_strategy={} scanned_files={} duplicate_groups={} returned_groups={} duplicate_files={} reclaimable_allocated_bytes={} skipped_count={} enumeration_ms={} group_identity_ms={} identity_hints={} identity_hints_verified={} identity_hint_fallback_directories={} identity_workers={} identity_peak_in_flight={} sample_hash_ms={} full_hash_ms={} allocation_measurement_ms={} allocation_measurement_fallbacks={} result_sort_ms={} sample_plan={} size_candidates={} aliases_filtered={} identity_unavailable={} sample_candidates={} sample_read_bytes={} sample_workers={} sample_peak_in_flight={} full_candidates={} full_read_bytes={} full_workers={} full_peak_in_flight={} hash_queue_capacity={} fully_sparse_candidates={} fully_sparse_groups={} fully_sparse_logical_bytes_skipped={} allocated_range_query_fallbacks={} cache_snapshot_found={} cache_candidate_matches={} sample_cache_hits={} full_cache_hits={} cache_load_ms={} cache_validation_ms={} cache_fallbacks={} cache_write_entries={} cache_write_ms={} directory_candidates={} directory_groups={} aggregated_file_entries={} directory_aggregation_ms={} stream_batches={} streamed_groups={} first_stream_group_ms={:?} elapsed_ms={}",
             operation.id(),
             roots.len(),
             root_sample,
@@ -1201,6 +1270,10 @@ impl DuplicateFileService {
             diagnostics.full_hash_worker_count,
             diagnostics.full_hash_peak_in_flight,
             diagnostics.hash_result_queue_capacity,
+            diagnostics.fully_sparse_candidate_count,
+            diagnostics.fully_sparse_group_count,
+            diagnostics.fully_sparse_logical_bytes_skipped,
+            diagnostics.allocated_range_query_fallback_count,
             diagnostics.cache_snapshot_found,
             diagnostics.cache_candidate_match_count,
             diagnostics.sample_hash_cache_hit_count,
@@ -1507,13 +1580,60 @@ fn execute_hash_pipeline(
     // remaining count reaches zero, without waiting for unrelated large files.
     let mut full_hashes = vec![None; candidates.len()];
     let mut full_groups = HashMap::<(u64, blake3::Hash), Vec<usize>>::new();
+    let mut fully_sparse_group_hashes = HashSet::<blake3::Hash>::new();
     let mut full_task_indices = Vec::new();
     let mut candidate_group_indices = vec![usize::MAX; candidates.len()];
     let mut full_task_group_states = Vec::with_capacity(full_task_groups.len());
     for (group_index, candidate_indices) in full_task_groups.into_iter().enumerate() {
         let mut state = FullTaskGroupState::default();
+        let has_cached_full_hash = candidate_indices.iter().any(|index| {
+            matching_cache[*index]
+                .and_then(|cached| cached.full_hash)
+                .is_some()
+        });
+        let fully_sparse = if has_cached_full_hash {
+            false
+        } else {
+            certify_fully_sparse_group(
+                candidates,
+                &candidate_indices,
+                operation,
+                &mut diagnostics.allocated_range_query_fallback_count,
+            )?
+        };
+        let sparse_group_hash =
+            fully_sparse.then(|| fully_sparse_group_hash(candidates[candidate_indices[0]].bytes));
+        if fully_sparse {
+            fully_sparse_group_hashes
+                .insert(sparse_group_hash.expect("a certified sparse group always has a digest"));
+            let candidate_count = u64::try_from(candidate_indices.len()).unwrap_or(u64::MAX);
+            diagnostics.fully_sparse_candidate_count = diagnostics
+                .fully_sparse_candidate_count
+                .saturating_add(candidate_count);
+            diagnostics.fully_sparse_group_count =
+                diagnostics.fully_sparse_group_count.saturating_add(1);
+            diagnostics.fully_sparse_logical_bytes_skipped = diagnostics
+                .fully_sparse_logical_bytes_skipped
+                .saturating_add(
+                    candidates[candidate_indices[0]]
+                        .bytes
+                        .saturating_mul(candidate_count),
+                );
+        }
         for index in candidate_indices {
             candidate_group_indices[index] = group_index;
+            if let Some(hash) = sparse_group_hash {
+                // This layout-derived digest is valid only while every member is certified as a
+                // complete hole. It groups the current scan but intentionally remains absent from
+                // `full_hashes`, so a later mixed sparse/dense group can never compare it with a
+                // real content digest loaded from cache.
+                state
+                    .hash_groups
+                    .entry((candidates[index].bytes, hash))
+                    .or_default()
+                    .push(index);
+                continue;
+            }
             let cached_full_hash = matching_cache[index].and_then(|cached| cached.full_hash);
             if let Some(cached_full_hash) = cached_full_hash {
                 let hash = blake3::Hash::from_bytes(cached_full_hash);
@@ -1581,6 +1701,7 @@ fn execute_hash_pipeline(
 
     Ok(HashPipelineResult {
         full_groups,
+        fully_sparse_group_hashes,
         sample_hashes,
         full_hashes,
         skipped_count: sample_failures.count.saturating_add(full_failures.count),
@@ -1588,6 +1709,55 @@ fn execute_hash_pipeline(
         full_failures,
         diagnostics,
     })
+}
+
+/// Certifies an entire sample group before bypassing content reads.
+///
+/// A single allocated member, unsupported filesystem, query error, or validation race returns the
+/// group to ordinary full hashing. This whole-group rule preserves equality with dense all-zero
+/// files and avoids using physical allocation as a proxy for content in mixed layouts.
+fn certify_fully_sparse_group(
+    candidates: &[FileCandidate],
+    candidate_indices: &[usize],
+    operation: &OperationGuard,
+    fallback_count: &mut u64,
+) -> Result<bool, String> {
+    for &index in candidate_indices {
+        operation
+            .ensure_not_cancelled()
+            .map_err(|error| error.to_string())?;
+        let candidate = &candidates[index];
+        let file = match File::open(&candidate.path) {
+            Ok(file) => file,
+            Err(_) => return Ok(false),
+        };
+        if validate_open_file(candidate, &file, true).is_err() {
+            return Ok(false);
+        }
+        let has_allocated_content =
+            match current_platform().file_has_allocated_content(&file, candidate.bytes) {
+                Ok(Some(value)) => value,
+                Ok(None) | Err(_) => {
+                    *fallback_count = fallback_count.saturating_add(1);
+                    return Ok(false);
+                }
+            };
+        if has_allocated_content {
+            return Ok(false);
+        }
+        if validate_open_file(candidate, &file, false).is_err()
+            || validate_current_path(candidate).is_err()
+        {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+fn fully_sparse_group_hash(logical_bytes: u64) -> blake3::Hash {
+    let mut hasher = blake3::Hasher::new_derive_key("mangodisk.duplicates.fully-sparse-group.v1");
+    hasher.update(&logical_bytes.to_le_bytes());
+    hasher.finalize()
 }
 
 fn complete_full_task_group(
@@ -1704,6 +1874,11 @@ fn apply_pipeline_diagnostics(
     diagnostics.full_hash_worker_count = pipeline.full_hash_worker_count;
     diagnostics.full_hash_peak_in_flight = pipeline.full_hash_peak_in_flight;
     diagnostics.hash_result_queue_capacity = pipeline.hash_result_queue_capacity;
+    diagnostics.fully_sparse_candidate_count = pipeline.fully_sparse_candidate_count;
+    diagnostics.fully_sparse_group_count = pipeline.fully_sparse_group_count;
+    diagnostics.fully_sparse_logical_bytes_skipped = pipeline.fully_sparse_logical_bytes_skipped;
+    diagnostics.allocated_range_query_fallback_count =
+        pipeline.allocated_range_query_fallback_count;
 }
 
 fn run_hash_stage(
@@ -1718,6 +1893,10 @@ fn run_hash_stage(
     if task_indices.is_empty() {
         return Ok(HashStageDiagnostics::default());
     }
+    progress.extend_hash_stage(
+        &candidates[task_indices[0]].path,
+        u64::try_from(task_indices.len()).unwrap_or(u64::MAX),
+    );
     let worker_count = configured_worker_count.max(1).min(task_indices.len());
     let queue_capacity = worker_count.saturating_mul(HASH_RESULT_QUEUE_PER_WORKER);
     let started = Instant::now();
@@ -1783,6 +1962,10 @@ fn run_hash_stage(
         let mut completed_count = 0_usize;
         while let Ok(outcome) = receiver.recv() {
             completed_count = completed_count.saturating_add(1);
+            progress.complete_hash_step(
+                &candidates[outcome.candidate_index].path,
+                outcome.bytes_read,
+            );
             consume(outcome);
         }
         for worker in workers {

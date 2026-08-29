@@ -376,7 +376,7 @@ onMounted(() => {
       </div>
     </MdResultWorkspace>
 
-    <MdOperationWorkspace v-else>
+    <MdOperationWorkspace v-else-if="store.scanning || !store.scanFailed">
       <MdOperationProgress
         :icon-name="ICON_NAMES.systemOptimization"
         :title="t('systemOptimization.scanning')"
@@ -389,6 +389,19 @@ onMounted(() => {
         :cancelable="false"
         :cancel-disabled="true"
       />
+    </MdOperationWorkspace>
+
+    <MdOperationWorkspace v-else>
+      <MdEmptyState
+        :icon-name="ICON_NAMES.info"
+        :title="t('systemOptimization.scanFailedTitle')"
+        :description="t('systemOptimization.scanFailedDescription')"
+      >
+        <Button variant="outline" @click="store.scan()">
+          <MdIcon :name="ICON_NAMES.refresh" :size="17" />
+          {{ t('common.retry') }}
+        </Button>
+      </MdEmptyState>
     </MdOperationWorkspace>
 
     <MdSystemSettingRiskDialog

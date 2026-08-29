@@ -61,7 +61,11 @@ impl BulkDirectory {
         let descriptor = unsafe {
             libc::open(
                 path.as_ptr(),
-                libc::O_RDONLY | libc::O_DIRECTORY | libc::O_CLOEXEC | libc::O_NOFOLLOW,
+                libc::O_RDONLY
+                    | libc::O_DIRECTORY
+                    | libc::O_CLOEXEC
+                    | libc::O_NOFOLLOW
+                    | libc::O_NONBLOCK,
             )
         };
         if descriptor < 0 {

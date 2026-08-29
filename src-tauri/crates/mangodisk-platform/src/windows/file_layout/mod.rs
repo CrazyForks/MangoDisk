@@ -54,6 +54,14 @@ struct DirectoryTotals {
 }
 
 impl DirectoryTotals {
+    /// Selects the progress unit promised by the caller-facing scan purpose.
+    fn progress_bytes(self, purpose: ScanPurpose) -> u64 {
+        match purpose {
+            ScanPurpose::DuplicateFiles => self.logical_bytes,
+            _ => self.allocated_bytes,
+        }
+    }
+
     fn checked_add_assign(&mut self, other: Self) -> Result<(), LayoutScanError> {
         self.logical_bytes = self
             .logical_bytes
@@ -364,7 +372,7 @@ fn collect_analysis(
     report_progress(
         root,
         prepared.root_totals.file_count,
-        prepared.root_totals.allocated_bytes,
+        prepared.root_totals.progress_bytes(purpose),
     );
 
     // Validate all native structures, parent chains, skip boundaries, and
@@ -995,6 +1003,29 @@ mod tests {
             Err(LayoutScanError::Platform(error))
                 if error == "file_parent_directory_missing"
         ));
+    }
+
+    #[test]
+    fn duplicate_progress_uses_logical_bytes_without_changing_disk_usage() {
+        let totals = DirectoryTotals {
+            logical_bytes: 64 * 1024 * 1024,
+            allocated_bytes: 4_096,
+            file_count: 1,
+            skipped_count: 0,
+        };
+
+        assert_eq!(
+            totals.progress_bytes(ScanPurpose::DuplicateFiles),
+            totals.logical_bytes
+        );
+        assert_eq!(
+            totals.progress_bytes(ScanPurpose::Analysis),
+            totals.allocated_bytes
+        );
+        assert_eq!(
+            totals.progress_bytes(ScanPurpose::LargeFiles),
+            totals.allocated_bytes
+        );
     }
 
     #[test]

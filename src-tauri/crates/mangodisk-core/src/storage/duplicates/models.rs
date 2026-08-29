@@ -24,6 +24,9 @@ pub struct DuplicateFileEntry {
 #[serde(rename_all = "camelCase")]
 pub struct DuplicateGroup {
     pub id: String,
+    /// Stable proof token for this scan result. Ordinary file groups expose their BLAKE3 content
+    /// digest; a group certified as entirely sparse uses a domain-separated layout proof token.
+    /// Consumers must treat the value as opaque and must not reuse it as a file-content checksum.
     pub hash: String,
     pub kind: DuplicateGroupKind,
     /// Logical content length represented by each entry.
@@ -82,7 +85,7 @@ pub struct DuplicateFilesResult {
     pub groups: Vec<DuplicateGroup>,
 }
 
-/// Streams only groups that passed full-content hashing.
+/// Streams only groups that passed exact content verification by hashing or a platform proof.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DuplicateGroupBatch {

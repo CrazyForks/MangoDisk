@@ -124,6 +124,13 @@ const progressTitle = computed(() => {
   if (props.progress?.currentStage === 'hashingFiles') return t('duplicateFiles.comparingContents');
   return t('duplicateFiles.scanning');
 });
+const progressBytesLabel = computed(() =>
+  t(
+    props.progress?.currentStage === 'hashingFiles'
+      ? 'duplicateFiles.verifiedContentData'
+      : 'duplicateFiles.discoveredLogicalData'
+  )
+);
 const summaryMetricLabel = computed(() =>
   t(props.resultComplete ? 'duplicateFiles.summaryReclaimable' : 'duplicateFiles.summaryReclaimableScanning')
 );
@@ -383,6 +390,7 @@ function confirmDelete() {
           :path-label="t('loading.currentAnalysisDirectory')"
           :preparing-text="t('loading.preparingAnalysisDirectory')"
           :hint="t('duplicateFiles.scanHint')"
+          :bytes-label="progressBytesLabel"
           :cancelable="true"
           :cancel-disabled="cancelling"
           @cancel="emit('cancel')"

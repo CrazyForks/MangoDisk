@@ -329,7 +329,7 @@ onUnmounted(() => {
       </div>
     </MdResultWorkspace>
 
-    <MdOperationWorkspace v-else>
+    <MdOperationWorkspace v-else-if="store.scanning || !store.scanFailed">
       <MdOperationProgress
         :icon-name="ICON_NAMES.systemMaintenance"
         :title="t('systemMaintenance.scanning')"
@@ -342,6 +342,19 @@ onUnmounted(() => {
         :cancelable="false"
         :cancel-disabled="true"
       />
+    </MdOperationWorkspace>
+
+    <MdOperationWorkspace v-else>
+      <MdEmptyState
+        :icon-name="ICON_NAMES.info"
+        :title="t('systemMaintenance.scanFailedTitle')"
+        :description="t('systemMaintenance.scanFailedDescription')"
+      >
+        <Button variant="outline" @click="store.retryScan()">
+          <MdIcon :name="ICON_NAMES.refresh" :size="17" />
+          {{ t('common.retry') }}
+        </Button>
+      </MdEmptyState>
     </MdOperationWorkspace>
 
     <Dialog v-model:open="confirmationOpen">

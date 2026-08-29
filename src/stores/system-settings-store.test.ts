@@ -88,6 +88,26 @@ describe('system settings store', () => {
     expect(store.desiredOptimizedIds).toEqual([optimized.settingId]);
   });
 
+  it('leaves the loading state after a failed scan and recovers on retry', async () => {
+    const scan = vi
+      .spyOn(SystemSettingsService, 'scan')
+      .mockRejectedValueOnce(new Error('operation busy'))
+      .mockResolvedValueOnce(catalog());
+    const store = useSystemSettingsStore();
+
+    await store.scan();
+
+    expect(store.scanning).toBe(false);
+    expect(store.scanFailed).toBe(true);
+    expect(store.catalog).toBeNull();
+
+    await store.scan();
+
+    expect(scan).toHaveBeenCalledTimes(2);
+    expect(store.scanFailed).toBe(false);
+    expect(store.catalog).toEqual(catalog());
+  });
+
   it('refreshes operation history after an executed change', async () => {
     const updatedCatalog = catalog([{ ...setting, status: 'optimized', selectedByDefault: false }]);
     const result: SystemSettingsChangeResult = {

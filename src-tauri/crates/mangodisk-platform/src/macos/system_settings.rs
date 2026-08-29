@@ -1,13 +1,24 @@
 use std::{
     path::Path,
-    process::{Command, Output, Stdio},
+    process::{Command, Stdio},
+    time::{Duration, Instant},
 };
 
 use crate::{
-    preflight_system_setting_change, PlatformCancellation, PlatformError, PlatformErrorCode,
-    PlatformResult, PlatformSystemSettingChangeRequest, PlatformSystemSettingChangeResult,
+    preflight_system_setting_change, run_controlled_command_with_log_policy,
+    ControlledCommandError, ControlledCommandLimits, ControlledCommandLogPolicy,
+    ControlledCommandOutput, ControlledEnvironmentPolicy, ControlledExecutable,
+    PlatformCancellation, PlatformError, PlatformErrorCode, PlatformResult,
+    PlatformSystemSettingChangeRequest, PlatformSystemSettingChangeResult,
     PlatformSystemSettingDiagnosticCode, PlatformSystemSettingState, PlatformSystemSettingValue,
 };
+
+const DEFAULTS_LIMITS: ControlledCommandLimits = ControlledCommandLimits {
+    timeout: Duration::from_secs(2),
+    stdout_bytes: 64 * 1024,
+    stderr_bytes: 16 * 1024,
+};
+const SETTINGS_SCAN_DEADLINE: Duration = Duration::from_secs(6);
 
 #[derive(Clone, Copy)]
 enum ValueKind {
@@ -471,6 +482,41 @@ pub(crate) fn scan(
     setting_ids: &[&str],
     cancellation: &PlatformCancellation,
 ) -> PlatformResult<Vec<PlatformSystemSettingState>> {
+    let started = Instant::now();
+    let result = scan_with_reader(
+        setting_ids,
+        cancellation,
+        SETTINGS_SCAN_DEADLINE,
+        || started.elapsed(),
+        read_state,
+    );
+    if let Some(elapsed) = result.deadline_elapsed {
+        log::warn!(
+            "macos_system_settings_scan_deadline_exceeded completed_count={} requested_count={} elapsed_ms={}",
+            result.states.len(),
+            setting_ids.len(),
+            elapsed.as_millis()
+        );
+    }
+    Ok(result.states)
+}
+
+struct SettingsScanResult {
+    states: Vec<PlatformSystemSettingState>,
+    deadline_elapsed: Option<Duration>,
+}
+
+fn scan_with_reader<E, R>(
+    setting_ids: &[&str],
+    cancellation: &PlatformCancellation,
+    deadline: Duration,
+    mut elapsed: E,
+    mut read: R,
+) -> SettingsScanResult
+where
+    E: FnMut() -> Duration,
+    R: FnMut(SettingDefinition, &PlatformCancellation) -> PlatformSystemSettingState,
+{
     let mut states = Vec::with_capacity(setting_ids.len());
     for setting_id in setting_ids {
         if cancellation.is_cancelled() {
@@ -478,13 +524,26 @@ pub(crate) fn scan(
             // convert the shared cancellation flag into the stable operation-cancelled error.
             break;
         }
+        let current_elapsed = elapsed();
+        if current_elapsed >= deadline {
+            // Native preference reads normally finish in milliseconds. Stop after a bounded
+            // deadline when cfprefsd or a container filesystem stalls so the page can render the
+            // successfully observed settings and mark the remaining definitions unavailable.
+            return SettingsScanResult {
+                states,
+                deadline_elapsed: Some(current_elapsed),
+            };
+        }
         let Some(definition) = definition(setting_id) else {
             states.push(unsupported_state(setting_id));
             continue;
         };
-        states.push(read_state(definition));
+        states.push(read(definition, cancellation));
     }
-    Ok(states)
+    SettingsScanResult {
+        states,
+        deadline_elapsed: None,
+    }
 }
 
 pub(crate) fn change(
@@ -616,8 +675,11 @@ fn unsupported_state(setting_id: &str) -> PlatformSystemSettingState {
     }
 }
 
-fn read_state(definition: SettingDefinition) -> PlatformSystemSettingState {
-    match read_value(definition) {
+fn read_state(
+    definition: SettingDefinition,
+    cancellation: &PlatformCancellation,
+) -> PlatformSystemSettingState {
+    match read_value_with_cancellation(definition, &|| cancellation.is_cancelled()) {
         Ok(value) => PlatformSystemSettingState {
             setting_id: definition.id.to_string(),
             effective_value: value.clone(),
@@ -651,7 +713,14 @@ fn diagnostic_for_error(code: PlatformErrorCode) -> PlatformSystemSettingDiagnos
 }
 
 fn read_value(definition: SettingDefinition) -> PlatformResult<PlatformSystemSettingValue> {
-    let output = run_defaults(&["read", definition.domain, definition.key])?;
+    read_value_with_cancellation(definition, &|| false)
+}
+
+fn read_value_with_cancellation(
+    definition: SettingDefinition,
+    is_cancelled: &(dyn Fn() -> bool + Sync),
+) -> PlatformResult<PlatformSystemSettingValue> {
+    let output = run_defaults(&["read", definition.domain, definition.key], is_cancelled)?;
     if !output.status.success() {
         // A missing key delegates to the operating-system default and must be
         // preserved as a distinct value so an optimization can be reverted.
@@ -684,28 +753,35 @@ fn write_value(
 ) -> PlatformResult<()> {
     let output = match value {
         PlatformSystemSettingValue::Missing => {
-            run_defaults(&["delete", definition.domain, definition.key])?
+            run_defaults(&["delete", definition.domain, definition.key], &|| false)?
         }
-        PlatformSystemSettingValue::Boolean(value) => run_defaults(&[
-            "write",
-            definition.domain,
-            definition.key,
-            "-bool",
-            if *value { "true" } else { "false" },
-        ])?,
-        PlatformSystemSettingValue::Integer(value) => {
-            let value = value.to_string();
-            run_defaults(&[
+        PlatformSystemSettingValue::Boolean(value) => run_defaults(
+            &[
                 "write",
                 definition.domain,
                 definition.key,
-                "-int",
-                value.as_str(),
-            ])?
+                "-bool",
+                if *value { "true" } else { "false" },
+            ],
+            &|| false,
+        )?,
+        PlatformSystemSettingValue::Integer(value) => {
+            let value = value.to_string();
+            run_defaults(
+                &[
+                    "write",
+                    definition.domain,
+                    definition.key,
+                    "-int",
+                    value.as_str(),
+                ],
+                &|| false,
+            )?
         }
-        PlatformSystemSettingValue::Text(value) => {
-            run_defaults(&["write", definition.domain, definition.key, "-string", value])?
-        }
+        PlatformSystemSettingValue::Text(value) => run_defaults(
+            &["write", definition.domain, definition.key, "-string", value],
+            &|| false,
+        )?,
         PlatformSystemSettingValue::Snapshot(_) => {
             return Err(PlatformError::new(
                 PlatformErrorCode::InvalidData,
@@ -741,19 +817,58 @@ fn validate_value(kind: ValueKind, value: &PlatformSystemSettingValue) -> Platfo
     }
 }
 
-fn run_defaults(args: &[&str]) -> PlatformResult<Output> {
-    Command::new(Path::new("/usr/bin/defaults"))
-        .args(args)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .output()
-        .map_err(|error| PlatformError::io("run defaults", &error))
+fn run_defaults(
+    args: &[&str],
+    is_cancelled: &(dyn Fn() -> bool + Sync),
+) -> PlatformResult<ControlledCommandOutput> {
+    let executable = ControlledExecutable::capture(Path::new("/usr/bin/defaults"))
+        .map_err(system_settings_command_error)?;
+    run_controlled_command_with_log_policy(
+        "macos_system_settings_defaults",
+        &executable,
+        args,
+        ControlledEnvironmentPolicy::Inherit,
+        DEFAULTS_LIMITS,
+        ControlledCommandLogPolicy::ExceptionalOnly,
+        is_cancelled,
+    )
+    .map_err(system_settings_command_error)
+}
+
+fn system_settings_command_error(error: ControlledCommandError) -> PlatformError {
+    PlatformError::new(
+        match error {
+            ControlledCommandError::Cancelled => PlatformErrorCode::UserCancelled,
+            ControlledCommandError::InvalidExecutable
+            | ControlledCommandError::ExecutableChanged => PlatformErrorCode::Unsupported,
+            ControlledCommandError::SpawnFailed
+            | ControlledCommandError::ReaderFailed
+            | ControlledCommandError::WaitFailed
+            | ControlledCommandError::TimedOut
+            | ControlledCommandError::OutputLimitExceeded => PlatformErrorCode::OperationFailed,
+        },
+        "system settings command could not complete",
+    )
 }
 
 #[cfg(test)]
 mod tests {
+    use std::sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    };
+
     use super::*;
+
+    fn observed_state(definition: SettingDefinition) -> PlatformSystemSettingState {
+        PlatformSystemSettingState {
+            setting_id: definition.id.to_string(),
+            value: PlatformSystemSettingValue::Boolean(true),
+            effective_value: PlatformSystemSettingValue::Boolean(true),
+            requires_elevation: false,
+            diagnostic: None,
+        }
+    }
 
     #[test]
     fn setting_identifiers_are_unique_and_namespaced() {
@@ -831,6 +946,83 @@ mod tests {
                     | (ValueKind::Text, ValueKind::Text)
             ));
         }
+    }
+
+    #[test]
+    fn scan_stops_before_reading_when_already_cancelled() {
+        let result = scan_with_reader(
+            &["macos.finder.show-hidden-files"],
+            &PlatformCancellation::new(|| true),
+            SETTINGS_SCAN_DEADLINE,
+            || Duration::ZERO,
+            |definition, _| observed_state(definition),
+        );
+
+        assert!(result.states.is_empty());
+        assert!(result.deadline_elapsed.is_none());
+    }
+
+    #[test]
+    fn scan_preserves_partial_results_after_cancellation() {
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let cancellation_flag = Arc::clone(&cancelled);
+        let cancellation =
+            PlatformCancellation::new(move || cancellation_flag.load(Ordering::SeqCst));
+        let result = scan_with_reader(
+            &["macos.finder.show-hidden-files", "macos.dock.auto-hide"],
+            &cancellation,
+            SETTINGS_SCAN_DEADLINE,
+            || Duration::ZERO,
+            |definition, _| {
+                cancelled.store(true, Ordering::SeqCst);
+                observed_state(definition)
+            },
+        );
+
+        assert_eq!(result.states.len(), 1);
+        assert_eq!(
+            result.states[0].setting_id,
+            "macos.finder.show-hidden-files"
+        );
+        assert!(result.deadline_elapsed.is_none());
+    }
+
+    #[test]
+    fn scan_reports_deadline_without_discarding_completed_states() {
+        let elapsed_values = [Duration::ZERO, SETTINGS_SCAN_DEADLINE];
+        let mut elapsed_values = elapsed_values.into_iter();
+        let result = scan_with_reader(
+            &["macos.finder.show-hidden-files", "macos.dock.auto-hide"],
+            &PlatformCancellation::new(|| false),
+            SETTINGS_SCAN_DEADLINE,
+            || {
+                elapsed_values
+                    .next()
+                    .expect("each requested setting checks the deadline")
+            },
+            |definition, _| observed_state(definition),
+        );
+
+        assert_eq!(result.states.len(), 1);
+        assert_eq!(result.deadline_elapsed, Some(SETTINGS_SCAN_DEADLINE));
+    }
+
+    #[test]
+    fn scan_keeps_unknown_settings_as_partial_diagnostics() {
+        let result = scan_with_reader(
+            &["macos.unknown.setting", "macos.dock.auto-hide"],
+            &PlatformCancellation::new(|| false),
+            SETTINGS_SCAN_DEADLINE,
+            || Duration::ZERO,
+            |definition, _| observed_state(definition),
+        );
+
+        assert_eq!(result.states.len(), 2);
+        assert_eq!(
+            result.states[0].diagnostic,
+            Some(PlatformSystemSettingDiagnosticCode::Unsupported)
+        );
+        assert_eq!(result.states[1].setting_id, "macos.dock.auto-hide");
     }
 
     #[test]

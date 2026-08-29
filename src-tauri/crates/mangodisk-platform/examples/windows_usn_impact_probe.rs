@@ -566,6 +566,9 @@ mod windows_probe {
             FastAnalysisScanError::Cancelled => {
                 "analysis A/B was cancelled unexpectedly".to_string()
             }
+            FastAnalysisScanError::Busy => {
+                "analysis A/B could not start because native workers are busy".to_string()
+            }
             FastAnalysisScanError::Platform(error) => {
                 format!(
                     "analysis A/B platform error digest={}",

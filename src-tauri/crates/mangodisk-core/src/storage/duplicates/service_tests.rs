@@ -163,6 +163,7 @@ fn benchmark_worker_counts(case_name: &str, root: &Path) {
     let mut expected_signature = None;
     for worker_count in [1, 2, 4] {
         let mut elapsed_samples = Vec::with_capacity(SAMPLE_BENCHMARK_RUNS);
+        let mut elapsed_microsecond_samples = Vec::with_capacity(SAMPLE_BENCHMARK_RUNS);
         for run in 1..=SAMPLE_BENCHMARK_RUNS {
             let started = Instant::now();
             let (result, diagnostics) = DuplicateFileService::find_with_options_diagnostics(
@@ -174,6 +175,7 @@ fn benchmark_worker_counts(case_name: &str, root: &Path) {
             )
             .expect("the worker-count scan should succeed");
             let elapsed_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
+            let elapsed_us = u64::try_from(started.elapsed().as_micros()).unwrap_or(u64::MAX);
             let signature = result_signature(&result);
             if let Some(expected) = &expected_signature {
                 assert_eq!(
@@ -184,12 +186,14 @@ fn benchmark_worker_counts(case_name: &str, root: &Path) {
                 expected_signature = Some(signature);
             }
             elapsed_samples.push(elapsed_ms);
+            elapsed_microsecond_samples.push(elapsed_us);
             println!(
-                    "duplicate_worker_count case={} workers={} run={} total_ms={} group_identity_ms={} identity_workers={} identity_peak={} sample_workers={} sample_peak={} full_workers={} full_peak={} queue_capacity={} groups={} reclaimable_bytes={}",
+                    "duplicate_worker_count case={} workers={} run={} total_ms={} total_us={} group_identity_ms={} identity_workers={} identity_peak={} sample_workers={} sample_peak={} full_workers={} full_peak={} queue_capacity={} full_bytes={} fully_sparse_candidates={} fully_sparse_groups={} fully_sparse_logical_bytes_skipped={} allocated_range_query_fallbacks={} groups={} reclaimable_bytes={}",
                     case_name,
                     worker_count,
                     run,
                     elapsed_ms,
+                    elapsed_us,
                     diagnostics.group_and_identity_ms,
                     diagnostics.identity_worker_count,
                     diagnostics.identity_peak_in_flight,
@@ -198,19 +202,28 @@ fn benchmark_worker_counts(case_name: &str, root: &Path) {
                     diagnostics.full_hash_worker_count,
                     diagnostics.full_hash_peak_in_flight,
                     diagnostics.hash_result_queue_capacity,
+                    diagnostics.full_hash_bytes,
+                    diagnostics.fully_sparse_candidate_count,
+                    diagnostics.fully_sparse_group_count,
+                    diagnostics.fully_sparse_logical_bytes_skipped,
+                    diagnostics.allocated_range_query_fallback_count,
                     result.total_group_count,
                     result.reclaimable_bytes
                 );
         }
         elapsed_samples.sort_unstable();
+        elapsed_microsecond_samples.sort_unstable();
         println!(
-                "duplicate_worker_count_summary case={} workers={} runs={} median_ms={} min_ms={} max_ms={}",
+                "duplicate_worker_count_summary case={} workers={} runs={} median_ms={} min_ms={} max_ms={} median_us={} min_us={} max_us={}",
                 case_name,
                 worker_count,
                 SAMPLE_BENCHMARK_RUNS,
                 elapsed_samples[SAMPLE_BENCHMARK_RUNS / 2],
                 elapsed_samples[0],
-                elapsed_samples[SAMPLE_BENCHMARK_RUNS - 1]
+                elapsed_samples[SAMPLE_BENCHMARK_RUNS - 1],
+                elapsed_microsecond_samples[SAMPLE_BENCHMARK_RUNS / 2],
+                elapsed_microsecond_samples[0],
+                elapsed_microsecond_samples[SAMPLE_BENCHMARK_RUNS - 1]
             );
     }
 }
@@ -282,7 +295,15 @@ fn staged_hashing_only_reports_identical_content() {
     fs::write(root.join(".python-cache/module.cpython-314.pyc"), &matching)
         .expect("the hidden Python cache fixture should be written");
 
-    let result = DuplicateFileService::find_with_progress(vec![display_path(&root)], 1, |_| {})
+    let progress_events = Arc::new(Mutex::new(Vec::<TraversalProgress>::new()));
+    let captured_events = Arc::clone(&progress_events);
+    let result =
+        DuplicateFileService::find_with_progress(vec![display_path(&root)], 1, move |event| {
+            captured_events
+                .lock()
+                .expect("capture staged hashing progress")
+                .push(event);
+        })
         .expect("the duplicate-file scan should succeed");
 
     assert_eq!(result.groups.len(), 1);
@@ -300,6 +321,22 @@ fn staged_hashing_only_reports_identical_content() {
         .entries
         .iter()
         .all(|entry| entry.name != "module.cpython-314.pyc"));
+    let progress_events = progress_events
+        .lock()
+        .expect("read staged hashing progress");
+    let completed = progress_events
+        .last()
+        .expect("the completed scan must publish final progress");
+    assert!(matches!(
+        completed.current_stage,
+        TraversalStage::HashingFiles
+    ));
+    // Three candidates each contribute three 16 KiB sample reads, then the two matching files
+    // contribute one complete 1 MiB read. Progress reports all real verification I/O rather than
+    // discarding the sample stage when full hashing starts.
+    assert_eq!(completed.bytes_scanned, 2 * 1024 * 1024 + 3 * 3 * 16 * 1024);
+    assert_eq!(completed.completed_steps, 5);
+    assert_eq!(completed.total_steps, 5);
     fs::remove_dir_all(root).expect("the duplicate-file fixture should be removed");
 }
 
@@ -317,8 +354,9 @@ fn sparse_duplicates_report_physical_reclaimable_space() {
     create_sparse_file(&root.join("first.bin"), LOGICAL_BYTES);
     create_sparse_file(&root.join("second.bin"), LOGICAL_BYTES);
 
-    let result = DuplicateFileService::find_with_progress(vec![display_path(&root)], 1, |_| {})
-        .expect("the sparse duplicate scan should succeed");
+    let (result, diagnostics) =
+        DuplicateFileService::find_with_diagnostics(vec![display_path(&root)], 1, |_| {})
+            .expect("the sparse duplicate scan should succeed");
     let group = result
         .groups
         .first()
@@ -334,7 +372,74 @@ fn sparse_duplicates_report_physical_reclaimable_space() {
     );
     assert_eq!(result.total_duplicate_bytes, group.total_allocated_bytes());
     assert_eq!(result.reclaimable_bytes, group.maximum_reclaimable_bytes());
+    assert_eq!(diagnostics.full_hash_bytes, 0);
+    assert_eq!(diagnostics.fully_sparse_candidate_count, 2);
+    assert_eq!(diagnostics.fully_sparse_group_count, 1);
+    assert_eq!(
+        diagnostics.fully_sparse_logical_bytes_skipped,
+        2 * LOGICAL_BYTES
+    );
     fs::remove_dir_all(root).expect("the sparse duplicate fixture should be removed");
+}
+
+#[test]
+fn mixed_sparse_and_dense_zero_files_use_real_content_hashes() {
+    const LOGICAL_BYTES: u64 = 8 * 1024 * 1024;
+
+    let _operation_lock = crate::shared::operation::test_operation_lock();
+    let root = std::env::temp_dir().join(format!(
+        "mangodisk-mixed-sparse-duplicate-{}-{}",
+        std::process::id(),
+        now_ms()
+    ));
+    fs::create_dir_all(&root).expect("create the mixed sparse fixture");
+    create_sparse_file(&root.join("sparse-first.bin"), LOGICAL_BYTES);
+    create_sparse_file(&root.join("sparse-second.bin"), LOGICAL_BYTES);
+    fs::write(
+        root.join("dense-zero.bin"),
+        vec![0_u8; usize::try_from(LOGICAL_BYTES).expect("fixture length fits usize")],
+    )
+    .expect("write the dense zero fixture");
+
+    let (result, diagnostics) =
+        DuplicateFileService::find_with_diagnostics(vec![display_path(&root)], 1, |_| {})
+            .expect("the mixed sparse scan should succeed");
+
+    assert_eq!(result.total_group_count, 1);
+    assert_eq!(result.duplicate_file_count, 3);
+    assert_eq!(diagnostics.fully_sparse_group_count, 0);
+    assert_eq!(diagnostics.fully_sparse_candidate_count, 0);
+    assert_eq!(diagnostics.full_hash_bytes, 3 * LOGICAL_BYTES);
+    fs::remove_dir_all(root).expect("remove the mixed sparse fixture");
+}
+
+#[test]
+fn fully_sparse_groups_are_not_promoted_to_unverifiable_directories() {
+    const LOGICAL_BYTES: u64 = 8 * 1024 * 1024;
+
+    let _operation_lock = crate::shared::operation::test_operation_lock();
+    let root = std::env::temp_dir().join(format!(
+        "mangodisk-sparse-directory-boundary-{}-{}",
+        std::process::id(),
+        now_ms()
+    ));
+    let first = root.join("first-copy");
+    let second = root.join("second-copy");
+    fs::create_dir_all(&first).expect("create first sparse directory");
+    fs::create_dir_all(&second).expect("create second sparse directory");
+    create_sparse_file(&first.join("payload.bin"), LOGICAL_BYTES);
+    create_sparse_file(&second.join("payload.bin"), LOGICAL_BYTES);
+
+    let (result, diagnostics) =
+        DuplicateFileService::find_with_diagnostics(vec![display_path(&root)], 1, |_| {})
+            .expect("scan sparse directory copies");
+
+    assert_eq!(result.total_group_count, 1);
+    assert_eq!(result.groups[0].kind, DuplicateGroupKind::File);
+    assert_eq!(result.duplicate_file_count, 2);
+    assert_eq!(diagnostics.fully_sparse_group_count, 1);
+    assert_eq!(diagnostics.aggregated_directory_group_count, 0);
+    fs::remove_dir_all(root).expect("remove sparse directory fixture");
 }
 
 #[test]
@@ -588,6 +693,45 @@ fn multiple_workers_emit_progress_once_per_throttle_window() {
         1,
         "exactly one worker may emit progress in a throttle window"
     );
+}
+
+#[test]
+fn hash_progress_replaces_logical_bytes_then_accumulates_actual_reads() {
+    let events = Arc::new(Mutex::new(Vec::<TraversalProgress>::new()));
+    let captured = Arc::clone(&events);
+    let progress = DuplicateProgress::new(1, move |event| {
+        captured
+            .lock()
+            .expect("capture duplicate progress")
+            .push(event);
+    });
+    let path = Path::new("/benchmark/progress.bin");
+
+    progress.visit(TraversalStage::Analyzing, path, 8 * 1024 * 1024);
+    progress.extend_hash_stage(path, 2);
+    progress.complete_hash_step(path, 4 * 1024);
+    progress.complete_hash_step(path, 8 * 1024);
+    progress.extend_hash_stage(path, 1);
+    progress.complete_hash_step(path, 16 * 1024);
+
+    let events = events.lock().expect("read duplicate progress");
+    let hash_start = events
+        .iter()
+        .find(|event| matches!(event.current_stage, TraversalStage::HashingFiles))
+        .expect("hashing must publish a stage boundary");
+    assert_eq!(hash_start.items_scanned, 1);
+    assert_eq!(hash_start.bytes_scanned, 0);
+    assert_eq!(hash_start.completed_steps, 0);
+    assert_eq!(hash_start.total_steps, 2);
+
+    let completed = events.last().expect("hashing must publish completion");
+    assert!(matches!(
+        completed.current_stage,
+        TraversalStage::HashingFiles
+    ));
+    assert_eq!(completed.bytes_scanned, 28 * 1024);
+    assert_eq!(completed.completed_steps, 3);
+    assert_eq!(completed.total_steps, 3);
 }
 
 #[test]

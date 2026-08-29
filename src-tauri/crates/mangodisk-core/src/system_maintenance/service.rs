@@ -111,8 +111,9 @@ impl SystemMaintenanceService {
     /// Enqueues one maintenance task and returns immediately with its current state.
     ///
     /// One parent operation guard remains alive for the full queue lifetime. This preserves the
-    /// product-wide mutation boundary while the scheduler safely overlaps independent maintenance
-    /// resources inside that boundary.
+    /// filesystem mutation boundary while the scheduler safely overlaps independent maintenance
+    /// resources inside that boundary. Read-only scans and unrelated configuration domains remain
+    /// available while the session is active.
     pub fn start_execution(
         request: SystemMaintenanceExecutionRequest,
         sink: SystemMaintenanceJobUpdateSink,

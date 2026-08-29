@@ -16,8 +16,9 @@ mod windows;
 #[cfg(windows)]
 pub use command::configure_background_process;
 pub use command::{
-    run_controlled_command, ControlledCommandError, ControlledCommandLimits,
-    ControlledCommandOutput, ControlledEnvironmentPolicy, ControlledExecutable,
+    run_controlled_command, run_controlled_command_with_log_policy, ControlledCommandError,
+    ControlledCommandLimits, ControlledCommandLogPolicy, ControlledCommandOutput,
+    ControlledEnvironmentPolicy, ControlledExecutable,
 };
 pub use contracts::*;
 pub use current::{application_directories, current_platform, CurrentPlatform};

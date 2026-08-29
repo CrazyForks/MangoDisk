@@ -4,7 +4,7 @@ use std::{
     os::unix::fs::MetadataExt,
     path::{Path, PathBuf},
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
         mpsc::{self, RecvTimeoutError},
         Arc, Condvar, Mutex,
     },
@@ -26,6 +26,7 @@ use super::{
 
 const RESULT_POLL_INTERVAL: Duration = Duration::from_millis(40);
 const MAX_DIRECTORY_WORKERS: usize = 8;
+static ACTIVE_ANALYSIS_REAPERS: AtomicUsize = AtomicUsize::new(0);
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 struct DirectoryTotals {
@@ -36,6 +37,18 @@ struct DirectoryTotals {
 }
 
 impl DirectoryTotals {
+    /// Selects the progress unit promised by the caller-facing scan purpose.
+    ///
+    /// Disk analysis and large-file discovery describe real disk consumption, while exact
+    /// duplicate grouping is keyed by logical length. Keeping this choice beside the native
+    /// totals prevents platform-specific scanners from silently presenting different units.
+    fn progress_bytes(self, purpose: ScanPurpose) -> u64 {
+        match purpose {
+            ScanPurpose::DuplicateFiles => self.logical_bytes,
+            _ => self.allocated_bytes,
+        }
+    }
+
     fn add_file(
         &mut self,
         logical_bytes: u64,
@@ -182,6 +195,7 @@ struct AnalysisCoordinator<'a> {
     task_queue: &'a DirectoryTaskQueue,
     consumer: &'a mut dyn FnMut(FastAnalysisRecord) -> Result<(), String>,
     report_progress: &'a mut dyn FnMut(&Path, u64, u64),
+    purpose: ScanPurpose,
     diagnostics: AnalysisDiagnostics,
     root_totals: Option<DirectoryTotals>,
 }
@@ -220,6 +234,7 @@ impl DirectoryTaskQueue {
 impl<'a> AnalysisCoordinator<'a> {
     fn new(
         root: &Path,
+        purpose: ScanPurpose,
         task_queue: &'a DirectoryTaskQueue,
         report_progress: &'a mut dyn FnMut(&Path, u64, u64),
         consumer: &'a mut dyn FnMut(FastAnalysisRecord) -> Result<(), String>,
@@ -236,6 +251,7 @@ impl<'a> AnalysisCoordinator<'a> {
             task_queue,
             consumer,
             report_progress,
+            purpose,
             diagnostics: AnalysisDiagnostics::default(),
             root_totals: None,
         }
@@ -271,7 +287,7 @@ impl<'a> AnalysisCoordinator<'a> {
         (self.report_progress)(
             &result.task.path,
             result.direct_totals.file_count,
-            result.direct_totals.allocated_bytes,
+            result.direct_totals.progress_bytes(self.purpose),
         );
         for candidate in result.candidates {
             emit_candidate(candidate, self.consumer, &mut self.diagnostics)?;
@@ -327,6 +343,7 @@ pub(super) fn analyze_records(
     request: AnalysisScanRequest<'_>,
     consumer: &mut dyn FnMut(FastAnalysisRecord) -> Result<(), String>,
 ) -> Result<FastAnalysisSummary, FastAnalysisScanError> {
+    ensure_worker_pool_available(&ACTIVE_ANALYSIS_REAPERS)?;
     let AnalysisScanRequest {
         root,
         purpose,
@@ -407,8 +424,13 @@ pub(super) fn analyze_records(
     }
     drop(result_sender);
 
-    let mut coordinator =
-        AnalysisCoordinator::new(root, task_queue.as_ref(), report_progress, consumer);
+    let mut coordinator = AnalysisCoordinator::new(
+        root,
+        purpose,
+        task_queue.as_ref(),
+        report_progress,
+        consumer,
+    );
     task_queue.push_many([DirectoryTask {
         node_id: 0,
         path: root.to_path_buf(),
@@ -445,11 +467,7 @@ pub(super) fn analyze_records(
 
     abort.store(true, Ordering::Relaxed);
     task_queue.stop();
-    for worker in workers {
-        if worker.join().is_err() && scan_result.is_ok() {
-            scan_result = Err(platform_error("analysis_worker_panicked"));
-        }
-    }
+    finish_workers(workers, &mut scan_result);
     scan_result?;
     let totals = coordinator
         .root_totals
@@ -481,6 +499,93 @@ pub(super) fn analyze_records(
             .unwrap_or(u64::MAX),
         strategy: "darwin_parallel_getattrlistbulk_allocated_files_v4",
     })
+}
+
+fn ensure_worker_pool_available(active_reapers: &AtomicUsize) -> Result<(), FastAnalysisScanError> {
+    let active_reaper_count = active_reapers.load(Ordering::Acquire);
+    if active_reaper_count == 0 {
+        return Ok(());
+    }
+    log::info!(
+        "macos_native_analysis_deferred reason=workers_reaping active_reaper_count={active_reaper_count}"
+    );
+    Err(FastAnalysisScanError::Busy)
+}
+
+/// Finishes the native reader pool without making a failed or cancelled request wait on a
+/// filesystem call that the process cannot interrupt. Darwin may keep `open` or
+/// `getattrlistbulk` inside the kernel while a directory provider is unresponsive. Successful
+/// scans still join synchronously because their summary depends on every worker having exited.
+/// Failed scans transfer the handles to one bounded reaper thread so the UI and operation
+/// scheduler can settle promptly while operating-system resources are reclaimed when the calls
+/// eventually return.
+fn finish_workers(
+    workers: Vec<thread::JoinHandle<()>>,
+    scan_result: &mut Result<(), FastAnalysisScanError>,
+) {
+    finish_workers_with_reaper_count(workers, scan_result, &ACTIVE_ANALYSIS_REAPERS);
+}
+
+fn finish_workers_with_reaper_count(
+    workers: Vec<thread::JoinHandle<()>>,
+    scan_result: &mut Result<(), FastAnalysisScanError>,
+    active_reapers: &'static AtomicUsize,
+) {
+    if scan_result.is_ok() {
+        for worker in workers {
+            if worker.join().is_err() && scan_result.is_ok() {
+                *scan_result = Err(platform_error("analysis_worker_panicked"));
+            }
+        }
+        return;
+    }
+
+    let worker_count = workers.len();
+    let reason = match scan_result {
+        Err(FastAnalysisScanError::Cancelled) => "cancelled",
+        Err(FastAnalysisScanError::Busy) => "busy",
+        Err(FastAnalysisScanError::Consumer(_)) => "consumer_rejected",
+        Err(FastAnalysisScanError::Platform(_)) => "platform_error",
+        Ok(()) => unreachable!("successful scans join workers synchronously"),
+    };
+    let active_reaper_count = active_reapers.fetch_add(1, Ordering::AcqRel) + 1;
+    log::info!("macos_native_analysis_workers_reaping worker_count={worker_count} reason={reason}");
+    let started = Instant::now();
+    if let Err(error) = thread::Builder::new()
+        .name("mangodisk-analysis-reaper".to_string())
+        .spawn(move || {
+            let panicked_count = workers
+                .into_iter()
+                .map(|worker| usize::from(worker.join().is_err()))
+                .sum::<usize>();
+            // State transitions must not live inside a log argument: disabled log levels are
+            // allowed to skip argument evaluation entirely.
+            let remaining_reaper_count = active_reapers
+                .fetch_sub(1, Ordering::AcqRel)
+                .saturating_sub(1);
+            log::info!(
+                "macos_native_analysis_workers_reaped worker_count={} panicked_count={} active_reaper_count={} elapsed_ms={}",
+                worker_count,
+                panicked_count,
+                remaining_reaper_count,
+                started.elapsed().as_millis()
+            );
+        })
+    {
+        // A failed reaper spawn drops the join handles, which safely detaches the readers. The
+        // active count intentionally remains non-zero because those detached readers can no
+        // longer be observed; failing closed prevents later scans from creating unbounded worker
+        // pools. Keep the diagnostic compact and avoid exposing any scanned path.
+        log::warn!(
+            "macos_native_analysis_reaper_spawn_failed worker_count={} io_kind={:?}",
+            worker_count,
+            error.kind()
+        );
+    } else {
+        log::debug!(
+            "macos_native_analysis_reaper_started active_reaper_count={active_reaper_count}"
+        );
+    }
 }
 
 fn read_directory(
@@ -922,6 +1027,7 @@ mod tests {
         assert!(candidates.is_empty());
 
         let mut duplicate_candidates = Vec::new();
+        let mut duplicate_progress_bytes = 0_u64;
         analyze_records(
             &MacOsPlatform,
             AnalysisScanRequest {
@@ -930,7 +1036,9 @@ mod tests {
                 large_file_minimum_bytes: 1,
                 is_cancelled: &|| false,
                 should_prune_directory: |_| false,
-                report_progress: &mut |_, _, _| {},
+                report_progress: &mut |_, _, bytes| {
+                    duplicate_progress_bytes = duplicate_progress_bytes.saturating_add(bytes);
+                },
             },
             &mut |record| {
                 if let FastAnalysisRecord::LargeFileCandidate(path) = record {
@@ -941,6 +1049,7 @@ mod tests {
         )
         .expect("scan the sparse duplicate fixture");
         assert_eq!(duplicate_candidates, vec![path]);
+        assert_eq!(duplicate_progress_bytes, 64 * 1024 * 1024);
         fs::remove_dir_all(root).expect("remove sparse fixture");
     }
 
@@ -986,6 +1095,37 @@ mod tests {
                 if error == "fixture consumer rejected record"
         ));
         fs::remove_dir_all(root).expect("remove fixture");
+    }
+
+    #[test]
+    fn failed_scan_does_not_wait_for_a_blocked_worker() {
+        static TEST_ACTIVE_REAPERS: AtomicUsize = AtomicUsize::new(0);
+        let (started_sender, started_receiver) = mpsc::channel();
+        let worker = thread::spawn(move || {
+            started_sender.send(()).expect("signal worker start");
+            thread::sleep(Duration::from_millis(250));
+        });
+        started_receiver
+            .recv_timeout(Duration::from_secs(1))
+            .expect("worker should start");
+        let mut result = Err(FastAnalysisScanError::Cancelled);
+        let started = Instant::now();
+
+        finish_workers_with_reaper_count(vec![worker], &mut result, &TEST_ACTIVE_REAPERS);
+
+        assert!(started.elapsed() < Duration::from_millis(100));
+        assert!(matches!(result, Err(FastAnalysisScanError::Cancelled)));
+        assert!(matches!(
+            ensure_worker_pool_available(&TEST_ACTIVE_REAPERS),
+            Err(FastAnalysisScanError::Busy)
+        ));
+        for _ in 0..1_000 {
+            if TEST_ACTIVE_REAPERS.load(Ordering::Acquire) == 0 {
+                return;
+            }
+            thread::sleep(Duration::from_millis(1));
+        }
+        panic!("the test reaper did not finish");
     }
 
     fn unique_fixture_root(label: &str) -> PathBuf {

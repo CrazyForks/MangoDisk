@@ -306,6 +306,10 @@ pub struct FastAnalysisSummary {
 #[derive(Debug)]
 pub enum FastAnalysisScanError {
     Cancelled,
+    /// A previous cancelled native scan still owns readers blocked inside the operating system.
+    /// Callers should retry later instead of starting another worker pool or falling back to a
+    /// second traversal that can hit the same unavailable provider.
+    Busy,
     Platform(String),
     Consumer(String),
 }

@@ -1,3 +1,4 @@
+mod allocated_content;
 mod analysis;
 mod bulk_directory;
 mod change_tracking;
@@ -229,6 +230,14 @@ impl Platform for MacOsPlatform {
             logical_bytes: metadata.len(),
             allocated_bytes: metadata.blocks().saturating_mul(512),
         }
+    }
+
+    fn file_has_allocated_content(
+        &self,
+        file: &fs::File,
+        logical_bytes: u64,
+    ) -> PlatformResult<Option<bool>> {
+        allocated_content::has_allocated_content(file, logical_bytes)
     }
 
     fn is_allowed_system_path_alias(&self, path: &Path) -> bool {

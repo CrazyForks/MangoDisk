@@ -839,6 +839,27 @@ mod tests {
 
     use super::*;
 
+    static ANALYSIS_TEST_LOCK: Mutex<()> = Mutex::new(());
+
+    fn analysis_test_lock() -> std::sync::MutexGuard<'static, ()> {
+        ANALYSIS_TEST_LOCK
+            .lock()
+            // The lock only isolates tests that intentionally share the production reaper
+            // counter. Recovering a poisoned guard prevents one failed assertion from making
+            // every later native analysis test fail with an unrelated Busy result.
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    fn wait_for_analysis_reapers() {
+        for _ in 0..1_000 {
+            if ACTIVE_ANALYSIS_REAPERS.load(Ordering::Acquire) == 0 {
+                return;
+            }
+            thread::sleep(Duration::from_millis(1));
+        }
+        panic!("the native analysis test reaper did not finish");
+    }
+
     #[test]
     fn dataless_directory_is_skipped_before_it_enters_the_worker_queue() {
         let root = Path::new("/fixture");
@@ -875,6 +896,7 @@ mod tests {
 
     #[test]
     fn native_analysis_reports_allocated_and_logical_sizes_and_skips_links() {
+        let _analysis_lock = analysis_test_lock();
         let root = unique_fixture_root("logical-size");
         fs::create_dir_all(root.join("nested/deeper")).expect("create fixture directories");
         write_bytes(&root.join("root.bin"), 13);
@@ -994,6 +1016,7 @@ mod tests {
 
     #[test]
     fn native_analysis_does_not_charge_sparse_holes_to_disk_usage() {
+        let _analysis_lock = analysis_test_lock();
         let root = unique_fixture_root("sparse-allocation");
         fs::create_dir_all(&root).expect("create sparse fixture directory");
         let path = root.join("sparse.bin");
@@ -1055,6 +1078,7 @@ mod tests {
 
     #[test]
     fn native_analysis_honors_cancellation_before_opening_root() {
+        let _analysis_lock = analysis_test_lock();
         let result = analyze_records(
             &MacOsPlatform,
             AnalysisScanRequest {
@@ -1072,6 +1096,7 @@ mod tests {
 
     #[test]
     fn native_analysis_stops_workers_when_consumer_rejects_a_record() {
+        let _analysis_lock = analysis_test_lock();
         let root = unique_fixture_root("consumer-error");
         fs::create_dir_all(root.join("nested/deeper")).expect("create fixture directories");
         write_bytes(&root.join("nested/deeper/large.bin"), 71);
@@ -1095,6 +1120,10 @@ mod tests {
                 if error == "fixture consumer rejected record"
         ));
         fs::remove_dir_all(root).expect("remove fixture");
+        // Failed scans intentionally hand workers to an asynchronous reaper. Keep the shared
+        // test lock until that production state is clean, otherwise another parallel test can
+        // observe a legitimate Busy response caused by this fixture rather than its own input.
+        wait_for_analysis_reapers();
     }
 
     #[test]

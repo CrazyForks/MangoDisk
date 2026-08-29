@@ -33,6 +33,7 @@ import { useStorageScopeStore } from '@/stores/storage-scope-store';
 
 import MdDuplicateFileGroups from './components/md-duplicate-file-groups.vue';
 import MdDuplicateSmartSelectButton from './components/md-duplicate-smart-select-button.vue';
+import { duplicateProgressBytesLabelKey } from './duplicate-file-progress-presentation';
 
 const { t } = useI18n({ useScope: 'global' });
 
@@ -124,13 +125,7 @@ const progressTitle = computed(() => {
   if (props.progress?.currentStage === 'hashingFiles') return t('duplicateFiles.comparingContents');
   return t('duplicateFiles.scanning');
 });
-const progressBytesLabel = computed(() =>
-  t(
-    props.progress?.currentStage === 'hashingFiles'
-      ? 'duplicateFiles.verifiedContentData'
-      : 'duplicateFiles.discoveredLogicalData'
-  )
-);
+const progressBytesLabel = computed(() => t(duplicateProgressBytesLabelKey(props.progress?.currentStage)));
 const summaryMetricLabel = computed(() =>
   t(props.resultComplete ? 'duplicateFiles.summaryReclaimable' : 'duplicateFiles.summaryReclaimableScanning')
 );

@@ -725,6 +725,221 @@ mod cleanup_matcher_tests {
         );
     }
 
+    fn service_custom_rule(root: &Path) -> CustomCleanupRule {
+        CustomCleanupRule {
+            schema_version: crate::cleanup::CUSTOM_CLEANUP_RULE_SCHEMA_VERSION,
+            id: "service-safety-fixture".to_string(),
+            name: "Service safety fixture".to_string(),
+            roots: vec![root.to_string_lossy().into_owned()],
+            name_patterns: vec!["*.tmp".to_string()],
+            minimum_bytes: None,
+            maximum_bytes: None,
+            modified_time: crate::cleanup::CustomCleanupModifiedTime::Any,
+            recursive: true,
+        }
+    }
+
+    fn custom_cleanup_request(dry_run: bool) -> CleanupRequest {
+        CleanupRequest {
+            rule_ids: vec!["custom.service-safety-fixture".to_string()],
+            source_selections: Vec::new(),
+            dry_run,
+            project_roots: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn custom_cleanup_service_previews_then_deletes_only_the_authorized_match() {
+        let _operation_lock = crate::shared::operation::test_operation_lock();
+        HistoryService::clear().expect("the cleanup test history should start empty");
+        let sandbox = std::env::temp_dir().join(format!(
+            "mangodisk-cleanup-service-flow-{}-{}",
+            std::process::id(),
+            now_ms()
+        ));
+        let _sandbox_cleanup = DirectoryCleanup(sandbox.clone());
+        let matching = sandbox.join("generated.tmp");
+        let retained = sandbox.join("project.txt");
+        fs::create_dir_all(&sandbox).expect("the cleanup service fixture should be created");
+        fs::write(&matching, b"rebuildable cache")
+            .expect("the matching cleanup fixture should be written");
+        fs::write(&retained, b"user content")
+            .expect("the retained cleanup fixture should be written");
+        let rules = vec![service_custom_rule(&sandbox)];
+        let scan_id = crate::cleanup::custom_session::publish(rules.clone(), false)
+            .expect("the authoritative custom cleanup session should be published");
+        let mut preview_progress = Vec::new();
+
+        let preview = CleanupService::execute_deep_cleanup_step_with_custom_rules_and_progress(
+            custom_cleanup_request(true),
+            "cleanup-service-preview".to_string(),
+            scan_id,
+            rules.clone(),
+            false,
+            |progress| preview_progress.push(progress),
+        )
+        .expect("the custom cleanup preview should succeed");
+
+        assert_eq!(preview.actions.len(), 1);
+        assert_eq!(
+            preview.actions[0].status,
+            crate::cleanup::CleanupActionStatus::Previewed
+        );
+        assert_eq!(preview.affected_item_count, 0);
+        assert!(preview.expected_bytes > 0);
+        assert!(matching.exists(), "a preview must not delete the match");
+        assert!(retained.exists());
+        assert_eq!(
+            preview_progress
+                .first()
+                .expect("preview progress should start")
+                .stage,
+            CleanupExecutionStage::Validating
+        );
+        assert_eq!(
+            preview_progress
+                .last()
+                .expect("preview progress should finish")
+                .stage,
+            CleanupExecutionStage::Finalizing
+        );
+
+        let mut execution_progress = Vec::new();
+        let result = CleanupService::execute_deep_cleanup_step_with_custom_rules_and_progress(
+            custom_cleanup_request(false),
+            "cleanup-service-execution".to_string(),
+            scan_id,
+            rules,
+            false,
+            |progress| execution_progress.push(progress),
+        )
+        .expect("the authorized custom cleanup should succeed");
+
+        assert_eq!(result.actions.len(), 1);
+        assert_eq!(
+            result.actions[0].status,
+            crate::cleanup::CleanupActionStatus::Completed
+        );
+        assert_eq!(result.affected_item_count, 1);
+        assert!(!matching.exists());
+        assert!(retained.exists(), "an unmatched user file must remain");
+        assert!(result.history_saved);
+        assert_eq!(
+            execution_progress
+                .first()
+                .expect("execution progress should start")
+                .stage,
+            CleanupExecutionStage::Cleaning
+        );
+        assert_eq!(
+            execution_progress
+                .last()
+                .expect("execution progress should finish")
+                .stage,
+            CleanupExecutionStage::Finalizing
+        );
+        assert_eq!(
+            HistoryService::list()
+                .expect("the cleanup test history should load")
+                .len(),
+            2
+        );
+        HistoryService::clear().expect("the cleanup test history should be removed");
+    }
+
+    #[test]
+    fn cancellation_during_custom_cleanup_validation_preserves_every_file() {
+        let _operation_lock = crate::shared::operation::test_operation_lock();
+        let sandbox = std::env::temp_dir().join(format!(
+            "mangodisk-cleanup-service-cancel-{}-{}",
+            std::process::id(),
+            now_ms()
+        ));
+        let _sandbox_cleanup = DirectoryCleanup(sandbox.clone());
+        let matching = sandbox.join("generated.tmp");
+        fs::create_dir_all(&sandbox).expect("the cancelled cleanup fixture should be created");
+        fs::write(&matching, b"preserve after cancellation")
+            .expect("the cancelled cleanup fixture should be written");
+        let rules = vec![service_custom_rule(&sandbox)];
+        let scan_id = crate::cleanup::custom_session::publish(rules.clone(), false)
+            .expect("the cancelled cleanup session should be published");
+        let mut cancelled = false;
+
+        let error = CleanupService::execute_deep_cleanup_step_with_custom_rules_and_progress(
+            custom_cleanup_request(true),
+            "cleanup-service-cancelled".to_string(),
+            scan_id,
+            rules,
+            false,
+            |progress| {
+                if !cancelled && progress.stage == CleanupExecutionStage::Validating {
+                    cancelled = true;
+                    CleanupService::cancel();
+                }
+            },
+        )
+        .expect_err("cancellation before measurement must stop the cleanup");
+
+        assert!(cancelled);
+        assert_eq!(
+            error.code(),
+            crate::shared::CoreErrorCode::OperationCancelled
+        );
+        assert!(
+            matching.exists(),
+            "early cancellation must preserve the match"
+        );
+    }
+
+    #[test]
+    fn cleanup_service_rejects_invalid_requests_before_any_side_effect() {
+        let _operation_lock = crate::shared::operation::test_operation_lock();
+        let empty = CleanupRequest {
+            rule_ids: Vec::new(),
+            source_selections: Vec::new(),
+            dry_run: false,
+            project_roots: Vec::new(),
+        };
+        assert!(CleanupService::execute_deep_cleanup_step(
+            empty,
+            "invalid-empty-selection".to_string()
+        )
+        .is_err());
+
+        let unknown = CleanupRequest {
+            rule_ids: vec!["unknown.rule".to_string()],
+            source_selections: Vec::new(),
+            dry_run: false,
+            project_roots: Vec::new(),
+        };
+        assert!(
+            CleanupService::execute_deep_cleanup_step(unknown.clone(), "   ".to_string()).is_err()
+        );
+        assert!(CleanupService::execute_deep_cleanup_step(
+            CleanupRequest {
+                rule_ids: vec!["unknown.rule".to_string(), "unknown.rule".to_string()],
+                ..unknown.clone()
+            },
+            "invalid-duplicate-selection".to_string()
+        )
+        .is_err());
+        assert!(CleanupService::execute(unknown).is_err());
+
+        for rule_ids in [
+            Vec::new(),
+            vec!["unknown.rule".to_string()],
+            vec!["unknown.rule".to_string(), "unknown.rule".to_string()],
+        ] {
+            assert!(
+                CleanupService::close_applications(CleanupApplicationCloseRequest {
+                    rule_ids,
+                    mode: crate::ApplicationCloseMode::Graceful,
+                })
+                .is_err()
+            );
+        }
+    }
+
     #[test]
     fn execution_progress_preserves_stage_order_and_final_totals() {
         let mut snapshots = Vec::new();

@@ -129,3 +129,110 @@ impl LargeFileService {
         Ok(result)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::{fs, io::Write, path::PathBuf};
+
+    use super::*;
+    use crate::storage::index::cache::LARGE_FILE_INDEX_FLOOR_BYTES;
+
+    struct LargeFileFixture {
+        root: PathBuf,
+    }
+
+    impl LargeFileFixture {
+        fn new() -> Self {
+            let root = std::env::temp_dir().join(format!(
+                "mangodisk-large-file-service-{}-{}",
+                std::process::id(),
+                now_ms()
+            ));
+            fs::create_dir_all(&root).expect("the large-file service fixture should be created");
+            Self { root }
+        }
+
+        fn file(&self) -> PathBuf {
+            self.root.join("candidate.bin")
+        }
+    }
+
+    impl Drop for LargeFileFixture {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.root);
+        }
+    }
+
+    #[test]
+    fn changed_large_file_is_preserved_until_a_fresh_snapshot_authorizes_delete() {
+        let _operation_lock = crate::shared::operation::test_operation_lock();
+        cache::clear_all().expect("the large-file cache should be clear before the service test");
+        HistoryService::clear().expect("the test history should be clear before the service test");
+        let fixture = LargeFileFixture::new();
+        let path = fixture.file();
+        let initial_bytes = LARGE_FILE_INDEX_FLOOR_BYTES.saturating_add(1024 * 1024);
+        fs::write(&path, vec![3_u8; initial_bytes as usize])
+            .expect("the dense large-file candidate should be written");
+
+        let initial = LargeFileService::find_with_progress(
+            Some(fixture.root.to_string_lossy().into_owned()),
+            1,
+            true,
+            |_| {},
+        )
+        .expect("the large-file service should scan the isolated fixture");
+        assert_eq!(initial.entries.len(), 1);
+        let selected_path = initial.entries[0].path.clone();
+        assert_eq!(
+            LargeFileService::resolve_open_target(initial.scan_id, selected_path.clone())
+                .expect("the published large file should resolve"),
+            selected_path
+        );
+
+        fs::OpenOptions::new()
+            .append(true)
+            .open(&path)
+            .expect("the large-file candidate should reopen")
+            .write_all(&[9])
+            .expect("the large-file candidate should change after the scan");
+        let stale_delete = LargeFileService::delete_files_permanently(
+            initial.scan_id,
+            vec![selected_path.clone()],
+        )
+        .expect("a live preflight failure should remain a typed batch result");
+        assert!(stale_delete.removed_paths.is_empty());
+        assert_eq!(stale_delete.failed.len(), 1);
+        assert!(
+            path.exists(),
+            "failed preflight must preserve the changed file"
+        );
+
+        let refreshed = LargeFileService::find_with_progress(
+            Some(fixture.root.to_string_lossy().into_owned()),
+            1,
+            true,
+            |_| {},
+        )
+        .expect("the changed large-file fixture should rescan successfully");
+        let deleted = LargeFileService::delete_files_permanently(
+            refreshed.scan_id,
+            vec![selected_path.clone()],
+        )
+        .expect("a candidate matching the fresh snapshot should be deleted");
+
+        assert_eq!(deleted.removed_paths, vec![selected_path.clone()]);
+        assert!(deleted.failed.is_empty());
+        assert!(!path.exists());
+        assert!(
+            LargeFileService::resolve_open_target(refreshed.scan_id, selected_path).is_err(),
+            "a deleted file must disappear from the authoritative result session"
+        );
+        let history = HistoryService::list().expect("large-file cleanup history should load");
+        assert_eq!(history.len(), 2);
+        assert_eq!(history[0].affected_item_count, 1);
+        assert_eq!(history[1].failed_item_count, 1);
+
+        HistoryService::clear().expect("the test history should be clear after the service test");
+        cache::clear_all().expect("the large-file cache should be clear after the service test");
+    }
+}

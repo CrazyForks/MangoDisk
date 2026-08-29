@@ -14,6 +14,7 @@ import { FormatUtils } from '@/lib/utils/format';
 import { PathUtils } from '@/lib/utils/path';
 
 import { applicationCanStartUninstall, applicationStatusKey } from '../application-uninstall-catalog';
+import { applicationSizeHintKey } from '../application-uninstall-presentation';
 import { defaultApplicationComponentIds } from '../application-uninstall-selection';
 
 const props = defineProps<{
@@ -111,10 +112,7 @@ function displayedComponentSize(component: ApplicationUninstallComponentSummary)
 }
 
 function displayedSizeHint(): string {
-  if (props.candidate.installerKind === 'windowsAppx') {
-    return t('applicationUninstall.windowsAppPackageSizeHint');
-  }
-  return t('applicationUninstall.applicationSizeEstimateHint');
+  return t(applicationSizeHintKey(props.candidate.installerKind));
 }
 </script>
 

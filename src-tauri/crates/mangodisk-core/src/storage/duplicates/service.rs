@@ -165,6 +165,12 @@ struct HashPipelineResult {
     diagnostics: HashPipelineDiagnostics,
 }
 
+#[derive(Clone, Copy)]
+struct HashPipelinePlan {
+    sample_plan: SamplePlan,
+    worker_count: usize,
+}
+
 #[derive(Default)]
 struct FullTaskGroupState {
     remaining_tasks: usize,
@@ -1020,11 +1026,13 @@ impl DuplicateFileService {
             let mut stream_group = |_, _| {};
             execute_hash_pipeline(
                 &candidates,
-                sample_plan,
+                HashPipelinePlan {
+                    sample_plan,
+                    worker_count: worker_config.worker_count,
+                },
                 validated_cache,
                 &operation,
                 &progress,
-                worker_config.worker_count,
                 &mut stream_group,
             )?
         };
@@ -1054,11 +1062,13 @@ impl DuplicateFileService {
             let mut stream_group = |_, _| {};
             pipeline = execute_hash_pipeline(
                 &candidates,
-                sample_plan,
+                HashPipelinePlan {
+                    sample_plan,
+                    worker_count: worker_config.worker_count,
+                },
                 None,
                 &operation,
                 &progress,
-                worker_config.worker_count,
                 &mut stream_group,
             )?;
         }
@@ -1465,13 +1475,44 @@ fn build_duplicate_group(
 
 fn execute_hash_pipeline(
     candidates: &[FileCandidate],
-    sample_plan: SamplePlan,
+    plan: HashPipelinePlan,
     cache: Option<&HashMap<PathBuf, DuplicateHashCacheFile>>,
     operation: &OperationGuard,
     progress: &DuplicateProgress,
-    worker_count: usize,
     on_group_complete: &mut impl FnMut((u64, blake3::Hash), Vec<usize>),
 ) -> Result<HashPipelineResult, String> {
+    let mut query_allocated_content = |file: &File, logical_bytes: u64| {
+        current_platform()
+            .file_has_allocated_content(file, logical_bytes)
+            // The fast path treats every native error identically: it records a fallback and
+            // performs ordinary content hashing. Keeping the native diagnostic out of this
+            // private callback avoids making a safety optimization depend on error text.
+            .map_err(|_| ())
+    };
+    execute_hash_pipeline_with_allocated_content_query(
+        candidates,
+        plan,
+        cache,
+        operation,
+        progress,
+        on_group_complete,
+        &mut query_allocated_content,
+    )
+}
+
+fn execute_hash_pipeline_with_allocated_content_query(
+    candidates: &[FileCandidate],
+    plan: HashPipelinePlan,
+    cache: Option<&HashMap<PathBuf, DuplicateHashCacheFile>>,
+    operation: &OperationGuard,
+    progress: &DuplicateProgress,
+    on_group_complete: &mut impl FnMut((u64, blake3::Hash), Vec<usize>),
+    query_allocated_content: &mut impl FnMut(&File, u64) -> Result<Option<bool>, ()>,
+) -> Result<HashPipelineResult, String> {
+    let HashPipelinePlan {
+        sample_plan,
+        worker_count,
+    } = plan;
     let mut diagnostics = HashPipelineDiagnostics {
         sample_hash_candidate_count: u64::try_from(candidates.len()).unwrap_or(u64::MAX),
         ..HashPipelineDiagnostics::default()
@@ -1599,6 +1640,7 @@ fn execute_hash_pipeline(
                 &candidate_indices,
                 operation,
                 &mut diagnostics.allocated_range_query_fallback_count,
+                query_allocated_content,
             )?
         };
         let sparse_group_hash =
@@ -1721,6 +1763,7 @@ fn certify_fully_sparse_group(
     candidate_indices: &[usize],
     operation: &OperationGuard,
     fallback_count: &mut u64,
+    query_allocated_content: &mut impl FnMut(&File, u64) -> Result<Option<bool>, ()>,
 ) -> Result<bool, String> {
     for &index in candidate_indices {
         operation
@@ -1734,14 +1777,13 @@ fn certify_fully_sparse_group(
         if validate_open_file(candidate, &file, true).is_err() {
             return Ok(false);
         }
-        let has_allocated_content =
-            match current_platform().file_has_allocated_content(&file, candidate.bytes) {
-                Ok(Some(value)) => value,
-                Ok(None) | Err(_) => {
-                    *fallback_count = fallback_count.saturating_add(1);
-                    return Ok(false);
-                }
-            };
+        let has_allocated_content = match query_allocated_content(&file, candidate.bytes) {
+            Ok(Some(value)) => value,
+            Ok(None) | Err(_) => {
+                *fallback_count = fallback_count.saturating_add(1);
+                return Ok(false);
+            }
+        };
         if has_allocated_content {
             return Ok(false);
         }

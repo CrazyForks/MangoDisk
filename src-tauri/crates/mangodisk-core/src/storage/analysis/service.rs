@@ -114,3 +114,112 @@ impl AnalysisService {
         Ok(outcome.result)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        fs,
+        path::PathBuf,
+        sync::{Arc, Mutex},
+    };
+
+    use super::*;
+
+    struct AnalysisFixture {
+        root: PathBuf,
+    }
+
+    impl AnalysisFixture {
+        fn new() -> Self {
+            let root = std::env::temp_dir().join(format!(
+                "mangodisk-analysis-service-{}-{}",
+                std::process::id(),
+                crate::filesystem::metadata::now_ms()
+            ));
+            fs::create_dir_all(&root).expect("the analysis service fixture should be created");
+            Self { root }
+        }
+
+        fn file(&self) -> PathBuf {
+            self.root.join("candidate.bin")
+        }
+    }
+
+    impl Drop for AnalysisFixture {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.root);
+        }
+    }
+
+    #[test]
+    fn analysis_service_deletes_the_current_direct_child_and_synchronizes_its_session() {
+        let _operation_lock = crate::shared::operation::test_operation_lock();
+        cache::clear_all().expect("the analysis cache should be clear before the service test");
+        let fixture = AnalysisFixture::new();
+        let path = fixture.file();
+        fs::write(&path, vec![1_u8; 16 * 1024]).expect("the analysis candidate should be written");
+        let progress_events = Arc::new(Mutex::new(Vec::new()));
+        let captured_events = Arc::clone(&progress_events);
+
+        let initial = AnalysisService::analyze_with_progress(
+            Some(fixture.root.to_string_lossy().into_owned()),
+            true,
+            move |progress| {
+                captured_events
+                    .lock()
+                    .expect("the analysis progress fixture should remain available")
+                    .push(progress)
+            },
+        )
+        .expect("the analysis service should scan the isolated fixture");
+        let selected_path = initial
+            .entries
+            .iter()
+            .find(|entry| entry.name == "candidate.bin")
+            .expect("the analysis result should contain the fixture file")
+            .path
+            .clone();
+        assert_eq!(
+            AnalysisService::resolve_open_target(initial.scan_id, selected_path.clone())
+                .expect("the published analysis entry should resolve"),
+            selected_path
+        );
+        assert!(
+            !progress_events
+                .lock()
+                .expect("the analysis progress fixture should remain readable")
+                .is_empty(),
+            "the service adapter must forward traversal progress"
+        );
+
+        assert!(
+            AnalysisService::delete_entry_permanently(
+                initial.scan_id,
+                fixture
+                    .root
+                    .join("fabricated.bin")
+                    .to_string_lossy()
+                    .into_owned(),
+            )
+            .is_err(),
+            "the service must reject a path that was not published by the scan"
+        );
+        // Analysis deletion intentionally authorizes the current regular direct child even when
+        // it changed after measurement. The permanent-delete boundary pins its physical identity
+        // during execution; stale scan sizes are accounting facts rather than preflight gates.
+        fs::write(&path, vec![2_u8; 32 * 1024])
+            .expect("the analysis candidate should change after the scan");
+        let deleted =
+            AnalysisService::delete_entry_permanently(initial.scan_id, selected_path.clone())
+                .expect("the current direct child should be deleted safely");
+
+        assert_eq!(deleted.removed_path, selected_path);
+        assert_eq!(deleted.removed_file_count, 1);
+        assert!(!path.exists());
+        assert!(
+            AnalysisService::resolve_open_target(initial.scan_id, deleted.removed_path).is_err(),
+            "a deleted entry must disappear from the authoritative result session"
+        );
+        cache::clear_all().expect("the analysis cache should be clear after the service test");
+    }
+}

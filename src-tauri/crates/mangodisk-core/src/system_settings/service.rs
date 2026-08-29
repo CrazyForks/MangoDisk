@@ -99,107 +99,9 @@ impl SystemSettingsService {
         }
 
         let recovery = load_recovery()?;
-        let recovery_items = recovery_items_by_id(recovery.as_ref());
-        let mut items = Vec::new();
-        let mut skipped_items = Vec::new();
-        for change in selection.items {
-            let setting_id = change.setting_id;
-            let Some(item) = session
-                .native_items
-                .iter()
-                .find(|item| item.public.setting_id == setting_id)
-            else {
-                skipped_items.push(skipped(
-                    setting_id,
-                    SystemSettingChangeSkipReason::SettingMissing,
-                ));
-                continue;
-            };
-            if item.public.status == SystemSettingStatus::Unavailable {
-                skipped_items.push(skipped(
-                    setting_id,
-                    skip_reason_for_diagnostic(item.public.diagnostic),
-                ));
-                continue;
-            }
-            if change.target == SystemSettingTargetState::Optimized
-                && item.public.status == SystemSettingStatus::Optimized
-            {
-                skipped_items.push(skipped(
-                    setting_id,
-                    SystemSettingChangeSkipReason::AlreadyOptimized,
-                ));
-                continue;
-            }
-            if change.target == SystemSettingTargetState::Default
-                && item.public.status != SystemSettingStatus::Optimized
-            {
-                skipped_items.push(skipped(
-                    setting_id,
-                    SystemSettingChangeSkipReason::AlreadyDefault,
-                ));
-                continue;
-            }
-            let Some(desired_value) =
-                desired_value_for_target(item, change.target, recovery_items.get(&setting_id))
-            else {
-                skipped_items.push(skipped(
-                    setting_id,
-                    SystemSettingChangeSkipReason::SettingChanged,
-                ));
-                continue;
-            };
-            let public = SystemSettingChangePlanItem {
-                setting_id: setting_id.clone(),
-                category: item.public.category,
-                target: change.target,
-                requires_restart: item.public.requires_restart,
-                requires_elevation: item.public.requires_elevation,
-            };
-            items.push(PendingChangeItem {
-                public,
-                expected_value: item.current_value.clone(),
-                desired_value,
-            });
-        }
-
-        let created_at_ms = now_ms();
-        let expires_at_ms = created_at_ms.saturating_add(CHANGE_PLAN_TTL_MS);
-        let plan_id = stable_id(
-            "system-settings-plan",
-            &[
-                session.public.catalog_revision.as_str(),
-                created_at_ms.to_string().as_str(),
-                items
-                    .iter()
-                    .map(|item| {
-                        format!(
-                            "{}:{}",
-                            item.public.setting_id,
-                            target_state_name(item.public.target)
-                        )
-                    })
-                    .collect::<Vec<_>>()
-                    .join("|")
-                    .as_str(),
-            ],
-        );
-        let public = SystemSettingsChangePlan {
-            schema_version: SYSTEM_SETTINGS_CHANGE_PLAN_SCHEMA_VERSION,
-            plan_id,
-            scan_id: session.public.scan_id,
-            catalog_revision: session.public.catalog_revision,
-            created_at_ms,
-            expires_at_ms,
-            items: items.iter().map(|item| item.public.clone()).collect(),
-            skipped_items,
-            requires_confirmation: !items.is_empty(),
-            requires_restart: items.iter().any(|item| item.public.requires_restart),
-        };
-        replace_change_plan(PendingChangePlan {
-            public: public.clone(),
-            items,
-        })?;
+        let pending = build_change_plan(selection, session, recovery.as_ref(), now_ms());
+        let public = pending.public.clone();
+        replace_change_plan(pending)?;
         log::info!(
             "system_settings_change_prepared operation_id={} target_count={} enable_count={} restore_count={} skipped_count={} restart_required={}",
             operation.id(),
@@ -405,6 +307,114 @@ impl SystemSettingsService {
     }
 }
 
+/// Builds a deterministic, side-effect-free change plan from one authoritative catalog.
+/// Keeping selection decisions in one function prevents GUI and CLI adapters from diverging and
+/// lets recovery-sensitive skip behavior be tested without reading or changing real settings.
+fn build_change_plan(
+    selection: SystemSettingsChangeSelection,
+    session: CatalogSession,
+    recovery: Option<&RecoveryDocument>,
+    created_at_ms: u64,
+) -> PendingChangePlan {
+    let recovery_items = recovery_items_by_id(recovery);
+    let mut items = Vec::new();
+    let mut skipped_items = Vec::new();
+    for change in selection.items {
+        let setting_id = change.setting_id;
+        let Some(item) = session
+            .native_items
+            .iter()
+            .find(|item| item.public.setting_id == setting_id)
+        else {
+            skipped_items.push(skipped(
+                setting_id,
+                SystemSettingChangeSkipReason::SettingMissing,
+            ));
+            continue;
+        };
+        if item.public.status == SystemSettingStatus::Unavailable {
+            skipped_items.push(skipped(
+                setting_id,
+                skip_reason_for_diagnostic(item.public.diagnostic),
+            ));
+            continue;
+        }
+        if change.target == SystemSettingTargetState::Optimized
+            && item.public.status == SystemSettingStatus::Optimized
+        {
+            skipped_items.push(skipped(
+                setting_id,
+                SystemSettingChangeSkipReason::AlreadyOptimized,
+            ));
+            continue;
+        }
+        if change.target == SystemSettingTargetState::Default
+            && item.public.status != SystemSettingStatus::Optimized
+        {
+            skipped_items.push(skipped(
+                setting_id,
+                SystemSettingChangeSkipReason::AlreadyDefault,
+            ));
+            continue;
+        }
+        let Some(desired_value) =
+            desired_value_for_target(item, change.target, recovery_items.get(&setting_id))
+        else {
+            skipped_items.push(skipped(
+                setting_id,
+                SystemSettingChangeSkipReason::SettingChanged,
+            ));
+            continue;
+        };
+        let public = SystemSettingChangePlanItem {
+            setting_id: setting_id.clone(),
+            category: item.public.category,
+            target: change.target,
+            requires_restart: item.public.requires_restart,
+            requires_elevation: item.public.requires_elevation,
+        };
+        items.push(PendingChangeItem {
+            public,
+            expected_value: item.current_value.clone(),
+            desired_value,
+        });
+    }
+
+    let expires_at_ms = created_at_ms.saturating_add(CHANGE_PLAN_TTL_MS);
+    let plan_id = stable_id(
+        "system-settings-plan",
+        &[
+            session.public.catalog_revision.as_str(),
+            created_at_ms.to_string().as_str(),
+            items
+                .iter()
+                .map(|item| {
+                    format!(
+                        "{}:{}",
+                        item.public.setting_id,
+                        target_state_name(item.public.target)
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("|")
+                .as_str(),
+        ],
+    );
+    let public = SystemSettingsChangePlan {
+        schema_version: SYSTEM_SETTINGS_CHANGE_PLAN_SCHEMA_VERSION,
+        plan_id,
+        scan_id: session.public.scan_id,
+        catalog_revision: session.public.catalog_revision,
+        created_at_ms,
+        expires_at_ms,
+        items: items.iter().map(|item| item.public.clone()).collect(),
+        skipped_items,
+        requires_confirmation: !items.is_empty(),
+        requires_restart: items.iter().any(|item| item.public.requires_restart),
+    };
+    PendingChangePlan { public, items }
+}
+
 fn capture_catalog(operation: &OperationGuard) -> CoreResult<CatalogSession> {
     let started = Instant::now();
     let platform_kind = current_platform_kind();
@@ -416,17 +426,59 @@ fn capture_catalog(operation: &OperationGuard) -> CoreResult<CatalogSession> {
     });
     let states = current_platform().scan_system_settings(&setting_ids, &cancellation)?;
     operation.ensure_not_cancelled()?;
-    let states = states
-        .into_iter()
-        .map(|state| (state.setting_id.clone(), state))
-        .collect::<BTreeMap<_, _>>();
-    let mut native_items = Vec::with_capacity(definitions.len());
-    for definition in definitions {
-        let state = states.get(definition.id);
-        native_items.push(native_item(definition, state));
-    }
+    let native_items = catalog_native_items(platform_kind, states)?;
     let recovery = load_recovery()?;
-    let recovery_available = mark_restore_availability(&mut native_items, recovery.as_ref());
+    Ok(assemble_catalog_session(
+        platform_kind,
+        started,
+        native_items,
+        recovery.as_ref(),
+    ))
+}
+
+/// Validates the adapter inventory before applying declarative setting definitions. Missing
+/// states remain visible as unavailable settings, while duplicate or unknown identifiers fail
+/// closed because silently overwriting them could authorize a change from ambiguous evidence.
+fn catalog_native_items(
+    platform_kind: SystemSettingsPlatform,
+    states: Vec<mangodisk_platform::PlatformSystemSettingState>,
+) -> CoreResult<Vec<CatalogNativeItem>> {
+    let definitions = definitions(platform_kind);
+    let known_ids = definitions
+        .iter()
+        .map(|definition| definition.id)
+        .collect::<BTreeSet<_>>();
+    let mut indexed_states = BTreeMap::new();
+    for state in states {
+        if !known_ids.contains(state.setting_id.as_str()) {
+            return Err(CoreError::new(
+                crate::shared::CoreErrorCode::Platform,
+                "system settings adapter returned an unknown setting",
+            ));
+        }
+        if indexed_states
+            .insert(state.setting_id.clone(), state)
+            .is_some()
+        {
+            return Err(CoreError::new(
+                crate::shared::CoreErrorCode::Platform,
+                "system settings adapter returned a duplicate setting",
+            ));
+        }
+    }
+    Ok(definitions
+        .iter()
+        .map(|definition| native_item(definition, indexed_states.get(definition.id)))
+        .collect())
+}
+
+fn assemble_catalog_session(
+    platform_kind: SystemSettingsPlatform,
+    started: Instant,
+    mut native_items: Vec<CatalogNativeItem>,
+    recovery: Option<&RecoveryDocument>,
+) -> CatalogSession {
+    let recovery_available = mark_restore_availability(&mut native_items, recovery);
     let scanned_at_ms = now_ms();
     let catalog_revision = catalog_revision(&native_items);
     let scan_id = stable_id(
@@ -451,10 +503,10 @@ fn capture_catalog(operation: &OperationGuard) -> CoreResult<CatalogSession> {
         elapsed_ms: started.elapsed().as_millis() as u64,
         recovery_available,
     };
-    Ok(CatalogSession {
+    CatalogSession {
         public,
         native_items,
-    })
+    }
 }
 
 fn native_item(
@@ -1257,6 +1309,202 @@ mod tests {
             original_value: PlatformSystemSettingValue::Integer(original),
             optimized_value: PlatformSystemSettingValue::Integer(optimized),
         }
+    }
+
+    fn native_fixture(
+        setting_id: &str,
+        status: SystemSettingStatus,
+        restore_available: bool,
+        diagnostic: Option<PlatformSystemSettingDiagnosticCode>,
+        requires_restart: bool,
+    ) -> CatalogNativeItem {
+        let optimized = status == SystemSettingStatus::Optimized;
+        let value = i64::from(optimized);
+        CatalogNativeItem {
+            public: SystemSettingItem {
+                setting_id: setting_id.to_string(),
+                category: super::super::SystemSettingCategory::Performance,
+                selection_kind: SystemSettingSelectionKind::Custom,
+                risk_level: super::super::SystemSettingRiskLevel::Standard,
+                status,
+                selected_by_default: false,
+                restore_available,
+                requires_restart,
+                requires_elevation: false,
+                diagnostic,
+            },
+            current_value: PlatformSystemSettingValue::Integer(value),
+            effective_value: PlatformSystemSettingValue::Integer(value),
+            disabled_value: PlatformSystemSettingValue::Integer(0),
+            recommended_value: PlatformSystemSettingValue::Integer(1),
+        }
+    }
+
+    fn catalog_session_fixture(native_items: Vec<CatalogNativeItem>) -> CatalogSession {
+        let items = native_items
+            .iter()
+            .map(|item| item.public.clone())
+            .collect::<Vec<_>>();
+        CatalogSession {
+            public: SystemSettingsCatalog {
+                schema_version: SYSTEM_SETTINGS_CATALOG_SCHEMA_VERSION,
+                scan_id: "scan-plan-fixture".to_string(),
+                catalog_revision: catalog_revision(&native_items),
+                platform: current_platform_kind(),
+                scanned_at_ms: 1,
+                summary: summary(&items),
+                items,
+                elapsed_ms: 1,
+                recovery_available: false,
+            },
+            native_items,
+        }
+    }
+
+    #[test]
+    fn platform_inventory_rejects_ambiguous_identifiers_and_marks_missing_states() {
+        let platform = current_platform_kind();
+        let definition = definitions(platform)[0];
+        let state = mangodisk_platform::PlatformSystemSettingState {
+            setting_id: definition.id.to_string(),
+            value: definition.default_value.owned(),
+            effective_value: definition.default_value.owned(),
+            requires_elevation: definition.requires_elevation,
+            diagnostic: None,
+        };
+
+        let items = catalog_native_items(platform, vec![state.clone()])
+            .expect("a partial native inventory must remain inspectable");
+        assert_eq!(items.len(), definitions(platform).len());
+        assert_eq!(items[0].public.setting_id, definition.id);
+        assert!(items
+            .iter()
+            .skip(1)
+            .all(|item| item.public.status == SystemSettingStatus::Unavailable));
+
+        assert_eq!(
+            catalog_native_items(platform, vec![state.clone(), state])
+                .err()
+                .expect("duplicate states must fail closed")
+                .code(),
+            crate::shared::CoreErrorCode::Platform
+        );
+        let unknown = mangodisk_platform::PlatformSystemSettingState {
+            setting_id: "system-setting.unknown".to_string(),
+            value: PlatformSystemSettingValue::Missing,
+            effective_value: PlatformSystemSettingValue::Missing,
+            requires_elevation: false,
+            diagnostic: None,
+        };
+        assert_eq!(
+            catalog_native_items(platform, vec![unknown])
+                .err()
+                .expect("unknown states must fail closed")
+                .code(),
+            crate::shared::CoreErrorCode::Platform
+        );
+    }
+
+    #[test]
+    fn mixed_change_plan_preserves_recovery_and_reports_every_skip_reason() {
+        let session = catalog_session_fixture(vec![
+            native_fixture(
+                "enable",
+                SystemSettingStatus::Recommended,
+                false,
+                None,
+                true,
+            ),
+            native_fixture("restore", SystemSettingStatus::Optimized, true, None, false),
+            native_fixture(
+                "unsupported",
+                SystemSettingStatus::Unavailable,
+                false,
+                Some(PlatformSystemSettingDiagnosticCode::Unsupported),
+                false,
+            ),
+            native_fixture(
+                "already-default",
+                SystemSettingStatus::Recommended,
+                false,
+                None,
+                false,
+            ),
+            native_fixture(
+                "already-optimized",
+                SystemSettingStatus::Optimized,
+                false,
+                None,
+                false,
+            ),
+            native_fixture(
+                "stale-restore",
+                SystemSettingStatus::Optimized,
+                true,
+                None,
+                false,
+            ),
+        ]);
+        let selection_item =
+            |setting_id: &str, target| super::super::SystemSettingChangeSelectionItem {
+                setting_id: setting_id.to_string(),
+                target,
+            };
+        let selection = SystemSettingsChangeSelection {
+            scan_id: session.public.scan_id.clone(),
+            items: vec![
+                selection_item("enable", SystemSettingTargetState::Optimized),
+                selection_item("restore", SystemSettingTargetState::Default),
+                selection_item("unsupported", SystemSettingTargetState::Optimized),
+                selection_item("already-default", SystemSettingTargetState::Default),
+                selection_item("already-optimized", SystemSettingTargetState::Optimized),
+                selection_item("stale-restore", SystemSettingTargetState::Default),
+                selection_item("missing", SystemSettingTargetState::Optimized),
+            ],
+        };
+        let recovery = recovery_document(vec![recovery_item("restore", 0, 1)]);
+
+        let pending = build_change_plan(selection, session, Some(&recovery), 5_000);
+
+        assert_eq!(pending.public.created_at_ms, 5_000);
+        assert_eq!(pending.public.expires_at_ms, 5_000 + CHANGE_PLAN_TTL_MS);
+        assert!(pending.public.requires_confirmation);
+        assert!(pending.public.requires_restart);
+        assert_eq!(pending.items.len(), 2);
+        assert_eq!(pending.items[0].public.setting_id, "enable");
+        assert_eq!(
+            pending.items[0].desired_value,
+            PlatformSystemSettingValue::Integer(1)
+        );
+        assert_eq!(pending.items[1].public.setting_id, "restore");
+        assert_eq!(
+            pending.items[1].desired_value,
+            PlatformSystemSettingValue::Integer(0)
+        );
+        assert_eq!(
+            pending
+                .public
+                .skipped_items
+                .iter()
+                .map(|item| (item.setting_id.as_str(), item.reason))
+                .collect::<Vec<_>>(),
+            vec![
+                ("unsupported", SystemSettingChangeSkipReason::Unsupported),
+                (
+                    "already-default",
+                    SystemSettingChangeSkipReason::AlreadyDefault
+                ),
+                (
+                    "already-optimized",
+                    SystemSettingChangeSkipReason::AlreadyOptimized
+                ),
+                (
+                    "stale-restore",
+                    SystemSettingChangeSkipReason::SettingChanged
+                ),
+                ("missing", SystemSettingChangeSkipReason::SettingMissing),
+            ]
+        );
     }
 
     #[test]

@@ -269,6 +269,68 @@ fn create_sparse_file(path: &Path, logical_bytes: u64) {
         .expect("the sparse duplicate fixture length should be set");
 }
 
+fn candidate_for_path(path: &Path) -> FileCandidate {
+    let metadata = fs::symlink_metadata(path).expect("candidate metadata should be readable");
+    let identity = load_file_identity(path, metadata.len());
+    FileCandidate {
+        root_ordinal: 0,
+        path: path.to_path_buf(),
+        bytes: metadata.len(),
+        modified_at: metadata.modified().ok(),
+        modified_at_ms: modified_ms(&metadata),
+        identity,
+        identity_source: identity.map(|_| FileIdentitySource::FileHandle),
+    }
+}
+
+fn assert_sparse_query_falls_back(
+    case_name: &str,
+    mut query_allocated_content: impl FnMut(&File, u64) -> Result<Option<bool>, ()>,
+) {
+    const LOGICAL_BYTES: u64 = 1024 * 1024;
+
+    let _operation_lock = crate::shared::operation::test_operation_lock();
+    let root = std::env::temp_dir().join(format!(
+        "mangodisk-sparse-query-{case_name}-{}-{}",
+        std::process::id(),
+        now_ms()
+    ));
+    fs::create_dir_all(&root).expect("the sparse query fixture should be created");
+    let first = root.join("first.bin");
+    let second = root.join("second.bin");
+    create_sparse_file(&first, LOGICAL_BYTES);
+    create_sparse_file(&second, LOGICAL_BYTES);
+    let candidates = vec![candidate_for_path(&first), candidate_for_path(&second)];
+    let operation = OperationGuard::start(CoordinatedOperationKind::DuplicateFiles)
+        .expect("the duplicate-file test operation should start");
+    let progress = DuplicateProgress::new(operation.id(), |_| {});
+    let mut ignore_group = |_, _| {};
+
+    let pipeline = execute_hash_pipeline_with_allocated_content_query(
+        &candidates,
+        HashPipelinePlan {
+            sample_plan: PRODUCTION_SAMPLE_PLAN,
+            worker_count: 2,
+        },
+        None,
+        &operation,
+        &progress,
+        &mut ignore_group,
+        &mut query_allocated_content,
+    )
+    .expect("an unavailable sparse query must fall back to content hashing");
+    operation.complete();
+
+    assert_eq!(pipeline.diagnostics.allocated_range_query_fallback_count, 1);
+    assert_eq!(pipeline.diagnostics.fully_sparse_group_count, 0);
+    assert_eq!(pipeline.diagnostics.fully_sparse_candidate_count, 0);
+    assert_eq!(pipeline.diagnostics.full_hash_candidate_count, 2);
+    assert_eq!(pipeline.diagnostics.full_hash_bytes, 2 * LOGICAL_BYTES);
+    assert_eq!(pipeline.full_groups.len(), 1);
+    assert_eq!(pipeline.skipped_count, 0);
+    fs::remove_dir_all(root).expect("the sparse query fixture should be removed");
+}
+
 #[test]
 fn staged_hashing_only_reports_identical_content() {
     let _operation_lock = crate::shared::operation::test_operation_lock();
@@ -380,6 +442,81 @@ fn sparse_duplicates_report_physical_reclaimable_space() {
         2 * LOGICAL_BYTES
     );
     fs::remove_dir_all(root).expect("the sparse duplicate fixture should be removed");
+}
+
+#[test]
+fn unsupported_allocated_content_query_falls_back_to_full_hashing() {
+    assert_sparse_query_falls_back("unsupported", |_, _| Ok(None));
+}
+
+#[test]
+fn failed_allocated_content_query_falls_back_to_full_hashing() {
+    assert_sparse_query_falls_back("error", |_, _| Err(()));
+}
+
+#[test]
+fn sparse_candidate_mutation_after_query_is_not_certified() {
+    const LOGICAL_BYTES: u64 = 1024 * 1024;
+
+    let _operation_lock = crate::shared::operation::test_operation_lock();
+    let root = std::env::temp_dir().join(format!(
+        "mangodisk-sparse-query-race-{}-{}",
+        std::process::id(),
+        now_ms()
+    ));
+    fs::create_dir_all(&root).expect("the sparse race fixture should be created");
+    let first = root.join("first.bin");
+    let second = root.join("second.bin");
+    create_sparse_file(&first, LOGICAL_BYTES);
+    create_sparse_file(&second, LOGICAL_BYTES);
+    let candidates = vec![candidate_for_path(&first), candidate_for_path(&second)];
+    let operation = OperationGuard::start(CoordinatedOperationKind::DuplicateFiles)
+        .expect("the duplicate-file test operation should start");
+    let progress = DuplicateProgress::new(operation.id(), |_| {});
+    let mut ignore_group = |_, _| {};
+    let mut query_count = 0_u64;
+    let mut mutate_after_query = |_: &File, _: u64| {
+        query_count = query_count.saturating_add(1);
+        if query_count == 1 {
+            // Simulate a file changing after the native query but before the second identity and
+            // metadata validation. A shorter dense payload makes the race deterministic on both
+            // macOS and Windows without relying on timestamp resolution.
+            fs::write(&first, vec![1_u8; (LOGICAL_BYTES / 2) as usize])
+                .expect("the sparse candidate should be mutated");
+        }
+        Ok(Some(false))
+    };
+
+    let pipeline = execute_hash_pipeline_with_allocated_content_query(
+        &candidates,
+        HashPipelinePlan {
+            sample_plan: PRODUCTION_SAMPLE_PLAN,
+            worker_count: 2,
+        },
+        None,
+        &operation,
+        &progress,
+        &mut ignore_group,
+        &mut mutate_after_query,
+    )
+    .expect("a changed sparse candidate should fail closed without aborting the scan");
+    operation.complete();
+
+    assert_eq!(query_count, 1);
+    assert_eq!(pipeline.diagnostics.allocated_range_query_fallback_count, 0);
+    assert_eq!(pipeline.diagnostics.fully_sparse_group_count, 0);
+    assert_eq!(pipeline.diagnostics.fully_sparse_candidate_count, 0);
+    assert_eq!(pipeline.diagnostics.full_hash_candidate_count, 2);
+    assert_eq!(pipeline.full_failures.count, 1);
+    assert!(
+        pipeline
+            .full_groups
+            .values()
+            .all(|indices| indices.len() == 1),
+        "a candidate changed after the sparse query must not form a duplicate group"
+    );
+    assert_eq!(pipeline.skipped_count, 1);
+    fs::remove_dir_all(root).expect("the sparse race fixture should be removed");
 }
 
 #[test]
@@ -840,11 +977,13 @@ fn verified_hash_cache_eliminates_reads_in_both_stages_without_changing_results(
     let mut ignore_group = |_, _| {};
     let fresh = execute_hash_pipeline(
         &candidates,
-        PRODUCTION_SAMPLE_PLAN,
+        HashPipelinePlan {
+            sample_plan: PRODUCTION_SAMPLE_PLAN,
+            worker_count: 2,
+        },
         None,
         &operation,
         &progress,
-        2,
         &mut ignore_group,
     )
     .expect("the fresh hash pipeline should succeed");
@@ -876,11 +1015,13 @@ fn verified_hash_cache_eliminates_reads_in_both_stages_without_changing_results(
         .collect::<HashMap<_, _>>();
     let cached = execute_hash_pipeline(
         &candidates,
-        PRODUCTION_SAMPLE_PLAN,
+        HashPipelinePlan {
+            sample_plan: PRODUCTION_SAMPLE_PLAN,
+            worker_count: 2,
+        },
         Some(&cache),
         &operation,
         &progress,
-        2,
         &mut ignore_group,
     )
     .expect("the cached hash pipeline should succeed");

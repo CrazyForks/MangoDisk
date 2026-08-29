@@ -11,7 +11,8 @@ use std::{
 use mangodisk_platform::{
     current_platform, PlatformCancellation, PlatformError, PlatformErrorCode,
     PlatformMutationState, PlatformSystemMaintenanceCompletion, PlatformSystemMaintenanceProgress,
-    PlatformSystemMaintenanceStatus, SystemMaintenancePlatform as _,
+    PlatformSystemMaintenanceState, PlatformSystemMaintenanceStatus,
+    SystemMaintenancePlatform as _,
 };
 
 use crate::{
@@ -837,6 +838,21 @@ fn capture_catalog(operation: &OperationGuard) -> CoreResult<SystemMaintenanceCa
         .map_err(CoreError::from)?;
     operation.ensure_not_cancelled()?;
 
+    assemble_catalog(operation.id(), started, platform_states)
+}
+
+/// Converts the platform inventory into the stable Core catalog contract.
+///
+/// Keeping adapter validation separate from native I/O makes malformed platform responses
+/// deterministic to test. More importantly, every GUI and CLI adapter receives the same
+/// fail-closed behavior when a platform implementation returns duplicate, unknown, or missing
+/// tasks after an operating-system update.
+fn assemble_catalog(
+    operation_id: u64,
+    started: Instant,
+    platform_states: Vec<PlatformSystemMaintenanceState>,
+) -> CoreResult<SystemMaintenanceCatalog> {
+    let definitions = definitions();
     let mut seen = BTreeSet::new();
     let mut items = Vec::with_capacity(definitions.len());
     for state in platform_states {
@@ -866,7 +882,7 @@ fn capture_catalog(operation: &OperationGuard) -> CoreResult<SystemMaintenanceCa
         if status == SystemMaintenanceStatus::Unavailable {
             log::info!(
                 "system_maintenance_task_unavailable operation_id={} task_id={} diagnostic={:?}",
-                operation.id(),
+                operation_id,
                 items
                     .last()
                     .map(|item| item.task_id.as_str())
@@ -891,7 +907,7 @@ fn capture_catalog(operation: &OperationGuard) -> CoreResult<SystemMaintenanceCa
     let scanned_at_ms = now_ms();
     Ok(SystemMaintenanceCatalog {
         schema_version: SYSTEM_MAINTENANCE_CATALOG_SCHEMA_VERSION,
-        scan_id: format!("system-maintenance-{}-{scanned_at_ms}", operation.id()),
+        scan_id: format!("system-maintenance-{operation_id}-{scanned_at_ms}"),
         platform: current_platform_name(),
         scanned_at_ms,
         elapsed_ms: started.elapsed().as_millis() as u64,
@@ -1052,6 +1068,47 @@ fn execution_registry() -> CoreResult<std::sync::MutexGuard<'static, ExecutionRe
 mod tests {
     use super::*;
 
+    fn platform_states() -> Vec<PlatformSystemMaintenanceState> {
+        let statuses = [
+            PlatformSystemMaintenanceStatus::Healthy,
+            PlatformSystemMaintenanceStatus::Recommended,
+            PlatformSystemMaintenanceStatus::Available,
+            PlatformSystemMaintenanceStatus::Unavailable,
+        ];
+        definitions()
+            .iter()
+            .enumerate()
+            .map(|(index, definition)| PlatformSystemMaintenanceState {
+                task_id: definition.id.to_string(),
+                status: statuses[index % statuses.len()],
+                requires_elevation: index % 2 == 0,
+                diagnostic: (index % statuses.len() == 3).then_some(
+                    mangodisk_platform::PlatformSystemMaintenanceDiagnosticCode::ToolUnavailable,
+                ),
+            })
+            .collect()
+    }
+
+    fn reset_global_service_state() {
+        if let Ok(mut registry) = execution_registry() {
+            *registry = ExecutionRegistry::default();
+        }
+        if let Ok(mut session) = catalog_session().lock() {
+            *session = None;
+        }
+    }
+
+    /// Ensures process-wide test state is released even when an assertion fails. The production
+    /// service intentionally retains terminal jobs, so leaking a fixture would make later tests
+    /// order-dependent and could also keep the global operation coordinator occupied.
+    struct GlobalServiceStateReset;
+
+    impl Drop for GlobalServiceStateReset {
+        fn drop(&mut self) {
+            reset_global_service_state();
+        }
+    }
+
     fn scheduler_entry(
         execution_id: &str,
         status: SystemMaintenanceJobStatus,
@@ -1105,6 +1162,251 @@ mod tests {
                 .is_err()
             );
         }
+    }
+
+    #[test]
+    fn catalog_contract_maps_states_and_restores_definition_order() {
+        let mut states = platform_states();
+        states.reverse();
+
+        let catalog = assemble_catalog(41, Instant::now(), states)
+            .expect("a complete platform catalog must be accepted");
+
+        assert_eq!(
+            catalog.schema_version,
+            SYSTEM_MAINTENANCE_CATALOG_SCHEMA_VERSION
+        );
+        assert!(catalog.scan_id.starts_with("system-maintenance-41-"));
+        assert_eq!(catalog.summary, summarize(&catalog.items));
+        assert_eq!(catalog.items.len(), definitions().len());
+        for (index, item) in catalog.items.iter().enumerate() {
+            assert_eq!(item.task_id, definitions()[index].id);
+            assert_eq!(item.requires_elevation, index % 2 == 0);
+        }
+    }
+
+    #[test]
+    fn catalog_contract_rejects_duplicate_unknown_and_incomplete_states() {
+        let states = platform_states();
+
+        let mut duplicate = states.clone();
+        duplicate.push(states[0].clone());
+        assert_eq!(
+            assemble_catalog(42, Instant::now(), duplicate)
+                .expect_err("duplicate task states must fail closed")
+                .code(),
+            CoreErrorCode::Platform
+        );
+
+        let mut unknown = states.clone();
+        unknown[0].task_id = "maintenance.unknown".to_string();
+        assert_eq!(
+            assemble_catalog(42, Instant::now(), unknown)
+                .expect_err("unknown task states must fail closed")
+                .code(),
+            CoreErrorCode::Platform
+        );
+
+        let mut incomplete = states;
+        incomplete.pop();
+        assert_eq!(
+            assemble_catalog(42, Instant::now(), incomplete)
+                .expect_err("incomplete platform catalogs must fail closed")
+                .code(),
+            CoreErrorCode::Platform
+        );
+    }
+
+    #[test]
+    fn public_queue_state_can_be_restored_cancelled_and_retried_without_native_work() {
+        let _operation_lock = crate::shared::operation::test_operation_lock();
+        reset_global_service_state();
+        let _reset = GlobalServiceStateReset;
+        let definition = definitions()[0];
+        let scan_id = "scan-public-queue".to_string();
+        let item = SystemMaintenanceItem {
+            task_id: definition.id.to_string(),
+            category: definition.category,
+            risk_level: definition.risk_level,
+            status: SystemMaintenanceStatus::Recommended,
+            requires_elevation: false,
+            requires_restart: definition.requires_restart,
+            estimated_duration_seconds: definition.estimated_duration_seconds,
+            diagnostic: None,
+        };
+        replace_catalog_session(CatalogSession {
+            public: SystemMaintenanceCatalog {
+                schema_version: SYSTEM_MAINTENANCE_CATALOG_SCHEMA_VERSION,
+                scan_id: scan_id.clone(),
+                platform: current_platform_name(),
+                scanned_at_ms: now_ms(),
+                elapsed_ms: 1,
+                summary: summarize(std::slice::from_ref(&item)),
+                items: vec![item],
+            },
+        })
+        .expect("catalog fixture must install");
+
+        // A synthetic conflicting job keeps the public request queued. This exercises the real
+        // service lifecycle without allowing a worker thread to invoke a native maintenance tool.
+        let operation = OperationGuard::start(CoordinatedOperationKind::SystemMaintenanceExecution)
+            .expect("maintenance execution operation must start");
+        let operation_id = operation.id();
+        {
+            let mut registry = execution_registry().expect("registry must remain available");
+            registry.operation_id = Some(operation_id);
+            registry.session_guard = Some(operation);
+            registry.entries.push(scheduler_entry(
+                "synthetic-blocker",
+                SystemMaintenanceJobStatus::Running,
+                definition.resources.to_vec(),
+                false,
+            ));
+        }
+
+        let updates = Arc::new(Mutex::new(Vec::<SystemMaintenanceJob>::new()));
+        let sink_updates = Arc::clone(&updates);
+        let request = SystemMaintenanceExecutionRequest {
+            scan_id: scan_id.clone(),
+            task_id: definition.id.to_string(),
+            authorization_prompt: "Authorize maintenance".to_string(),
+        };
+        let queued = SystemMaintenanceService::start_execution(
+            request.clone(),
+            Arc::new(move |job| {
+                sink_updates
+                    .lock()
+                    .expect("update collector must remain available")
+                    .push(job);
+            }),
+        )
+        .expect("conflicting maintenance request must enqueue");
+        assert_eq!(queued.status, SystemMaintenanceJobStatus::Queued);
+        assert_eq!(queued.revision, 1);
+
+        let restored =
+            SystemMaintenanceService::runtime_state().expect("runtime state must remain readable");
+        assert_eq!(
+            restored.catalog.expect("catalog must be retained").scan_id,
+            scan_id
+        );
+        assert_eq!(restored.executions.len(), 2);
+
+        let cancelled = SystemMaintenanceService::cancel_execution(&queued.execution_id)
+            .expect("queued execution must cancel safely");
+        assert_eq!(cancelled.status, SystemMaintenanceJobStatus::Finished);
+        assert_eq!(cancelled.revision, 2);
+        assert_eq!(
+            cancelled
+                .result
+                .as_ref()
+                .and_then(|result| result.failure_reason),
+            Some(SystemMaintenanceFailureReason::UserCancelled)
+        );
+        assert_eq!(
+            updates
+                .lock()
+                .expect("update collector must remain available")
+                .as_slice(),
+            std::slice::from_ref(&cancelled)
+        );
+        assert_eq!(
+            SystemMaintenanceService::cancel_execution(&queued.execution_id)
+                .expect("terminal cancellation must be idempotent"),
+            cancelled
+        );
+
+        // A cancelled queued job made no system change, so retrying against the same catalog is
+        // safe. It must still remain queued behind the same synthetic resource conflict.
+        let retried = SystemMaintenanceService::start_execution(request, Arc::new(|_| {}))
+            .expect("unchanged cancellation must remain retryable");
+        assert_eq!(retried.status, SystemMaintenanceJobStatus::Queued);
+        assert_ne!(retried.execution_id, queued.execution_id);
+        SystemMaintenanceService::cancel_execution(&retried.execution_id)
+            .expect("retry fixture must cancel cleanly");
+
+        assert!(SystemMaintenanceService::cancel_execution("").is_err());
+        assert!(SystemMaintenanceService::cancel_execution("missing-job").is_err());
+    }
+
+    #[test]
+    fn running_cancellation_and_progress_keep_events_and_runtime_state_consistent() {
+        let _operation_lock = crate::shared::operation::test_operation_lock();
+        reset_global_service_state();
+        let _reset = GlobalServiceStateReset;
+        let updates = Arc::new(Mutex::new(Vec::<SystemMaintenanceJob>::new()));
+        let sink_updates = Arc::clone(&updates);
+        let mut entry = scheduler_entry(
+            "running-safe-cancel",
+            SystemMaintenanceJobStatus::Running,
+            vec![MaintenanceResource::Network],
+            false,
+        );
+        entry.sink = Arc::new(move |job| {
+            sink_updates
+                .lock()
+                .expect("update collector must remain available")
+                .push(job);
+        });
+        let cancellation = Arc::clone(&entry.cancellation);
+        let operation = OperationGuard::start(CoordinatedOperationKind::SystemMaintenanceExecution)
+            .expect("maintenance execution operation must start");
+        {
+            let mut registry = execution_registry().expect("registry must remain available");
+            registry.operation_id = Some(operation.id());
+            registry.session_guard = Some(operation);
+            registry.entries.push(entry);
+        }
+
+        let progress = PlatformSystemMaintenanceProgress::step(
+            mangodisk_platform::PlatformSystemMaintenancePhase::RefreshingNetwork,
+            1,
+            2,
+            Some(40),
+        );
+        update_execution_progress("running-safe-cancel", progress)
+            .expect("valid progress must be published");
+        update_execution_progress("running-safe-cancel", progress)
+            .expect("duplicate progress must be an idempotent no-op");
+        assert_eq!(
+            updates
+                .lock()
+                .expect("update collector must remain available")
+                .len(),
+            1
+        );
+        assert_eq!(
+            update_execution_progress(
+                "running-safe-cancel",
+                PlatformSystemMaintenanceProgress::step(
+                    mangodisk_platform::PlatformSystemMaintenancePhase::RefreshingNetwork,
+                    2,
+                    1,
+                    Some(101),
+                ),
+            )
+            .expect_err("invalid progress must fail closed")
+            .code(),
+            CoreErrorCode::Platform
+        );
+
+        let cancelling = SystemMaintenanceService::cancel_execution("running-safe-cancel")
+            .expect("a cancelable running job must accept cancellation");
+        assert_eq!(cancelling.status, SystemMaintenanceJobStatus::Cancelling);
+        assert_eq!(cancelling.revision, 3);
+        assert!(!cancelling.cancelable);
+        assert!(cancellation.load(Ordering::Relaxed));
+        let restored =
+            SystemMaintenanceService::runtime_state().expect("runtime state must remain readable");
+        assert_eq!(restored.executions, vec![cancelling.clone()]);
+        assert_eq!(
+            updates
+                .lock()
+                .expect("update collector must remain available")
+                .last(),
+            Some(&cancelling)
+        );
+        assert!(SystemMaintenanceService::cancel_execution("running-safe-cancel").is_err());
     }
 
     #[test]

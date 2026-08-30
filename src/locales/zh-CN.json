@@ -1192,6 +1192,7 @@
         "disabled": "将关闭 {count} 个启动项",
         "removed": "将清除 {count} 个残留启动项"
       },
+      "batchName": "{count} 个启动项",
       "enableNamedGroup": "启用 {name}",
       "disableNamedGroup": "禁用 {name}",
       "futureOnly": "关闭自动启动不会停止当前正在运行的程序或服务",
@@ -1202,8 +1203,12 @@
       "refreshFailedResult": "操作已完成，列表暂未更新，请重新扫描",
       "enableSuccessResult": "已开启“{name}”的自动启动",
       "disableSuccessResult": "已关闭“{name}”的自动启动",
+      "batchEnableSuccessResult": "已开启 {count} 个启动项",
+      "batchDisableSuccessResult": "已关闭 {count} 个启动项",
       "partialEnableResult": "“{name}”已启用 {changed} 项，{failed} 项启用失败",
       "partialDisableResult": "“{name}”已禁用 {changed} 项，{failed} 项禁用失败",
+      "batchPartialEnableResult": "已启用 {changed} 个启动项，{failed} 个启用失败",
+      "batchPartialDisableResult": "已禁用 {changed} 个启动项，{failed} 个禁用失败",
       "warnings": {
         "affectsOtherTriggers": "此计划任务还包含非启动触发条件；禁用会影响整个任务",
         "itemCurrentlyRunning": "此项目当前正在运行，本次变更不会将它停止"

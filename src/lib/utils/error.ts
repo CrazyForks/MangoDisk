@@ -13,7 +13,13 @@ export interface CommandError {
   retryable: boolean;
 }
 
-export type CommandErrorReason = 'resourceBusy' | 'accessDeniedOrBusy' | 'itemChanged' | 'scanResourcesReleasing';
+export type CommandErrorReason =
+  | 'resourceBusy'
+  | 'accessDeniedOrBusy'
+  | 'itemChanged'
+  | 'scanResourcesReleasing'
+  | 'folderUnavailable'
+  | 'folderSelectionLimitExceeded';
 
 const COMMAND_ERROR_CODES: ReadonlySet<string> = new Set<CommandErrorCode>([
   'invalidInput',
@@ -26,6 +32,8 @@ const COMMAND_ERROR_CODES: ReadonlySet<string> = new Set<CommandErrorCode>([
 ]);
 
 const COMMAND_ERROR_REASONS: ReadonlySet<string> = new Set<CommandErrorReason>([
+  'folderUnavailable',
+  'folderSelectionLimitExceeded',
   'resourceBusy',
   'accessDeniedOrBusy',
   'itemChanged',

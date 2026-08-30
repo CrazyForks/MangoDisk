@@ -1353,6 +1353,14 @@
     "taskJoinFailed": "Background task stopped"
   },
   "errorReasons": {
+    "folderSelectionLimitExceeded": {
+      "title": "Too many folders selected",
+      "message": "Select up to 64 folders at a time, then try again"
+    },
+    "folderUnavailable": {
+      "title": "Selected folders are unavailable",
+      "message": "Some selected items are not accessible folders. Check permissions, shared-folder connections, or link targets, then select the folders again"
+    },
     "resourceBusy": {
       "title": "Item is in use",
       "message": "This item is open in File Explorer or another app. Close the related window or app and try again"

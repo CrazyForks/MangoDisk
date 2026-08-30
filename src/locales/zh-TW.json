@@ -1284,6 +1284,14 @@
     "taskJoinFailed": "背景任務已停止"
   },
   "errorReasons": {
+    "folderSelectionLimitExceeded": {
+      "title": "選取的資料夾過多",
+      "message": "每次最多選取 64 個資料夾，請減少數量後再試一次"
+    },
+    "folderUnavailable": {
+      "title": "無法使用所選資料夾",
+      "message": "部分所選項目不是可用的資料夾。請檢查存取權限、共用連線或連結目標，然後重新選擇"
+    },
     "resourceBusy": {
       "title": "項目正在使用",
       "message": "此項目正被檔案總管或其他程式使用。請關閉相關視窗或程式後重試"

@@ -10,6 +10,55 @@ use super::*;
 
 struct DirectoryCleanup(PathBuf);
 
+#[cfg(windows)]
+#[test]
+#[ignore = "creates an isolated fixture under an explicitly supplied shared directory"]
+fn real_redirected_share_supports_storage_scans() {
+    use crate::storage::{
+        analysis::AnalysisService, duplicates::DuplicateFileService, large_files::LargeFileService,
+    };
+    let _operation_lock = crate::shared::operation::test_operation_lock();
+    let parent = std::env::var("MANGODISK_TEST_SHARED_SCAN_PARENT")
+        .expect("supply a redirected shared directory for isolated test files");
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let entry = PathBuf::from(parent).join(format!("MangoDisk-Shared-Scan-{unique}"));
+    fs::create_dir(&entry).expect("create the isolated shared fixture");
+    let _cleanup = DirectoryCleanup(entry.clone());
+    let data = vec![0x5a_u8; LARGE_FILE_INDEX_FLOOR_BYTES as usize + 4096];
+    fs::write(entry.join("first.bin"), &data).unwrap();
+    fs::write(entry.join("second.bin"), &data).unwrap();
+    fs::create_dir(entry.join("nested")).unwrap();
+    fs::write(entry.join("nested/unique.txt"), b"different content").unwrap();
+    let canonical = current_platform()
+        .resolve_directory_entry(&entry)
+        .expect("resolve the redirected shared directory");
+    let root = current_platform().display_path(&canonical);
+    let started = Instant::now();
+    let analysis =
+        AnalysisService::analyze_with_progress(Some(root.clone()), true, |_| {}).unwrap();
+    assert_eq!(
+        analysis
+            .entries
+            .iter()
+            .map(|entry| entry.file_count)
+            .sum::<u64>(),
+        3
+    );
+    let large = LargeFileService::find_with_progress(Some(root.clone()), 1, true, |_| {}).unwrap();
+    assert_eq!(large.entries.len(), 2);
+    let duplicates = DuplicateFileService::find_with_progress(vec![root], 1, |_| {}).unwrap();
+    assert_eq!(duplicates.groups.len(), 1);
+    assert_eq!(duplicates.groups[0].entries.len(), 2);
+    assert_eq!(duplicates.groups[0].bytes_per_file, data.len() as u64);
+    println!(
+        "shared_scan_verified files=3 large_files=2 duplicate_groups=1 elapsed_ms={}",
+        started.elapsed().as_millis()
+    );
+}
+
 impl Drop for DirectoryCleanup {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.0);

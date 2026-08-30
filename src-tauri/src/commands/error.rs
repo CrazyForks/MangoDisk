@@ -36,6 +36,10 @@ where
 }
 
 impl CommandError {
+    pub(super) fn invalid_input(operation: &'static str) -> Self {
+        Self::new(CommandErrorCode::InvalidInput, operation, false)
+    }
+
     fn operation<E>(operation: &'static str, error: E) -> Self
     where
         E: Any + Display,

@@ -1288,6 +1288,14 @@
     "taskJoinFailed": "后台任务已停止"
   },
   "errorReasons": {
+    "folderSelectionLimitExceeded": {
+      "title": "选择的文件夹过多",
+      "message": "每次最多选择 64 个文件夹，请减少数量后重试"
+    },
+    "folderUnavailable": {
+      "title": "无法使用所选文件夹",
+      "message": "部分所选项目不是可用的文件夹。请检查访问权限、共享连接或链接目标，然后重新选择"
+    },
     "resourceBusy": {
       "title": "项目正在使用",
       "message": "此项目正被资源管理器或其他程序使用。请关闭相关窗口或程序后重试"

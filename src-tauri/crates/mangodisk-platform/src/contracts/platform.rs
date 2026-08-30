@@ -255,6 +255,12 @@ pub trait Platform: Send + Sync {
         }
         Ok(())
     }
+    /// Resolves an explicitly selected directory or an OS-provided folder shortcut.
+    /// Callers must retain the returned target, not the original alias. This entry
+    /// boundary does not relax link checks during traversal or deletion.
+    fn resolve_directory_entry(&self, path: &Path) -> PlatformResult<PathBuf> {
+        self.canonicalize_no_links(path)
+    }
     fn canonicalize_no_links(&self, path: &Path) -> PlatformResult<PathBuf> {
         self.validate_path_no_links(path)?;
         let canonical =

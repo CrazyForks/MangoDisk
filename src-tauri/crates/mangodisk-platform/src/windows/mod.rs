@@ -2,6 +2,7 @@ mod allocated_content;
 mod change_tracking;
 mod directories;
 mod directory_aggregate;
+mod directory_entry;
 mod directory_identity;
 mod disk_cleanup;
 mod file_layout;
@@ -293,6 +294,10 @@ impl Platform for WindowsPlatform {
         mode: ApplicationProcessCloseMode,
     ) -> Vec<PlatformResult<ApplicationProcessCloseResult>> {
         process_control::close_many(targets, mode)
+    }
+
+    fn resolve_directory_entry(&self, path: &Path) -> PlatformResult<PathBuf> {
+        directory_entry::resolve(path)
     }
 
     fn is_link_like(&self, metadata: &fs::Metadata) -> bool {

@@ -17,6 +17,10 @@ const errorMessage = computed(() => {
       return t('errorReasons.accessDeniedOrBusy.message');
     case 'itemChanged':
       return t('errorReasons.itemChanged.message');
+    case 'folderUnavailable':
+      return t('errorReasons.folderUnavailable.message');
+    case 'folderSelectionLimitExceeded':
+      return t('errorReasons.folderSelectionLimitExceeded.message');
     case 'scanResourcesReleasing':
       return t('errorReasons.scanResourcesReleasing.message');
     default:
@@ -32,6 +36,10 @@ const errorTitle = computed(() => {
       return t('errorReasons.accessDeniedOrBusy.title');
     case 'itemChanged':
       return t('errorReasons.itemChanged.title');
+    case 'folderUnavailable':
+      return t('errorReasons.folderUnavailable.title');
+    case 'folderSelectionLimitExceeded':
+      return t('errorReasons.folderSelectionLimitExceeded.title');
     case 'scanResourcesReleasing':
       return t('errorReasons.scanResourcesReleasing.title');
     default:

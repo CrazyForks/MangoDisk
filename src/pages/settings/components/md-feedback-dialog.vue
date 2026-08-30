@@ -3,11 +3,12 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 
 import MdDialogContent from '@/components/custom/md-dialog-content.vue';
+import MdDialogHeader from '@/components/custom/md-dialog-header.vue';
 import MdIconAction from '@/components/custom/md-icon-action.vue';
 import MdIcon from '@/components/icons/md-icon.vue';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PROJECT_LINKS } from '@/lib/models/application-shell';
@@ -400,7 +401,7 @@ onMounted(() => {
       </template>
 
       <template v-else>
-        <DialogHeader class="feedback-header">
+        <MdDialogHeader class="feedback-header">
           <DialogTitle>{{ t('settings.feedbackDialog.title') }}</DialogTitle>
           <DialogDescription
             :class="{ 'feedback-submit-error': submissionErrorKey }"
@@ -409,7 +410,7 @@ onMounted(() => {
           >
             {{ t(submissionErrorKey ?? 'settings.feedbackDialog.description') }}
           </DialogDescription>
-        </DialogHeader>
+        </MdDialogHeader>
 
         <div class="feedback-body scrollbar-stable">
           <div class="feedback-meta-grid">

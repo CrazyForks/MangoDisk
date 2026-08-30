@@ -5,6 +5,7 @@ import { toast } from 'vue-sonner';
 
 import MdCategoryFilter from '@/components/custom/md-category-filter.vue';
 import MdDialogContent from '@/components/custom/md-dialog-content.vue';
+import MdDialogHeader from '@/components/custom/md-dialog-header.vue';
 import MdEmptyState from '@/components/custom/md-empty-state.vue';
 import MdOperationProgress from '@/components/custom/md-operation-progress.vue';
 import MdOperationWorkspace from '@/components/custom/md-operation-workspace.vue';
@@ -13,7 +14,7 @@ import MdResultFilterToolbar from '@/components/custom/md-result-filter-toolbar.
 import MdResultWorkspace from '@/components/custom/md-result-workspace.vue';
 import MdIcon from '@/components/icons/md-icon.vue';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type {
   SystemMaintenanceCategory,
@@ -359,12 +360,12 @@ onUnmounted(() => {
 
     <Dialog v-model:open="confirmationOpen">
       <MdDialogContent class="w-[calc(100%-3rem)] max-w-[440px] gap-0 p-0">
-        <DialogHeader class="px-6 pt-6 pr-14 pb-4">
+        <MdDialogHeader class="px-6 pt-6 pr-14 pb-4">
           <DialogTitle>{{ t('systemMaintenance.confirmation.title') }}</DialogTitle>
           <DialogDescription class="mt-2 leading-6">
             {{ t('systemMaintenance.confirmation.description') }}
           </DialogDescription>
-        </DialogHeader>
+        </MdDialogHeader>
         <DialogFooter class="border-t border-border/70 px-6 py-3.5">
           <Button variant="outline" type="button" @click="confirmationOpen = false">
             {{ t('common.cancel') }}

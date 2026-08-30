@@ -3,10 +3,11 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n';
 
 import MdDialogContent from '@/components/custom/md-dialog-content.vue';
+import MdDialogHeader from '@/components/custom/md-dialog-header.vue';
 import MdMiddleEllipsis from '@/components/custom/md-middle-ellipsis.vue';
 import MdIcon from '@/components/icons/md-icon.vue';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog';
 import { CLEANUP_OPERATION_IDS } from '@/lib/models/cleanup';
 import { ICON_NAMES } from '@/lib/models/ui';
 import { ByteSizeService } from '@/lib/services/byte-size-service';
@@ -329,10 +330,10 @@ onBeforeUnmount(() => {
 
   <Dialog :open="cancellationConfirmOpen" @update:open="cancellationConfirmOpen = $event">
     <MdDialogContent class="w-[calc(100%-3rem)] max-w-[440px] gap-0 p-0">
-      <DialogHeader class="px-6 pt-6 pr-14 pb-4">
+      <MdDialogHeader class="px-6 pt-6 pr-14 pb-4">
         <DialogTitle>{{ t('loading.cancelCleanupConfirmTitle') }}</DialogTitle>
         <DialogDescription class="mt-2 leading-6">{{ t('loading.cancelCleanupConfirmDescription') }}</DialogDescription>
-      </DialogHeader>
+      </MdDialogHeader>
       <DialogFooter class="border-t border-border/70 px-6 py-3.5">
         <Button variant="outline" type="button" @click="cancellationConfirmOpen = false">{{
           t('common.cancel')

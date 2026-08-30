@@ -3,11 +3,12 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 
 import MdDialogContent from '@/components/custom/md-dialog-content.vue';
+import MdDialogHeader from '@/components/custom/md-dialog-header.vue';
 import MdIconAction from '@/components/custom/md-icon-action.vue';
 import MdIcon from '@/components/icons/md-icon.vue';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -292,10 +293,10 @@ onBeforeUnmount(() => {
 <template>
   <Dialog :open="modelValue" @update:open="emit('update:modelValue', $event)">
     <MdDialogContent class="custom-dialog flex max-h-[calc(100dvh-1.5rem)] min-h-0 flex-col gap-0 overflow-hidden p-0">
-      <DialogHeader class="custom-dialog-header flex-none px-4 pt-3 pr-11">
+      <MdDialogHeader class="custom-dialog-header flex-none px-4 pt-3 pr-11">
         <DialogTitle>{{ t('cleanup.customCleanup.title') }}</DialogTitle>
         <DialogDescription>{{ t('cleanup.customCleanup.description') }}</DialogDescription>
-      </DialogHeader>
+      </MdDialogHeader>
 
       <div class="custom-dialog-body">
         <aside class="rule-sidebar">

@@ -206,6 +206,41 @@ describe('system settings store', () => {
     expect(store.pendingPlan).toEqual(restorePlan);
   });
 
+  it('prepares recovery when a catalog update changes the recommendation', async () => {
+    const legacyRecoverable = {
+      ...setting,
+      settingId: 'macos.keyboard.fast-key-repeat',
+      status: 'recommended' as const,
+      selectedByDefault: false,
+      restoreAvailable: true,
+    };
+    const current = catalog([legacyRecoverable]);
+    current.recoveryAvailable = true;
+    const restorePlan: SystemSettingsChangePlan = {
+      ...plan,
+      items: [
+        {
+          settingId: legacyRecoverable.settingId,
+          category: legacyRecoverable.category,
+          target: 'default',
+          requiresRestart: false,
+          requiresElevation: false,
+        },
+      ],
+    };
+    const prepare = vi.spyOn(SystemSettingsService, 'prepareChange').mockResolvedValue(restorePlan);
+    const store = useSystemSettingsStore();
+    store.catalog = current;
+
+    await store.prepareRecovery();
+
+    expect(prepare).toHaveBeenCalledWith({
+      scanId: current.scanId,
+      items: [{ settingId: legacyRecoverable.settingId, target: 'default' }],
+    });
+    expect(store.pendingPlan).toEqual(restorePlan);
+  });
+
   it('keeps the current draft when recovery preparation fails', async () => {
     const recoverable = {
       ...setting,

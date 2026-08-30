@@ -1118,6 +1118,54 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "temporarily changes and restores the current keyboard repeat preferences"]
+    fn actual_key_repeat_settings_round_trip_and_restore() {
+        let cases = [
+            (
+                "macos.keyboard.fast-key-repeat",
+                PlatformSystemSettingValue::Integer(2),
+            ),
+            (
+                "macos.keyboard.short-repeat-delay",
+                PlatformSystemSettingValue::Integer(15),
+            ),
+        ];
+
+        for (setting_id, candidate) in cases {
+            let definition = definition(setting_id).expect("the key repeat setting should exist");
+            let before =
+                read_value(definition).expect("the original preference should be readable");
+            let temporary = if before == candidate {
+                let PlatformSystemSettingValue::Integer(value) = candidate else {
+                    unreachable!("keyboard repeat test values must be integers");
+                };
+                PlatformSystemSettingValue::Integer(value + 1)
+            } else {
+                candidate
+            };
+
+            let round_trip = (|| -> PlatformResult<()> {
+                write_value(definition, &temporary)?;
+                if read_value(definition)? != temporary {
+                    return Err(PlatformError::operation_failed(
+                        "temporary keyboard repeat preference was not persisted",
+                    ));
+                }
+                Ok(())
+            })();
+            let restore = write_value(definition, &before);
+
+            restore.expect("the original keyboard repeat preference should always be restored");
+            round_trip
+                .expect("the keyboard repeat preference should support a verified round trip");
+            assert_eq!(
+                read_value(definition).expect("the restored preference should be readable"),
+                before
+            );
+        }
+    }
+
+    #[test]
     #[ignore = "temporarily changes and restores newly added macOS preferences"]
     fn actual_expanded_settings_round_trip_and_restore() {
         let cases = [

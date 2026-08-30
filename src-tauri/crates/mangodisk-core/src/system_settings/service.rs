@@ -350,6 +350,7 @@ fn build_change_plan(
         }
         if change.target == SystemSettingTargetState::Default
             && item.public.status != SystemSettingStatus::Optimized
+            && !item.public.restore_available
         {
             skipped_items.push(skipped(
                 setting_id,
@@ -947,9 +948,10 @@ fn desired_value_for_target(
     }
 }
 
-/// Marks only settings whose current native value still matches MangoDisk's durable baseline.
-/// A setting that another tool changed after optimization must not appear in the bulk restore
-/// action because restoring it would overwrite newer user intent.
+/// Marks only available settings whose current native value still matches MangoDisk's durable
+/// baseline. The catalog recommendation may change between releases, so recovery is intentionally
+/// independent of the current optimized status. A value changed by another tool still fails the
+/// baseline match and cannot appear in the bulk restore action.
 fn mark_restore_availability(
     items: &mut [CatalogNativeItem],
     recovery: Option<&RecoveryDocument>,
@@ -957,7 +959,7 @@ fn mark_restore_availability(
     let recovery_items = recovery_items_by_id(recovery);
     let mut available = false;
     for item in items {
-        item.public.restore_available = item.public.status == SystemSettingStatus::Optimized
+        item.public.restore_available = item.public.status != SystemSettingStatus::Unavailable
             && recovery_items
                 .get(&item.public.setting_id)
                 .is_some_and(|recovery| valid_recovery_baseline(recovery, item));
@@ -1406,6 +1408,80 @@ mod tests {
     }
 
     #[test]
+    fn missing_key_repeat_preferences_remain_system_owned_and_recommended() {
+        let definition = definitions(SystemSettingsPlatform::Macos)
+            .iter()
+            .find(|definition| definition.id == "macos.keyboard.fast-key-repeat")
+            .expect("the key repeat preference should exist");
+        let state = mangodisk_platform::PlatformSystemSettingState {
+            setting_id: definition.id.to_string(),
+            value: PlatformSystemSettingValue::Missing,
+            effective_value: PlatformSystemSettingValue::Missing,
+            requires_elevation: false,
+            diagnostic: None,
+        };
+
+        let item = native_item(definition, Some(&state));
+
+        assert_eq!(item.public.status, SystemSettingStatus::Recommended);
+        assert_eq!(item.current_value, PlatformSystemSettingValue::Missing);
+        assert_eq!(item.effective_value, PlatformSystemSettingValue::Missing);
+        assert_eq!(item.disabled_value, PlatformSystemSettingValue::Missing);
+        assert_eq!(
+            item.recommended_value,
+            PlatformSystemSettingValue::Integer(2)
+        );
+    }
+
+    #[test]
+    fn legacy_recommendation_remains_restorable_after_catalog_changes() {
+        let recovery = recovery_document(vec![RecoveryItem {
+            setting_id: "macos.keyboard.fast-key-repeat".to_string(),
+            original_value: PlatformSystemSettingValue::Missing,
+            optimized_value: PlatformSystemSettingValue::Integer(1),
+        }]);
+        let mut native_items = vec![CatalogNativeItem {
+            public: SystemSettingItem {
+                setting_id: "macos.keyboard.fast-key-repeat".to_string(),
+                category: super::super::SystemSettingCategory::Performance,
+                selection_kind: SystemSettingSelectionKind::Custom,
+                risk_level: super::super::SystemSettingRiskLevel::Standard,
+                status: SystemSettingStatus::Recommended,
+                selected_by_default: false,
+                restore_available: false,
+                requires_restart: false,
+                requires_elevation: false,
+                diagnostic: None,
+            },
+            current_value: PlatformSystemSettingValue::Integer(1),
+            effective_value: PlatformSystemSettingValue::Integer(1),
+            disabled_value: PlatformSystemSettingValue::Missing,
+            recommended_value: PlatformSystemSettingValue::Integer(2),
+        }];
+        assert!(mark_restore_availability(
+            &mut native_items,
+            Some(&recovery)
+        ));
+        let session = catalog_session_fixture(native_items);
+        let selection = SystemSettingsChangeSelection {
+            scan_id: session.public.scan_id.clone(),
+            items: vec![super::super::SystemSettingChangeSelectionItem {
+                setting_id: "macos.keyboard.fast-key-repeat".to_string(),
+                target: SystemSettingTargetState::Default,
+            }],
+        };
+
+        let pending = build_change_plan(selection, session, Some(&recovery), 5_000);
+
+        assert!(pending.public.skipped_items.is_empty());
+        assert_eq!(pending.items.len(), 1);
+        assert_eq!(
+            pending.items[0].desired_value,
+            PlatformSystemSettingValue::Missing
+        );
+    }
+
+    #[test]
     fn mixed_change_plan_preserves_recovery_and_reports_every_skip_reason() {
         let session = catalog_session_fixture(vec![
             native_fixture(
@@ -1733,8 +1809,17 @@ mod tests {
         assert!(mark_restore_availability(&mut items, Some(&matching)));
         assert!(items[0].public.restore_available);
 
+        items[0].public.status = SystemSettingStatus::Recommended;
+        items[0].recommended_value = PlatformSystemSettingValue::Integer(2);
+        assert!(mark_restore_availability(&mut items, Some(&matching)));
+        assert!(items[0].public.restore_available);
+
         let stale = recovery_document(vec![recovery_item("windows.test.setting", 0, 2)]);
         assert!(!mark_restore_availability(&mut items, Some(&stale)));
+        assert!(!items[0].public.restore_available);
+
+        items[0].public.status = SystemSettingStatus::Unavailable;
+        assert!(!mark_restore_availability(&mut items, Some(&matching)));
         assert!(!items[0].public.restore_available);
     }
 

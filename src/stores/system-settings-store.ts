@@ -98,7 +98,9 @@ export const useSystemSettingsStore = defineStore('system-settings', {
       if (!this.catalog || this.preparing || this.executing) return null;
       const restoreIds = new Set(
         this.catalog.items
-          .filter(item => item.status === 'optimized' && item.restoreAvailable)
+          // Recovery remains valid when a later MangoDisk release changes its recommendation.
+          // Core exposes only settings whose current value still matches the durable baseline.
+          .filter(item => item.restoreAvailable)
           .map(item => item.settingId)
       );
       if (!restoreIds.size) return null;

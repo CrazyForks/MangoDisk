@@ -23,7 +23,7 @@ import {
 import { ICON_NAMES } from '@/lib/models/ui';
 import { FileManagerService } from '@/lib/services/file-manager-service';
 import { FolderSelectionService } from '@/lib/services/folder-selection-service';
-import { NativeFolderDropService, type NativeFolderDropEvent } from '@/lib/services/native-folder-drop-service';
+import { NativeDragDropService, type NativeDragDropEvent } from '@/lib/services/native-drag-drop-service';
 import { PathUtils } from '@/lib/utils/path';
 import { CustomCleanupPreferenceUtils } from '@/lib/utils/custom-cleanup-preference';
 import { useAppStore } from '@/stores/app-store';
@@ -180,7 +180,7 @@ async function appendDirectories(ruleId: string, paths: string[]) {
   );
 }
 
-function handleDirectoryDrop(event: NativeFolderDropEvent) {
+function handleDirectoryDrop(event: NativeDragDropEvent) {
   if (!props.modelValue || !activeRule.value) {
     directoryDropActive.value = false;
     return;
@@ -274,7 +274,7 @@ watch(
 
 onMounted(() => {
   directoryDropListenerMounted = true;
-  void NativeFolderDropService.listen(handleDirectoryDrop)
+  void NativeDragDropService.listen(handleDirectoryDrop)
     .then(stop => {
       if (directoryDropListenerMounted) stopDirectoryDropListener = stop;
       else stop();

@@ -6,26 +6,26 @@ vi.mock('@tauri-apps/api/webview', () => ({
   getCurrentWebview: () => ({ onDragDropEvent }),
 }));
 
-import { NativeFolderDropService, type NativeFolderDropEvent } from './native-folder-drop-service';
+import { NativeDragDropService, type NativeDragDropEvent } from './native-drag-drop-service';
 
-describe('NativeFolderDropService', () => {
+describe('NativeDragDropService', () => {
   beforeEach(() => {
     onDragDropEvent.mockReset();
   });
 
   it('forwards the native payload without exposing the Tauri event envelope', async () => {
-    let nativeListener: ((event: { payload: NativeFolderDropEvent }) => void) | undefined;
+    let nativeListener: ((event: { payload: NativeDragDropEvent }) => void) | undefined;
     const stop = vi.fn();
     onDragDropEvent.mockImplementation(async listener => {
       nativeListener = listener;
       return stop;
     });
     const listener = vi.fn();
-    const unlisten = await NativeFolderDropService.listen(listener);
-    const payload: NativeFolderDropEvent = {
+    const unlisten = await NativeDragDropService.listen(listener);
+    const payload: NativeDragDropEvent = {
       type: 'drop',
       paths: ['/tmp/example'],
-      position: { x: 20, y: 40 } as Extract<NativeFolderDropEvent, { type: 'drop' }>['position'],
+      position: { x: 20, y: 40 } as Extract<NativeDragDropEvent, { type: 'drop' }>['position'],
     };
 
     nativeListener?.({ payload });

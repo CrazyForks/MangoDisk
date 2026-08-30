@@ -42,6 +42,7 @@ export const ICON_NAMES = {
   fileAudio: 'fileAudio',
   fileVideo: 'fileVideo',
   fileImage: 'fileImage',
+  paperclip: 'paperclip',
   fileCode: 'fileCode',
   fileSettings: 'fileSettings',
   aiModel: 'aiModel',

@@ -5,6 +5,7 @@ pub(crate) mod cleanup;
 pub(crate) mod disk;
 pub(crate) mod duplicate_files;
 pub(crate) mod error;
+pub(crate) mod feedback;
 pub(crate) mod file_icons;
 pub(crate) mod file_manager;
 pub(crate) mod folder_selection;

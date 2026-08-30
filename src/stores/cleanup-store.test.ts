@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ApplicationCloseBatchResult } from '@/lib/models/application-close';
 import {
+  CLEANUP_RULE_IDS,
   CLEANUP_SCAN_SCOPE_MODES,
   STANDARD_CLEANUP_SCAN_SCOPE,
   type CleanupExecutionProgress,
@@ -141,6 +142,43 @@ describe('cleanup workflow completion', () => {
     expect(completed).toBe(true);
     expect(store.scanProgress).toEqual(finalProgress);
     expect(store.loading).toBe(false);
+  });
+
+  it('replaces only the matching privileged rule in the active scan snapshot', async () => {
+    const rule = {
+      ruleId: CLEANUP_RULE_IDS.windowsPreviousInstallations,
+      category: 'system',
+      group: 'system',
+      risk: 'recoverable',
+      defaultSelected: false,
+      recommendedSelected: false,
+      bytes: 0,
+      fileCount: 1,
+      available: true,
+      selectable: false,
+      status: 'requiresElevation',
+      runningProcesses: [],
+      requiresAppClose: false,
+      sources: [],
+      sourceCount: 0,
+      sourcesTruncated: false,
+      scanElapsedMs: 1,
+    } as const;
+    const measured = { ...rule, bytes: 9_715_531_776, selectable: true, status: 'found' as const };
+    const store = useCleanupStore();
+    store.scan = {
+      scannedAtMs: 42,
+      rules: [rule],
+      reclaimableBytes: 0,
+      safeBytes: 0,
+    } as CleanupScanResult;
+    vi.spyOn(CleanupService, 'scanPreviousInstallationsWithPrivileges').mockResolvedValue(measured);
+
+    expect(await store.scanPreviousInstallationsWithPrivileges()).toBe(true);
+    expect(store.scan.rules).toEqual([measured]);
+    expect(store.scan.reclaimableBytes).toBe(9_715_531_776);
+    expect(store.selectedRuleIds).toEqual([]);
+    expect(store.privilegedScanRuleId).toBeNull();
   });
 
   it('reports completion after Core returns a cleanup result', async () => {
@@ -651,6 +689,27 @@ describe('cleanup workflow completion', () => {
     expect(store.selectedBytes).toBe(400);
 
     store.setRulesSelected(['rule-1'], false);
+    expect(store.selectedRuleIds).toEqual([]);
+    expect(store.sourceSelections).toEqual([]);
+  });
+
+  it('does not select rules that require a privileged scan', () => {
+    const store = useCleanupStore();
+    store.scan = {
+      rules: [
+        {
+          ruleId: CLEANUP_RULE_IDS.windowsPreviousInstallations,
+          selectable: false,
+          status: 'requiresElevation',
+          bytes: 0,
+          sourcesTruncated: false,
+          sources: [],
+        },
+      ],
+    } as CleanupScanResult;
+
+    store.setRulesSelected([CLEANUP_RULE_IDS.windowsPreviousInstallations], true);
+
     expect(store.selectedRuleIds).toEqual([]);
     expect(store.sourceSelections).toEqual([]);
   });

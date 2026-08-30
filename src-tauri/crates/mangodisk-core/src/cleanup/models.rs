@@ -184,6 +184,10 @@ pub enum ScanItemStatus {
     /// could not establish a complete result.
     ReviewOnly,
     Limited,
+    /// The target is known to exist, but measuring or changing it requires an explicit elevation
+    /// boundary. Adapters may offer a user-initiated privileged refresh without elevating the
+    /// complete application process.
+    RequiresElevation,
 }
 
 #[derive(Debug, Clone, Serialize)]

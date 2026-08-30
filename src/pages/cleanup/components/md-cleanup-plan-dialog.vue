@@ -123,12 +123,17 @@ function executeSelection() {
   }
   void closeApplications('graceful');
 }
+
+function preventOutsideDismiss(event: Event) {
+  event.preventDefault();
+}
 </script>
 
 <template>
   <Dialog :open="modelValue" @update:open="emit('update:modelValue', $event)">
     <MdDialogContent
       class="flex max-h-[calc(100dvh-1.5rem)] min-h-0 flex-col gap-0 overflow-hidden p-0 sm:max-h-[86dvh] sm:max-w-[720px]"
+      @interact-outside="preventOutsideDismiss"
     >
       <MdDialogHeader class="plan-header flex-none px-5 pt-4 pr-12">
         <DialogTitle>{{ t('cleanup.planDialogTitle') }}</DialogTitle>

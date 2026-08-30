@@ -74,11 +74,18 @@ function updateOpen(open: boolean) {
   // result without a page-level watcher.
   if (!open) emit('update:modelValue', false);
 }
+
+function preventOutsideDismiss(event: Event) {
+  event.preventDefault();
+}
 </script>
 
 <template>
   <Dialog :open="modelValue && hasResult" @update:open="updateOpen">
-    <MdDialogContent class="flex max-h-[84vh] min-h-0 flex-col overflow-hidden p-0 sm:max-w-[620px]">
+    <MdDialogContent
+      class="flex max-h-[84vh] min-h-0 flex-col overflow-hidden p-0 sm:max-w-[620px]"
+      @interact-outside="preventOutsideDismiss"
+    >
       <template v-if="hasResult">
         <MdDialogHeader class="flex-none px-5 pt-5 pr-12">
           <DialogTitle class="text-lg">{{

@@ -76,6 +76,7 @@ export const CLEANUP_RULE_IDS = {
   dockerBuildCache: 'special.docker-build-cache',
   macosUniversalBinaries: 'special.macos-universal-binaries',
   windowsRecycleBin: 'special.windows-recycle-bin',
+  windowsPreviousInstallations: 'special.windows-previous-installations',
 } as const;
 
 export type CleanupOperationId = (typeof CLEANUP_OPERATION_IDS)[keyof typeof CLEANUP_OPERATION_IDS];
@@ -93,7 +94,8 @@ export type CleanupCategory =
   | 'ai'
   | 'container';
 export type CleanupResultGroup = (typeof CLEANUP_RESULT_GROUP_IDS)[keyof typeof CLEANUP_RESULT_GROUP_IDS];
-export type ScanItemStatus = 'found' | 'clean' | 'notApplicable' | 'requiresClose' | 'reviewOnly' | 'limited';
+export type ScanItemStatus =
+  'found' | 'clean' | 'notApplicable' | 'requiresClose' | 'reviewOnly' | 'limited' | 'requiresElevation';
 
 export interface CleanupSourceDetail {
   path: string;

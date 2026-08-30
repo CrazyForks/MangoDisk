@@ -189,6 +189,7 @@ pub fn run() {
             commands::disk::get_system_disk,
             commands::disk::list_disks,
             commands::cleanup::scan_cleanup_candidates,
+            commands::cleanup::scan_windows_previous_installations_with_privileges,
             commands::cleanup::cancel_cleanup_scan,
             commands::cleanup::cancel_cleanup_execution,
             commands::cleanup::close_cleanup_applications,

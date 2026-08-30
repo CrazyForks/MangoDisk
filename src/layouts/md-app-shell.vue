@@ -568,6 +568,7 @@ async function cancelDeepCleanup() {
           :busy="cleanupBusy"
           :closing-applications="cleanupStore.closingApplications"
           :close-result="cleanupStore.applicationCloseResult"
+          :privileged-scan-rule-id="cleanupStore.privilegedScanRuleId"
           @scan="scanCleanup"
           @toggle-source="cleanupStore.toggleSource"
           @select-all="cleanupStore.setRulesSelected"
@@ -575,6 +576,7 @@ async function cancelDeepCleanup() {
           @cancel="cleanupStore.cancelScan()"
           @close-applications="closeApplicationsBeforeCleanup"
           @open="openPath"
+          @privileged-scan="cleanupStore.scanPreviousInstallationsWithPrivileges()"
         />
         <AnalysisPage
           v-else-if="store.currentPage === PAGE_IDS.analysis"

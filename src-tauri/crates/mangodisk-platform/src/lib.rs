@@ -1,6 +1,8 @@
 mod command;
 mod contracts;
 mod current;
+#[cfg(windows)]
+mod disk_cleanup_helper;
 mod file_icon;
 mod inventory;
 #[cfg(target_os = "macos")]
@@ -22,6 +24,8 @@ pub use command::{
 };
 pub use contracts::*;
 pub use current::{application_directories, current_platform, CurrentPlatform};
+#[cfg(windows)]
+pub use disk_cleanup_helper::run_disk_cleanup_helper_mode;
 pub use file_icon::{
     NativeFileIconAsset, NativeFileIconAssignment, NativeFileIconItemKind,
     NativeFileIconLoadResult, NativeFileIconMode, NativeFileIconRequest, NativeFileIconService,
@@ -37,7 +41,8 @@ pub use system_maintenance_helper::run_system_maintenance_helper_mode;
 pub use system_settings_helper::run_system_settings_helper_mode;
 #[cfg(windows)]
 pub use windows::{
-    execute_windows_disk_cleanup, fresh_windows_disk_cleanup_estimates,
+    estimate_windows_previous_installations_with_privileges, execute_windows_disk_cleanup,
+    execute_windows_previous_installations_with_privileges, fresh_windows_disk_cleanup_estimates,
     windows_disk_cleanup_estimates,
 };
 

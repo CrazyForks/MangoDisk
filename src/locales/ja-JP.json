@@ -1394,6 +1394,12 @@
     "totalSize": "合計 {size}",
     "selectAll": "すべて選択",
     "selectRule": "{name} のクリーンアップ項目を選択",
+    "privilegedScan": {
+      "required": "未確認",
+      "sizePending": "管理者権限が必要です",
+      "action": "管理者として確認",
+      "checking": "確認中…"
+    },
     "categoryItemCount": "{count} 項目 | {count} 項目",
     "categoryTitles": {
       "custom": "カスタムクリーンアップ",
@@ -2080,12 +2086,14 @@
     "validating": "選択した項目を検証中…",
     "finalizing": "クリーンアップ結果を最終処理中…",
     "cleaningSafetyHint": "選択した項目をクリーンアップしています。内容が変更された項目や使用中の項目は、誤って削除しないようスキップします",
+    "windowsPreviousInstallationsCleanupHint": "Windows の確認画面で承認し、システムのクリーンアップが完了するまで MangoDisk を起動したままにしてください",
     "previewingSafetyHint": "選択した項目を何も削除・変更せずに確認中",
     "elapsedSeconds": "{count} 秒 | {count} 秒",
     "cleanupItemList": "クリーンアップ項目進行状況",
     "cleanupItemWaiting": "クリーンアップ待ち",
     "cleanupItemValidating": "現在のクリーンアップ範囲を確認中",
     "cleanupItemSystemProcessing": "システムがこの項目を処理中",
+    "windowsPreviousInstallationsCleanupWaiting": "Windows の確認またはクリーンアップの完了を待っています",
     "cleanupItemCompleted": "{count} が処理され、{size} が解放されました",
     "cleanupItemChecked": "確認が完了しました。内容は変更されていません",
     "cleanupItemPartial": "{count} 件を処理し、{size} を解放しました。一部の内容はスキップされました",
@@ -3037,6 +3045,11 @@
         "name": "Windows Updateのクリーンアップ",
         "description": "Windowsが削除可能と報告する置き換えられた更新ファイル。",
         "impact": "インストール済みの更新は有効なままです。古い更新ファイルを削除するとロールバックオプションが制限される可能性があります。"
+      },
+      "special.windows-previous-installations": {
+        "name": "以前の Windows のインストール",
+        "description": "新しい Windows へアップグレードした後、Windows.old に保持されている旧システムのデータです。",
+        "impact": "クリーンアップすると以前のシステムが完全に削除され、古い Windows に戻せなくなります。"
       },
       "special.macos-universal-binaries": {
         "name": "ユニバーサルバイナリ",

@@ -83,6 +83,7 @@ const props = defineProps<{
   sourceSelections: CleanupSourceSelection[];
   closingApplications: boolean;
   closeResult: ApplicationCloseBatchResult | null;
+  privilegedScanRuleId: string | null;
 }>();
 const emit = defineEmits<{
   cancel: [];
@@ -92,6 +93,7 @@ const emit = defineEmits<{
   scan: [scope: CleanupScanScope];
   selectAll: [ruleIds: string[], selected: boolean];
   toggleSource: [ruleId: string, path: string];
+  privilegedScan: [];
 }>();
 
 const confirmOpen = ref(false);
@@ -447,11 +449,13 @@ watch(
         :selected-leftover-ids="selectedLeftoverIds"
         :selected-rule-ids="selectedRuleIds"
         :source-selections="sourceSelections"
+        :privileged-scan-rule-id="privilegedScanRuleId"
         @toggle-source="toggleSource"
         @toggle-leftover="toggleLeftover"
         @select-leftover-group="setLeftoverGroupSelected"
         @select-all="selectAll"
         @open="emit('open', $event)"
+        @privileged-scan="emit('privilegedScan')"
       />
     </MdResultWorkspace>
 

@@ -230,6 +230,36 @@
   transition: background-color 0.16s ease;
 }
 
+.rule-card.requires-elevation .rule-summary {
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  gap: 6px;
+}
+
+.rule-card.requires-elevation .rule-disclosure {
+  grid-template-columns: 30px minmax(0, 1fr) minmax(118px, auto) 22px;
+}
+
+.rule-card.requires-elevation .rule-size {
+  min-width: 118px;
+}
+
+.elevation-required-label {
+  @apply text-warning-foreground;
+}
+
+.privileged-scan-button {
+  min-width: 104px;
+  padding-inline: 10px;
+}
+
+.privileged-scan-spinner {
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+}
+
 .rule-disclosure {
   display: grid;
   min-width: 0;

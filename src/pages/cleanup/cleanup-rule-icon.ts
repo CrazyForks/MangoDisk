@@ -39,6 +39,7 @@ const CLEANUP_RULE_ICONS: Readonly<Record<string, IconName>> = {
   'special.windows-delivery-optimization': ICON_NAMES.brandWindows,
   'special.windows-defender-cache': ICON_NAMES.brandWindows,
   'special.windows-update-cleanup': ICON_NAMES.brandWindows,
+  [CLEANUP_RULE_IDS.windowsPreviousInstallations]: ICON_NAMES.brandWindows,
 
   'app.slack-cache': ICON_NAMES.brandSlack,
   'app.claude-cache': ICON_NAMES.cleanupAiModelCache,

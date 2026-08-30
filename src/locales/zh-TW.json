@@ -1328,6 +1328,12 @@
     "totalSize": "共 {size}",
     "selectAll": "全選",
     "selectRule": "選擇清理項目：{name}",
+    "privilegedScan": {
+      "required": "尚未檢查",
+      "sizePending": "需要系統管理員權限",
+      "action": "系統管理員檢查",
+      "checking": "檢查中…"
+    },
     "categoryItemCount": "{count} 個項目",
     "categoryTitles": {
       "custom": "自訂清理",
@@ -2014,12 +2020,14 @@
     "validating": "正在再次確認所選項目…",
     "finalizing": "正在彙整清理結果…",
     "cleaningSafetyHint": "正在清理選取項目；內容如有變更或正在使用，會自動跳過以避免誤刪",
+    "windowsPreviousInstallationsCleanupHint": "請在 Windows 系統視窗中確認，並保持 MangoDisk 執行直到系統完成清理",
     "previewingSafetyHint": "正在核對所選項目，不會刪除或修改任何內容",
     "elapsedSeconds": "{count} 秒",
     "cleanupItemList": "清理項目進度",
     "cleanupItemWaiting": "等待清理",
     "cleanupItemValidating": "正在核對目前清理範圍",
     "cleanupItemSystemProcessing": "系統正在處理此項目",
+    "windowsPreviousInstallationsCleanupWaiting": "等待 Windows 確認或完成清理",
     "cleanupItemCompleted": "已處理 {count} 項，釋放 {size}",
     "cleanupItemChecked": "檢查完成，未修改內容",
     "cleanupItemPartial": "已處理 {count} 項，釋放 {size}，部分內容已跳過",
@@ -2971,6 +2979,11 @@
         "name": "Windows 更新清理",
         "description": "Windows 可清理的舊版更新檔案",
         "impact": "已安裝的更新會保留；清理舊檔案後，部分更新可能無法回退。"
+      },
+      "special.windows-previous-installations": {
+        "name": "先前的 Windows 安裝",
+        "description": "升級到新版 Windows 後保留在 Windows.old 中的舊系統資料",
+        "impact": "清理後將永久刪除先前的系統安裝，無法再回復到舊版 Windows。"
       },
       "special.macos-universal-binaries": {
         "name": "Universal Binary",

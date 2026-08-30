@@ -132,6 +132,14 @@ pub(crate) fn system_maintenance_helper_execute(
     system_maintenance::execute_with_current_privileges(task_id, progress)
 }
 
+pub(crate) fn disk_cleanup_helper_is_elevated() -> PlatformResult<bool> {
+    disk_cleanup::current_process_is_elevated().map_err(|error_code| {
+        PlatformError::operation_failed(format!(
+            "read disk cleanup helper elevation state failed with Windows error {error_code}"
+        ))
+    })
+}
+
 pub(crate) fn startup_helper_change_many(
     requests: &[crate::startup_helper::StartupHelperChangeRequest],
 ) -> Vec<PlatformResult<crate::PlatformStartupChangeResult>> {
@@ -183,6 +191,17 @@ pub fn execute_windows_disk_cleanup(
     cancellation: &PlatformCancellation,
 ) -> WindowsDiskCleanupExecution {
     disk_cleanup::execute(kind, cancellation)
+}
+
+pub fn estimate_windows_previous_installations_with_privileges(
+) -> PlatformResult<WindowsDiskCleanupEstimate> {
+    crate::disk_cleanup_helper::estimate_previous_installations_with_privileges()
+}
+
+pub fn execute_windows_previous_installations_with_privileges(
+    cancellation: &PlatformCancellation,
+) -> PlatformResult<WindowsDiskCleanupExecution> {
+    crate::disk_cleanup_helper::execute_previous_installations_with_privileges(cancellation)
 }
 
 impl Platform for WindowsPlatform {

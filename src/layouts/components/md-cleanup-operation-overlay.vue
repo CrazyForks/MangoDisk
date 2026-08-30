@@ -17,6 +17,8 @@ import { PathUtils } from '@/lib/utils/path';
 import { useApplicationStore } from '@/stores/application-store';
 import { useCleanupStore } from '@/stores/cleanup-store';
 
+import { isWaitingForPreviousWindowsInstallationCleanup } from './cleanup-operation-presentation';
+
 interface CleanupRuleSummary {
   fileCount: number;
   name: string;
@@ -54,6 +56,9 @@ const destructiveActive = computed(
     applicationStore.deletingLeftovers
 );
 const progress = computed(() => cleanupStore.executionProgress);
+const waitingForPreviousWindowsInstallationCleanup = computed(() =>
+  isWaitingForPreviousWindowsInstallationCleanup(cleanupStore.operation, progress.value)
+);
 
 watch(destructiveActive, active => {
   if (!active) cancellationConfirmOpen.value = false;
@@ -78,6 +83,9 @@ const loadingMessage = computed(() => {
 });
 const loadingHint = computed(() => {
   if (props.cancelling) return t('loading.cancellingCleanupHint');
+  if (waitingForPreviousWindowsInstallationCleanup.value) {
+    return t('loading.windowsPreviousInstallationsCleanupHint');
+  }
   return cleanupStore.operation === CLEANUP_OPERATION_IDS.previewing
     ? t('loading.previewingSafetyHint')
     : t('loading.cleaningSafetyHint');
@@ -117,6 +125,8 @@ const items = computed(() => {
       detail = t('loading.cleanupItemValidating');
     } else if (active && currentProgress?.currentItemPath) {
       detail = PathUtils.display(currentProgress.currentItemPath);
+    } else if (active && waitingForPreviousWindowsInstallationCleanup.value) {
+      detail = t('loading.windowsPreviousInstallationsCleanupWaiting');
     } else if (active) {
       detail = t('loading.cleanupItemSystemProcessing');
     }

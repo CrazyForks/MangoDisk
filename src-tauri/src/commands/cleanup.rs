@@ -1,6 +1,6 @@
 use mangodisk_core::{
     ApplicationCloseBatchResult, CleanupApplicationCloseRequest, CleanupRequest, CleanupResult,
-    CleanupScanResult, CleanupScanService, CleanupService, CustomCleanupRule,
+    CleanupScanResult, CleanupScanService, CleanupService, CustomCleanupRule, ScanRuleResult,
 };
 use serde::Deserialize;
 
@@ -57,6 +57,16 @@ pub async fn scan_cleanup_candidates(
 #[tauri::command]
 pub fn cancel_cleanup_scan() {
     CleanupScanService::cancel();
+}
+
+#[tauri::command]
+pub async fn scan_windows_previous_installations_with_privileges() -> CommandResult<ScanRuleResult>
+{
+    run_blocking(
+        "scan_windows_previous_installations_with_privileges",
+        CleanupScanService::scan_previous_installations_with_privileges,
+    )
+    .await
 }
 
 #[tauri::command]

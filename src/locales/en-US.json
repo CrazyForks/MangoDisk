@@ -1397,6 +1397,12 @@
     "totalSize": "{size} total",
     "selectAll": "Select all",
     "selectRule": "Select cleanup item: {name}",
+    "privilegedScan": {
+      "required": "Not checked",
+      "sizePending": "Administrator access required",
+      "action": "Admin check",
+      "checking": "Checking…"
+    },
     "categoryItemCount": "{count} item | {count} items",
     "categoryTitles": {
       "custom": "Custom cleanup",
@@ -2083,12 +2089,14 @@
     "validating": "Validating selected items…",
     "finalizing": "Finalizing cleanup results…",
     "cleaningSafetyHint": "Cleaning your selection; changed or in-use content is skipped to prevent accidental deletion",
+    "windowsPreviousInstallationsCleanupHint": "Confirm the Windows system prompt, then keep MangoDisk open while Windows finishes cleanup",
     "previewingSafetyHint": "Reviewing the selected items without deleting or changing anything",
     "elapsedSeconds": "{count} sec | {count} sec",
     "cleanupItemList": "Cleanup item progress",
     "cleanupItemWaiting": "Waiting to be cleaned",
     "cleanupItemValidating": "Checking the current cleanup scope",
     "cleanupItemSystemProcessing": "The system is processing this item",
+    "windowsPreviousInstallationsCleanupWaiting": "Waiting for Windows confirmation or cleanup",
     "cleanupItemCompleted": "{count} processed, {size} released",
     "cleanupItemChecked": "Check complete; no content was changed",
     "cleanupItemPartial": "{count} processed and {size} released; some content was skipped",
@@ -3040,6 +3048,11 @@
         "name": "Windows Update cleanup",
         "description": "Superseded update files that Windows reports as removable.",
         "impact": "Installed updates remain active. Removing old update files may limit rollback options."
+      },
+      "special.windows-previous-installations": {
+        "name": "Previous Windows installation",
+        "description": "The Windows.old data kept after upgrading to a newer version of Windows.",
+        "impact": "Cleanup permanently removes the previous installation and prevents returning to the earlier Windows version."
       },
       "special.macos-universal-binaries": {
         "name": "Universal binaries",

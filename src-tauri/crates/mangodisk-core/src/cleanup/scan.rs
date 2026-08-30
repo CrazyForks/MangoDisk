@@ -40,7 +40,7 @@ use crate::{
 
 const CLEANUP_SCAN_WORKER_LIMIT: usize = 4;
 const MAX_CLEANUP_SOURCE_DETAILS: usize = 256;
-const CLEANUP_SCAN_SCHEMA_VERSION: &str = "1.7";
+const CLEANUP_SCAN_SCHEMA_VERSION: &str = "1.8";
 
 pub struct CleanupScanService;
 
@@ -151,6 +151,23 @@ impl Drop for CleanerPreviewTask {
 }
 
 impl CleanupScanService {
+    pub fn scan_previous_installations_with_privileges() -> CoreResult<ScanRuleResult> {
+        #[cfg(windows)]
+        {
+            cleaners::preview_windows_previous_installations_with_privileges().map_err(|error| {
+                if error.code() == mangodisk_platform::PlatformErrorCode::UserCancelled {
+                    crate::shared::CoreError::operation_cancelled()
+                } else {
+                    error.into()
+                }
+            })
+        }
+        #[cfg(not(windows))]
+        Err(crate::shared::CoreError::operation_failed(
+            "privileged previous-installation scanning is available only on Windows",
+        ))
+    }
+
     pub fn scan_with_progress(callback: impl ProgressSink) -> CoreResult<CleanupScanResult> {
         Self::scan_cleanup_candidates_with_options(Vec::new(), false, Vec::new(), true, callback)
     }
@@ -1708,7 +1725,9 @@ mod tests {
                     && rule.bytes > 0
                     && !matches!(
                         rule.status,
-                        ScanItemStatus::Limited | ScanItemStatus::ReviewOnly
+                        ScanItemStatus::Limited
+                            | ScanItemStatus::ReviewOnly
+                            | ScanItemStatus::RequiresElevation
                     ))
                 && (rule.status != ScanItemStatus::Found || rule.bytes > 0)
                 && (rule.status != ScanItemStatus::Clean || rule.bytes == 0)

@@ -1542,6 +1542,8 @@
       "days": "日数",
       "includeSubdirectories": "サブフォルダを含める",
       "includeSubdirectoriesDescription": "オフにすると、選択したフォルダ直下のファイルだけを確認します",
+      "removeEmptyDirectories": "空のフォルダを削除",
+      "removeEmptyDirectoriesDescription": "クリーンアップ後、選択したフォルダ内の空のサブフォルダを削除します。選択したフォルダ自体は残ります",
       "removeRule": "このルールを削除",
       "empty": "カスタムルールはまだありません",
       "includeStandardRules": "標準スキャンも実行",

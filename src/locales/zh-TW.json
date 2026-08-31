@@ -1476,6 +1476,8 @@
       "days": "天數",
       "includeSubdirectories": "包含子資料夾",
       "includeSubdirectoriesDescription": "關閉後只檢查所選資料夾第一層的檔案",
+      "removeEmptyDirectories": "移除空資料夾",
+      "removeEmptyDirectoriesDescription": "清理後移除掃描資料夾內的空子資料夾，所選資料夾會保留",
       "removeRule": "刪除此規則",
       "empty": "尚未新增自訂規則",
       "includeStandardRules": "同時執行標準掃描",

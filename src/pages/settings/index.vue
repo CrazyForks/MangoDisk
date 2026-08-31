@@ -16,11 +16,11 @@ import {
   type MacOsPrivacyDestination,
 } from '@/lib/models/macos-permissions';
 import { ICON_NAMES } from '@/lib/models/ui';
-import { isLanguageId, LANGUAGE_OPTIONS, THEME_IDS } from '@/lib/models/settings';
+import { isLanguageId, isThemeId, LANGUAGE_OPTIONS, THEME_IDS } from '@/lib/models/settings';
 import type { AppSettings } from '@/lib/models/settings';
 import { FileManagerService } from '@/lib/services/file-manager-service';
 import { MacOsPermissionService } from '@/lib/services/macos-permission-service';
-import { AppUpdateProgressUtils } from '@/lib/utils/app-update-progress';
+import * as AppUpdateProgressUtils from '@/lib/utils/app-update-progress';
 import { useAppUpdateStore } from '@/stores/app-update-store';
 
 const { t } = useI18n({ useScope: 'global' });
@@ -136,8 +136,8 @@ function updateLanguage(value: unknown) {
 }
 
 function updateTheme(value: unknown) {
-  if (typeof value !== 'string' || !Object.values(THEME_IDS).includes(value)) return;
-  form.theme = value as AppSettings['theme'];
+  if (!isThemeId(value)) return;
+  form.theme = value;
   save();
 }
 </script>

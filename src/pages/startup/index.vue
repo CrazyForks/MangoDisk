@@ -39,12 +39,19 @@ import { MacOsPermissionService } from '@/lib/services/macos-permission-service'
 import { MacOsSystemSettingsService } from '@/lib/services/macos-system-settings-service';
 import { LoggerService } from '@/lib/services/logger-service';
 import { OperatingSystemService } from '@/lib/services/operating-system-service';
-import { FormatUtils } from '@/lib/utils/format';
-import { RenderBatchUtils } from '@/lib/utils/render-batch';
+import * as FormatUtils from '@/lib/utils/format';
+import * as RenderBatchUtils from '@/lib/utils/render-batch';
 
 import MdStartupRow from './components/md-startup-row.vue';
 import { startupGroupIconUrl } from './startup-brand-icon';
-import { enqueueStartupChange, queuedStartupItemIds, type StartupQueuedChange } from './startup-change-queue';
+import {
+  cancelQueuedStartupChanges,
+  completeStartupChange,
+  createStartupChangeWorkflow,
+  dispatchNextStartupChange,
+  enqueueStartupWorkflow,
+  queuedStartupItemIds,
+} from './startup-change-queue';
 
 import {
   defaultStartupGroups,
@@ -100,8 +107,7 @@ const permissionPromptOpen = ref(false);
 const permissionPromptShown = ref(false);
 const iconUrls = ref<ReadonlyMap<string, string>>(new Map());
 const visibleCount = ref(STARTUP_RENDER_BATCH_SIZE);
-const queuedChanges = ref<StartupQueuedChange[]>([]);
-const activeChange = ref<StartupQueuedChange | null>(null);
+const changeWorkflow = ref(createStartupChangeWorkflow());
 const changeFeedback = ref<{
   displayName: string;
   desiredState: StartupDesiredState;
@@ -133,7 +139,7 @@ const remainingResultCount = computed(() =>
 const changeBusy = computed(
   () => props.preparingChange || props.executingChange || props.cancellingChange || Boolean(props.pendingPlan)
 );
-const pendingChangeItemIds = computed(() => queuedStartupItemIds(activeChange.value, queuedChanges.value));
+const pendingChangeItemIds = computed(() => queuedStartupItemIds(changeWorkflow.value));
 const changeQueueBusy = computed(() => changeBusy.value || pendingChangeItemIds.value.size > 0);
 const backgroundTasksNeedPermission = computed(() =>
   needsBackgroundTaskPermission(isMacOs, props.catalog?.coverage ?? [])
@@ -183,7 +189,7 @@ watch(
 watch(
   () => props.pendingPlan,
   plan => {
-    const request = activeChange.value;
+    const request = changeWorkflow.value.activeChange;
     if (!plan || !request) return;
     if (startupPlanRequiresReview(plan, request.itemIds.length, request.requiresReview)) {
       changeOpen.value = true;
@@ -196,7 +202,7 @@ watch(
 watch(
   () => props.preparingChange,
   (preparing, wasPreparing) => {
-    if (!preparing && wasPreparing && !props.pendingPlan && activeChange.value) {
+    if (!preparing && wasPreparing && !props.pendingPlan && changeWorkflow.value.activeChange) {
       changeFeedback.value = null;
       completeActiveChange();
     }
@@ -314,7 +320,7 @@ function loadMoreResults() {
 
 function isChanging(group: StartupOwnerGroup): boolean {
   const manageableItemIds = new Set(manageableArtifacts(group).map(artifact => artifact.itemId));
-  return [activeChange.value, ...queuedChanges.value].some(
+  return [changeWorkflow.value.activeChange, ...changeWorkflow.value.queuedChanges].some(
     change => change?.desiredState !== 'removed' && change?.itemIds.some(itemId => manageableItemIds.has(itemId))
   );
 }
@@ -340,9 +346,9 @@ function requestArtifactChange(artifact: StartupArtifact) {
 }
 
 function requestChange(itemIds: string[], desiredState: StartupDesiredState, requiresReview = false) {
-  if (!itemIds.length || itemIds.some(itemId => activeChange.value?.itemIds.includes(itemId))) return;
-  queuedChanges.value = enqueueStartupChange(
-    queuedChanges.value,
+  if (!itemIds.length || itemIds.some(itemId => changeWorkflow.value.activeChange?.itemIds.includes(itemId))) return;
+  changeWorkflow.value = enqueueStartupWorkflow(
+    changeWorkflow.value,
     itemIds,
     desiredState,
     STARTUP_CHANGE_BATCH_LIMIT,
@@ -352,26 +358,26 @@ function requestChange(itemIds: string[], desiredState: StartupDesiredState, req
     desiredState,
     requiresReview,
     requestedItemCount: itemIds.length,
-    queuedBatchCount: queuedChanges.value.length,
+    queuedBatchCount: changeWorkflow.value.queuedChanges.length,
     pendingItemCount: pendingChangeItemIds.value.size,
   });
   scheduleNextChange(STARTUP_CHANGE_BATCH_WINDOW_MS);
 }
 
 function scheduleNextChange(delayMs: number) {
-  if (changeDispatchTimer || activeChange.value || !queuedChanges.value.length) return;
+  if (changeDispatchTimer || changeWorkflow.value.activeChange || !changeWorkflow.value.queuedChanges.length) return;
   changeDispatchTimer = setTimeout(() => {
     changeDispatchTimer = null;
-    if (changeBusy.value || activeChange.value) return;
-    const [nextChange, ...remaining] = queuedChanges.value;
+    if (changeBusy.value || changeWorkflow.value.activeChange) return;
+    const dispatch = dispatchNextStartupChange(changeWorkflow.value);
+    const nextChange = dispatch.change;
     if (!nextChange) return;
-    queuedChanges.value = remaining;
-    activeChange.value = nextChange;
+    changeWorkflow.value = dispatch.workflow;
     LoggerService.info(LOG_DOMAINS.startup, LOG_EVENTS.startupChangeBatchDispatched, {
       desiredState: nextChange.desiredState,
       itemCount: nextChange.itemIds.length,
       requiresReview: Boolean(nextChange.requiresReview),
-      remainingBatchCount: remaining.length,
+      remainingBatchCount: dispatch.workflow.queuedChanges.length,
     });
     changeFeedback.value = {
       displayName:
@@ -386,22 +392,21 @@ function scheduleNextChange(delayMs: number) {
 }
 
 function completeActiveChange() {
-  activeChange.value = null;
+  changeWorkflow.value = completeStartupChange(changeWorkflow.value);
   scheduleNextChange(0);
 }
 
 function cancelQueuedChanges() {
-  const queuedBatchCount = queuedChanges.value.length;
-  const queuedItemCount = queuedChanges.value.reduce((count, change) => count + change.itemIds.length, 0);
-  queuedChanges.value = [];
+  const cancellation = cancelQueuedStartupChanges(changeWorkflow.value);
+  changeWorkflow.value = cancellation.workflow;
   if (changeDispatchTimer) {
     clearTimeout(changeDispatchTimer);
     changeDispatchTimer = null;
   }
-  if (queuedBatchCount) {
+  if (cancellation.cancelledBatchCount) {
     LoggerService.info(LOG_DOMAINS.startup, LOG_EVENTS.startupChangeQueueCancelled, {
-      queuedBatchCount,
-      queuedItemCount,
+      queuedBatchCount: cancellation.cancelledBatchCount,
+      queuedItemCount: cancellation.cancelledItemCount,
     });
   }
 }
@@ -517,7 +522,7 @@ function updateChangeOpen(open: boolean) {
           <MdCategoryFilter
             :model-value="stateFilter"
             :options="filterOptions"
-            :aria-label="t('startup.filterLabel')"
+            :accessibility-label="t('startup.filterLabel')"
             :disabled="changeQueueBusy"
             @update:model-value="updateStateFilter"
           />

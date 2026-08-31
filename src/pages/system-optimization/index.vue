@@ -307,7 +307,7 @@ onMounted(() => {
             :model-value="activeCategory"
             :options="categoryOptions"
             :disabled="busy"
-            :aria-label="t('systemOptimization.filterCategory')"
+            :accessibility-label="t('systemOptimization.filterCategory')"
             @update:model-value="updateCategory"
           />
         </MdResultFilterToolbar>

@@ -250,7 +250,7 @@ onUnmounted(() => {
             :model-value="activeCategory"
             :options="categoryOptions"
             :disabled="store.scanning"
-            :aria-label="t('systemMaintenance.filterCategory')"
+            :accessibility-label="t('systemMaintenance.filterCategory')"
             @update:model-value="updateCategory"
           />
         </MdResultFilterToolbar>
@@ -412,6 +412,7 @@ onUnmounted(() => {
 .item-details {
   position: relative;
   display: flex;
+  width: 100%;
   min-width: 0;
   height: 20px;
   align-items: center;

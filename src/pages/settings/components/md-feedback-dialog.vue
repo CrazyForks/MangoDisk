@@ -380,7 +380,7 @@ onMounted(() => {
   <Dialog :open="props.open" @update:open="updateOpen">
     <MdDialogContent
       class="feedback-dialog flex min-h-0 flex-col"
-      :height="submittedId ? 'auto' : 'tall'"
+      height="auto"
       :show-close="!submitting && !addingAttachments"
       size="wide"
       @interact-outside="preventOutsideDismiss"
@@ -607,7 +607,9 @@ onMounted(() => {
 
 .feedback-body {
   display: grid;
+  flex: 1 1 auto;
   min-height: 0;
+  align-content: start;
   gap: 15px;
   overflow-y: auto;
   padding: 16px var(--layout-dialog-body-inline-padding);

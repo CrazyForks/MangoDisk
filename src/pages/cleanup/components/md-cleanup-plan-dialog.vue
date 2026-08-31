@@ -15,7 +15,7 @@ import type {
   ApplicationCloseMode,
 } from '@/lib/models/application-close';
 import { ByteSizeService } from '@/lib/services/byte-size-service';
-import { FormatUtils } from '@/lib/utils/format';
+import * as FormatUtils from '@/lib/utils/format';
 import { cleanupApplicationCloseGroups, cleanupApplicationCloseRetry } from '../cleanup-application-close';
 
 const { t } = useI18n({ useScope: 'global' });
@@ -84,6 +84,9 @@ const planItems = computed(() => {
 
   return items.sort((left, right) => right.bytes - left.bytes);
 });
+const usesScrollableLayout = computed(
+  () => planItems.value.length > 6 || closeGroups.value.length > 0 || closePhase.value === 'force'
+);
 
 watch(
   () => props.modelValue,
@@ -132,8 +135,13 @@ function preventOutsideDismiss(event: Event) {
 
 <template>
   <Dialog :open="modelValue" @update:open="emit('update:modelValue', $event)">
-    <MdDialogContent class="flex min-h-0 flex-col" size="wide" @interact-outside="preventOutsideDismiss">
-      <MdDialogHeader class="flex-none">
+    <MdDialogContent
+      class="cleanup-plan-dialog"
+      :height="usesScrollableLayout ? 'tall' : 'auto'"
+      size="wide"
+      @interact-outside="preventOutsideDismiss"
+    >
+      <MdDialogHeader>
         <DialogTitle>{{ t('cleanup.planDialogTitle') }}</DialogTitle>
         <DialogDescription class="plan-summary">
           <span>
@@ -145,7 +153,7 @@ function preventOutsideDismiss(event: Event) {
         </DialogDescription>
       </MdDialogHeader>
 
-      <div class="plan-scroll-region scrollbar-stable">
+      <div class="plan-dialog-body scrollbar-stable">
         <p v-if="requiresAppClose && closePhase === 'selection'" class="process-warning">
           {{ t('cleanup.closeAppsBeforeCleanup') }}
         </p>
@@ -220,9 +228,15 @@ function preventOutsideDismiss(event: Event) {
   font-weight: 600;
 }
 
-.plan-scroll-region {
+:global(.cleanup-plan-dialog) {
+  display: grid;
   min-height: 0;
-  flex: 1 1 auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.plan-dialog-body {
+  min-width: 0;
+  min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
 }

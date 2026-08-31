@@ -16,12 +16,12 @@ import MdStatusBadge from '@/components/custom/md-status-badge.vue';
 import MdIcon from '@/components/icons/md-icon.vue';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogDescription, DialogTitle } from '@/components/ui/dialog';
-import { ICON_NAMES } from '@/lib/models/ui';
+import { ICON_NAMES, type IconName } from '@/lib/models/ui';
 import type { ApplicationUninstallApplicationDetails, PresentedOperationRecord } from '@/lib/models/history';
 import type { ApplicationLeftoverActionResult, ApplicationUninstallActionResult } from '@/lib/models/application';
 import { ByteSizeService } from '@/lib/services/byte-size-service';
-import { FormatUtils } from '@/lib/utils/format';
-import { PathUtils } from '@/lib/utils/path';
+import * as FormatUtils from '@/lib/utils/format';
+import * as PathUtils from '@/lib/utils/path';
 
 const { locale, t } = useI18n({ useScope: 'global' });
 
@@ -32,6 +32,7 @@ const detailOpen = ref(false);
 const clearConfirmOpen = ref(false);
 const selectedRecord = ref<PresentedOperationRecord | null>(null);
 const selectedDetails = computed(() => selectedRecord.value?.details.payload ?? null);
+const usesTallDetailDialog = computed(() => (selectedRecord.value?.selectedItemCount ?? 0) > 4);
 const selectedUninstallApplications = computed<ApplicationUninstallApplicationDetails[]>(() => {
   const record = selectedRecord.value;
   if (record?.details.type !== 'applicationUninstall') return [];
@@ -68,7 +69,7 @@ function operationTitle(record: PresentedOperationRecord): string {
   return t(`history.categories.${record.category}`);
 }
 
-function operationIcon(record: PresentedOperationRecord): string {
+function operationIcon(record: PresentedOperationRecord): IconName {
   if (record.category === 'deepCleanup') return ICON_NAMES.deepCleanup;
   if (record.category === 'largeFileCleanup') return ICON_NAMES.largeFiles;
   if (record.category === 'duplicateFileCleanup') return ICON_NAMES.duplicateFiles;
@@ -213,52 +214,58 @@ function fileCleanupActionMessage(status: 'deleted' | 'failed'): string {
       />
     </MdResultWorkspace>
 
-    <MdResultTable v-else class="history-list">
-      <template #header>
-        <div class="history-list-header" aria-hidden="true">
-          <span>{{ t('history.operation') }}</span>
-          <span>{{ t('history.planned') }}</span>
-          <span>{{ t('history.resultSpace') }}</span>
-        </div>
-      </template>
-      <MdResultTableRow v-for="record in history" :key="record.operationId" class="history-record-row">
-        <button class="record" type="button" @click="openDetails(record)">
-          <span class="record-icon" :class="{ preview: record.dryRun }">
-            <MdIcon :name="record.dryRun ? ICON_NAMES.search : operationIcon(record)" :size="18" />
-          </span>
-          <span class="record-main">
-            <span>
-              <strong class="md-result-primary">{{ operationTitle(record) }}</strong>
-              <MdStatusBadge v-if="record.failedItemCount" size="compact" tone="warning">
-                {{ t('history.statusWarnings') }}
-              </MdStatusBadge>
+    <MdResultWorkspace v-else>
+      <MdResultTable class="history-list" header-variant="plain">
+        <template #header>
+          <div class="history-list-header" aria-hidden="true">
+            <span>{{ t('history.operation') }}</span>
+            <span>{{ t('history.planned') }}</span>
+            <span>{{ t('history.resultSpace') }}</span>
+          </div>
+        </template>
+        <MdResultTableRow v-for="record in history" :key="record.operationId" class="history-record-row">
+          <button class="record" type="button" @click="openDetails(record)">
+            <span class="record-icon" :class="{ preview: record.dryRun }">
+              <MdIcon :name="record.dryRun ? ICON_NAMES.search : operationIcon(record)" :size="18" />
             </span>
-            <small>
-              {{ FormatUtils.dateTime(record.startedAtMs, locale) }} ·
-              {{ recordSummary(record) }}
-            </small>
-          </span>
-          <strong class="record-byte">
-            {{
-              countBasedRecord(record)
-                ? FormatUtils.integer(record.selectedItemCount)
-                : ByteSizeService.bytes(record.expectedBytes)
-            }}
-          </strong>
-          <strong class="record-byte">
-            {{
-              countBasedRecord(record)
-                ? FormatUtils.integer(record.affectedItemCount)
-                : ByteSizeService.bytes(displayedReleasedBytes(record))
-            }}
-          </strong>
-          <MdIcon class="record-chevron" :name="ICON_NAMES.chevronRight" :size="17" />
-        </button>
-      </MdResultTableRow>
-    </MdResultTable>
+            <span class="record-main">
+              <span>
+                <strong class="md-result-primary">{{ operationTitle(record) }}</strong>
+                <MdStatusBadge v-if="record.failedItemCount" size="compact" tone="warning">
+                  {{ t('history.statusWarnings') }}
+                </MdStatusBadge>
+              </span>
+              <small>
+                {{ FormatUtils.dateTime(record.startedAtMs, locale) }} ·
+                {{ recordSummary(record) }}
+              </small>
+            </span>
+            <strong class="record-byte">
+              {{
+                countBasedRecord(record)
+                  ? FormatUtils.integer(record.selectedItemCount)
+                  : ByteSizeService.bytes(record.expectedBytes)
+              }}
+            </strong>
+            <strong class="record-byte">
+              {{
+                countBasedRecord(record)
+                  ? FormatUtils.integer(record.affectedItemCount)
+                  : ByteSizeService.bytes(displayedReleasedBytes(record))
+              }}
+            </strong>
+            <MdIcon class="record-chevron" :name="ICON_NAMES.chevronRight" :size="17" />
+          </button>
+        </MdResultTableRow>
+      </MdResultTable>
+    </MdResultWorkspace>
 
     <Dialog v-model:open="detailOpen">
-      <MdDialogContent class="min-h-0 grid-rows-[auto_auto_minmax(0,1fr)_auto]" size="wide">
+      <MdDialogContent
+        class="min-h-0 grid-rows-[auto_auto_minmax(0,1fr)_auto]"
+        :height="usesTallDetailDialog ? 'tall' : 'auto'"
+        size="wide"
+      >
         <MdDialogHeader>
           <DialogTitle>{{ t('history.detailTitle') }}</DialogTitle>
           <DialogDescription>{{ t('history.detailDescription') }}</DialogDescription>
@@ -531,13 +538,6 @@ function fileCleanupActionMessage(status: 'deleted' | 'failed'): string {
 
 .history-list {
   --result-table-content-inline-padding: 0px;
-
-  min-height: 0;
-  flex: 1;
-  overflow: hidden;
-  border-width: 1px;
-  border-radius: 11px;
-  @apply border-border/70 bg-card text-card-foreground;
 }
 
 .history-list-header,

@@ -61,10 +61,16 @@ const sizeClass = {
   </DialogContent>
 </template>
 
-<style scoped>
+<style>
+/*
+ * DialogContent is teleported to document.body by the generated primitive.
+ * Scoped selectors stay on this wrapper's local subtree and therefore cannot
+ * constrain the teleported node. These project-prefixed classes intentionally
+ * remain global so every real dialog receives the viewport safety boundary.
+ */
 .md-dialog-content {
   width: calc(100% - var(--layout-dialog-viewport-inset) - var(--layout-dialog-viewport-inset));
-  max-height: calc(100dvh - var(--layout-dialog-viewport-inset) - var(--layout-dialog-viewport-inset));
+  max-height: calc(100vh - var(--layout-dialog-viewport-inset) - var(--layout-dialog-viewport-inset));
   gap: 0;
   overflow: hidden;
   padding: 0;
@@ -73,7 +79,7 @@ const sizeClass = {
 .md-dialog-content--tall {
   height: min(
     var(--layout-dialog-tall-height),
-    calc(100dvh - var(--layout-dialog-viewport-inset) - var(--layout-dialog-viewport-inset))
+    calc(100vh - var(--layout-dialog-viewport-inset) - var(--layout-dialog-viewport-inset))
   );
 }
 </style>

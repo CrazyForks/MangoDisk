@@ -9,9 +9,9 @@ import { Button } from '@/components/ui/button';
 import { CLEANUP_OPERATION_IDS } from '@/lib/models/cleanup';
 import { ICON_NAMES } from '@/lib/models/ui';
 import { ByteSizeService } from '@/lib/services/byte-size-service';
-import { CleanupRuleTextUtils } from '@/lib/utils/cleanup-rule-text';
-import { FormatUtils } from '@/lib/utils/format';
-import { PathUtils } from '@/lib/utils/path';
+import * as CleanupRuleTextUtils from '@/lib/utils/cleanup-rule-text';
+import * as FormatUtils from '@/lib/utils/format';
+import * as PathUtils from '@/lib/utils/path';
 import { useApplicationStore } from '@/stores/application-store';
 import { useCleanupStore } from '@/stores/cleanup-store';
 
@@ -39,7 +39,8 @@ let loadingClockTimer: ReturnType<typeof setInterval> | null = null;
 const cleanupScanning = computed(
   () =>
     cleanupStore.loading &&
-    [CLEANUP_OPERATION_IDS.scanning, CLEANUP_OPERATION_IDS.cancelling].includes(cleanupStore.operation)
+    (cleanupStore.operation === CLEANUP_OPERATION_IDS.scanning ||
+      cleanupStore.operation === CLEANUP_OPERATION_IDS.cancelling)
 );
 const visible = computed(() => (cleanupStore.loading && !cleanupScanning.value) || applicationStore.deletingLeftovers);
 const executionActive = computed(

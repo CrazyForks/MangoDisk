@@ -26,8 +26,8 @@ import { ICON_NAMES } from '@/lib/models/ui';
 import { FileManagerService } from '@/lib/services/file-manager-service';
 import { FolderSelectionService } from '@/lib/services/folder-selection-service';
 import { NativeDragDropService, type NativeDragDropEvent } from '@/lib/services/native-drag-drop-service';
-import { PathUtils } from '@/lib/utils/path';
-import { CustomCleanupPreferenceUtils } from '@/lib/utils/custom-cleanup-preference';
+import * as PathUtils from '@/lib/utils/path';
+import * as CustomCleanupPreferenceUtils from '@/lib/utils/custom-cleanup-preference';
 import { useAppStore } from '@/stores/app-store';
 import { useCustomCleanupStore } from '@/stores/custom-cleanup-store';
 import { customCleanupDraftFingerprint, customCleanupPersistedState } from '../custom-cleanup-dialog-state';
@@ -218,9 +218,9 @@ function removeDirectory(path: string) {
   rule.roots = rule.roots.filter(item => PathUtils.comparisonKey(item) !== key);
 }
 
-function setPatterns(value: string) {
+function setPatterns(value: string | undefined) {
   if (!activeRule.value) return;
-  activeRule.value.namePatterns = value
+  activeRule.value.namePatterns = (value ?? '')
     .split(',')
     .map(pattern => pattern.trim())
     .filter(Boolean);
@@ -230,11 +230,12 @@ function sizeInMb(bytes: number | null): string {
   return bytes === null ? '' : String(bytes / MEBIBYTE);
 }
 
-function setSize(kind: 'minimumBytes' | 'maximumBytes', value: string) {
+function setSize(kind: 'minimumBytes' | 'maximumBytes', value: string | undefined) {
   const rule = activeRule.value;
   if (!rule) return;
-  const number = Number(value);
-  rule[kind] = value.trim() === '' || !Number.isFinite(number) || number < 0 ? null : Math.round(number * MEBIBYTE);
+  const text = value ?? '';
+  const number = Number(text);
+  rule[kind] = text.trim() === '' || !Number.isFinite(number) || number < 0 ? null : Math.round(number * MEBIBYTE);
 }
 
 function setModifiedMode(value: unknown) {
@@ -244,11 +245,15 @@ function setModifiedMode(value: unknown) {
   rule.modifiedTime = mode === 'any' ? { mode } : { mode, days: 30 };
 }
 
-function setModifiedDays(value: string) {
+function setModifiedDays(value: string | undefined) {
   const rule = activeRule.value;
   if (!rule || rule.modifiedTime.mode === 'any') return;
-  const days = Number(value);
+  const days = Number(value ?? '');
   rule.modifiedTime.days = Number.isSafeInteger(days) ? days : 0;
+}
+
+function modifiedDays(rule: CustomCleanupRule): string {
+  return rule.modifiedTime.mode === 'any' ? '' : String(rule.modifiedTime.days);
 }
 
 async function persist(scan: boolean) {
@@ -575,7 +580,7 @@ onBeforeUnmount(() => {
                   :max="MAX_CUSTOM_CLEANUP_FILTER_DAYS"
                   :aria-invalid="validationRequested && activeRuleModifiedTimeInvalid"
                   :disabled="activeRule.modifiedTime.mode === 'any'"
-                  :model-value="String(activeRule.modifiedTime.days)"
+                  :model-value="modifiedDays(activeRule)"
                   @update:model-value="setModifiedDays"
                 />
               </div>

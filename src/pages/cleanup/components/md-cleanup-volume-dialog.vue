@@ -13,8 +13,8 @@ import { Dialog, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import type { DiskInfo } from '@/lib/models/disk';
 import { ICON_NAMES } from '@/lib/models/ui';
 import { ByteSizeService } from '@/lib/services/byte-size-service';
-import { FormatUtils } from '@/lib/utils/format';
-import { PathUtils } from '@/lib/utils/path';
+import * as FormatUtils from '@/lib/utils/format';
+import * as PathUtils from '@/lib/utils/path';
 
 const props = defineProps<{
   disks: DiskInfo[];

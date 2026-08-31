@@ -21,7 +21,7 @@ import {
 import { PROJECT_LINKS } from '@/lib/models/application-shell';
 import { LANGUAGE_OPTIONS } from '@/lib/models/settings';
 import { ICON_NAMES } from '@/lib/models/ui';
-import { AppUpdateProgressUtils } from '@/lib/utils/app-update-progress';
+import * as AppUpdateProgressUtils from '@/lib/utils/app-update-progress';
 import { ByteSizeService } from '@/lib/services/byte-size-service';
 
 const props = defineProps<{
@@ -57,15 +57,14 @@ const restarting = computed(() => props.status === APP_UPDATE_STATUS_IDS.restart
 const closeLocked = computed(() => checking.value || installing.value || restarting.value);
 const updateAvailable = computed(() => props.status === APP_UPDATE_STATUS_IDS.available);
 const manualDownload = computed(() => props.action === APP_UPDATE_ACTION_IDS.manualDownload);
-const updateFocused = computed(() =>
-  [
-    APP_UPDATE_STATUS_IDS.available,
-    APP_UPDATE_STATUS_IDS.downloading,
-    APP_UPDATE_STATUS_IDS.downloaded,
-    APP_UPDATE_STATUS_IDS.installing,
-    APP_UPDATE_STATUS_IDS.restartRequired,
-    APP_UPDATE_STATUS_IDS.restarting,
-  ].includes(props.status)
+const updateFocused = computed(
+  () =>
+    props.status === APP_UPDATE_STATUS_IDS.available ||
+    props.status === APP_UPDATE_STATUS_IDS.downloading ||
+    props.status === APP_UPDATE_STATUS_IDS.downloaded ||
+    props.status === APP_UPDATE_STATUS_IDS.installing ||
+    props.status === APP_UPDATE_STATUS_IDS.restartRequired ||
+    props.status === APP_UPDATE_STATUS_IDS.restarting
 );
 const currentVersionLabel = computed(() => props.currentVersion || t('settings.versionUnknown'));
 const dialogTitle = computed(() => {

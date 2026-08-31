@@ -5,15 +5,17 @@ import { computed, ref } from 'vue';
 import MdEmptyState from '@/components/custom/md-empty-state.vue';
 import MdDestructiveActionDialog from '@/components/custom/md-destructive-action-dialog.vue';
 import MdDialogContent from '@/components/custom/md-dialog-content.vue';
+import MdDialogFooter from '@/components/custom/md-dialog-footer.vue';
 import MdDialogHeader from '@/components/custom/md-dialog-header.vue';
 import MdMiddleEllipsis from '@/components/custom/md-middle-ellipsis.vue';
 import MdPageShell from '@/components/custom/md-page-shell.vue';
 import MdResultTable from '@/components/custom/md-result-table.vue';
 import MdResultTableRow from '@/components/custom/md-result-table-row.vue';
 import MdResultWorkspace from '@/components/custom/md-result-workspace.vue';
+import MdStatusBadge from '@/components/custom/md-status-badge.vue';
 import MdIcon from '@/components/icons/md-icon.vue';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { ICON_NAMES } from '@/lib/models/ui';
 import type { ApplicationUninstallApplicationDetails, PresentedOperationRecord } from '@/lib/models/history';
 import type { ApplicationLeftoverActionResult, ApplicationUninstallActionResult } from '@/lib/models/application';
@@ -189,7 +191,7 @@ function fileCleanupActionMessage(status: 'deleted' | 'failed'): string {
 </script>
 
 <template>
-  <MdPageShell class="@container/history" content-mode="workspace" :title="t('history.title')">
+  <MdPageShell class="@container/history" content-mode="workspace" content-width="wide" :title="t('history.title')">
     <template v-if="history.length" #actions>
       <Button
         class="clear-history-button"
@@ -227,7 +229,9 @@ function fileCleanupActionMessage(status: 'deleted' | 'failed'): string {
           <span class="record-main">
             <span>
               <strong class="md-result-primary">{{ operationTitle(record) }}</strong>
-              <em v-if="record.failedItemCount">{{ t('history.statusWarnings') }}</em>
+              <MdStatusBadge v-if="record.failedItemCount" size="compact" tone="warning">
+                {{ t('history.statusWarnings') }}
+              </MdStatusBadge>
             </span>
             <small>
               {{ FormatUtils.dateTime(record.startedAtMs, locale) }} ·
@@ -254,10 +258,8 @@ function fileCleanupActionMessage(status: 'deleted' | 'failed'): string {
     </MdResultTable>
 
     <Dialog v-model:open="detailOpen">
-      <MdDialogContent
-        class="max-h-[84vh] min-h-0 grid-rows-[auto_auto_minmax(0,1fr)_auto] overflow-hidden p-0 sm:max-w-2xl"
-      >
-        <MdDialogHeader class="px-6 pt-6 pr-14">
+      <MdDialogContent class="min-h-0 grid-rows-[auto_auto_minmax(0,1fr)_auto]" size="wide">
+        <MdDialogHeader>
           <DialogTitle>{{ t('history.detailTitle') }}</DialogTitle>
           <DialogDescription>{{ t('history.detailDescription') }}</DialogDescription>
         </MdDialogHeader>
@@ -498,9 +500,9 @@ function fileCleanupActionMessage(status: 'deleted' | 'failed'): string {
           </template>
         </MdResultTable>
 
-        <DialogFooter class="border-t border-border/70 px-6 py-3.5">
+        <MdDialogFooter>
           <Button variant="outline" type="button" @click="detailOpen = false">{{ t('common.close') }}</Button>
-        </DialogFooter>
+        </MdDialogFooter>
       </MdDialogContent>
     </Dialog>
 
@@ -518,18 +520,6 @@ function fileCleanupActionMessage(status: 'deleted' | 'failed'): string {
 
 <style scoped>
 @reference "@assets/main.css";
-
-.history-list,
-.history-empty-workspace {
-  width: 100%;
-  max-width: 1280px;
-  margin-inline: auto;
-}
-
-:deep(.md-page-header) {
-  max-width: 1280px;
-  margin-inline: auto;
-}
 
 .clear-history-button {
   @apply border-0 bg-transparent text-muted-foreground shadow-none hover:text-destructive;
@@ -614,15 +604,6 @@ function fileCleanupActionMessage(status: 'deleted' | 'failed'): string {
 
 .record-main strong {
   font-size: var(--font-content-primary);
-}
-
-.record-main > span em {
-  border-radius: 999px;
-  padding: 3px 8px;
-  font-size: 10px;
-  font-style: normal;
-  @apply text-warning-foreground;
-  background: var(--surface-warning-subtle);
 }
 
 .record-main small {

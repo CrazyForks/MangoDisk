@@ -3,12 +3,13 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 
 import MdDialogContent from '@/components/custom/md-dialog-content.vue';
+import MdDialogFooter from '@/components/custom/md-dialog-footer.vue';
 import MdDialogHeader from '@/components/custom/md-dialog-header.vue';
 import MdIconAction from '@/components/custom/md-icon-action.vue';
 import MdIcon from '@/components/icons/md-icon.vue';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -305,8 +306,8 @@ onBeforeUnmount(() => {
 
 <template>
   <Dialog :open="modelValue" @update:open="emit('update:modelValue', $event)">
-    <MdDialogContent class="custom-dialog flex max-h-[calc(100dvh-1.5rem)] min-h-0 flex-col gap-0 overflow-hidden p-0">
-      <MdDialogHeader class="custom-dialog-header flex-none px-4 pt-3 pr-11">
+    <MdDialogContent class="custom-dialog flex min-h-0 flex-col" size="large">
+      <MdDialogHeader class="flex-none">
         <DialogTitle>{{ t('cleanup.customCleanup.title') }}</DialogTitle>
         <DialogDescription>{{ t('cleanup.customCleanup.description') }}</DialogDescription>
       </MdDialogHeader>
@@ -633,7 +634,7 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <DialogFooter class="custom-dialog-footer flex-none border-t border-border/70 px-4 py-2.5">
+      <MdDialogFooter align="between">
         <label class="standard-scan-option">
           <Checkbox v-model="includeStandardRules" />
           <span>{{ t('cleanup.customCleanup.includeStandardRules') }}</span>
@@ -649,7 +650,7 @@ onBeforeUnmount(() => {
             {{ t('cleanup.customCleanup.saveAndScan') }}
           </Button>
         </span>
-      </DialogFooter>
+      </MdDialogFooter>
     </MdDialogContent>
   </Dialog>
 </template>
@@ -658,22 +659,19 @@ onBeforeUnmount(() => {
 @reference "@assets/main.css";
 
 .custom-dialog {
-  height: min(700px, calc(100dvh - 24px));
-  min-height: min(700px, calc(100dvh - 24px));
-  width: min(900px, calc(100vw - 24px));
-  max-width: 900px;
-}
-
-.custom-dialog-header {
-  gap: 2px;
-  padding-bottom: 10px;
+  min-height: 0;
 }
 
 .custom-dialog-body {
   display: grid;
   min-height: 0;
-  flex: 1;
-  grid-template-columns: 185px minmax(0, 1fr);
+  /*
+   * The editor may shrink and scroll when the viewport is short, but it must
+   * not grow into unused dialog space. Growing here creates the detached
+   * footer divider that made the form look vertically unbalanced.
+   */
+  flex: 0 1 auto;
+  grid-template-columns: 170px minmax(0, 1fr);
   overflow: hidden;
   border-top: 1px solid var(--border-subtle);
 }
@@ -694,13 +692,13 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 2px;
   overflow-y: auto;
-  padding: 8px;
+  padding: 7px;
 }
 
 .rule-sidebar-footer {
   flex: none;
   border-top: 1px solid var(--border-subtle);
-  padding: 5px 7px;
+  padding: 4px 7px;
 }
 
 .rule-list-item {
@@ -800,9 +798,9 @@ onBeforeUnmount(() => {
   align-content: start;
   container-type: inline-size;
   grid-template-columns: minmax(0, 1fr);
-  gap: 12px;
+  gap: 10px;
   overflow-y: auto;
-  padding: 12px 16px 14px;
+  padding: 10px 14px;
 }
 
 .field {
@@ -813,7 +811,7 @@ onBeforeUnmount(() => {
 .field-heading {
   display: flex;
   min-width: 0;
-  min-height: 18px;
+  min-height: 17px;
   align-items: baseline;
   gap: 7px;
 }
@@ -821,7 +819,7 @@ onBeforeUnmount(() => {
 .field label,
 .field-label {
   font-size: var(--font-content-secondary);
-  font-weight: 600;
+  font-weight: var(--font-weight-label);
 }
 
 .pattern-example-trigger {
@@ -848,7 +846,7 @@ onBeforeUnmount(() => {
 
 .directory-header {
   display: flex;
-  min-height: 28px;
+  min-height: 26px;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
@@ -876,8 +874,8 @@ onBeforeUnmount(() => {
 .directory-drop-zone {
   @apply border-border/70 bg-muted/10;
   display: flex;
-  height: 154px;
-  min-height: 154px;
+  height: 126px;
+  min-height: 126px;
   flex-direction: column;
   overflow: hidden;
   border-width: 1px;
@@ -908,7 +906,7 @@ onBeforeUnmount(() => {
 .directory-item {
   @apply border-border/50 text-muted-foreground;
   display: grid;
-  min-height: 30px;
+  min-height: 28px;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 6px;
@@ -967,13 +965,13 @@ onBeforeUnmount(() => {
 .filter-fields {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 10px;
 }
 
 .compact-control {
   width: 100%;
   min-width: 0;
-  height: 34px;
+  height: 32px;
 }
 
 .compact-control.invalid {
@@ -993,8 +991,8 @@ onBeforeUnmount(() => {
 .modified-controls {
   display: grid;
   min-width: 0;
-  grid-template-columns: minmax(0, 1fr) 96px;
-  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .days-field-hidden {
@@ -1003,7 +1001,7 @@ onBeforeUnmount(() => {
 
 .modified-labels label {
   font-size: var(--font-content-secondary);
-  font-weight: 600;
+  font-weight: var(--font-weight-label);
 }
 
 .empty-directories {
@@ -1019,7 +1017,7 @@ onBeforeUnmount(() => {
 
 .rule-options {
   display: flex;
-  min-height: 28px;
+  min-height: 24px;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 24px;
@@ -1034,8 +1032,8 @@ onBeforeUnmount(() => {
 
 .rule-option label {
   cursor: pointer;
-  font-size: var(--font-content-primary);
-  font-weight: 600;
+  font-size: var(--font-content-secondary);
+  font-weight: var(--font-weight-label);
 }
 
 .rule-option-help {
@@ -1063,13 +1061,6 @@ onBeforeUnmount(() => {
   color: var(--muted-foreground);
 }
 
-.custom-dialog-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
 .field-error {
   overflow: hidden;
   color: var(--destructive);
@@ -1090,7 +1081,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 7px;
   font-size: var(--font-content-secondary);
-  font-weight: 500;
+  font-weight: var(--font-weight-label);
 }
 
 .dialog-actions {
@@ -1099,13 +1090,9 @@ onBeforeUnmount(() => {
   gap: 8px;
 }
 
-.dialog-actions > * {
-  height: 34px;
-}
-
 @container (max-width: 500px) {
   .custom-dialog-body {
-    grid-template-columns: 160px minmax(0, 1fr);
+    grid-template-columns: 150px minmax(0, 1fr);
   }
 
   .filter-fields {

@@ -3,9 +3,12 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { toast } from 'vue-sonner';
 
+import MdCategoryFilter from '@/components/custom/md-category-filter.vue';
 import MdDialogContent from '@/components/custom/md-dialog-content.vue';
+import MdDialogFooter from '@/components/custom/md-dialog-footer.vue';
 import MdDialogHeader from '@/components/custom/md-dialog-header.vue';
 import MdEmptyState from '@/components/custom/md-empty-state.vue';
+import MdInlineNotice from '@/components/custom/md-inline-notice.vue';
 import MdLoadMoreButton from '@/components/custom/md-load-more-button.vue';
 import MdOperationProgress from '@/components/custom/md-operation-progress.vue';
 import MdOperationWorkspace from '@/components/custom/md-operation-workspace.vue';
@@ -15,9 +18,10 @@ import MdResultSearch from '@/components/custom/md-result-search.vue';
 import MdResultSummary from '@/components/custom/md-result-summary.vue';
 import MdResultTable from '@/components/custom/md-result-table.vue';
 import MdResultWorkspace from '@/components/custom/md-result-workspace.vue';
+import MdSpinner from '@/components/custom/md-spinner.vue';
 import MdIcon from '@/components/icons/md-icon.vue';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import type {
   StartupArtifact,
   StartupCatalog,
@@ -112,6 +116,13 @@ const isMacOs = OperatingSystemService.isMacOs();
 const artifactsById = computed(() => indexStartupArtifacts(props.catalog?.artifacts ?? []));
 const defaultGroups = computed(() => defaultStartupGroups(props.catalog?.groups ?? [], artifactsById.value));
 const filterCounts = computed(() => startupFilterCounts(defaultGroups.value, artifactsById.value));
+const filterOptions = computed(() =>
+  (['all', 'enabled', 'disabled'] as const).map(value => ({
+    value,
+    label: t(`startup.filters.${value}`),
+    count: filterCounts.value[value],
+  }))
+);
 const filteredGroups = computed(() =>
   filterAndSortStartupGroups(defaultGroups.value, artifactsById.value, query.value, stateFilter.value, locale.value)
 );
@@ -134,6 +145,11 @@ const pendingPlanOnlyAffectsFutureLaunches = computed(
   () => props.pendingPlan?.desiredState === 'disabled' && Boolean(props.pendingPlan.items.length)
 );
 const pendingPlanRemovesOrphans = computed(() => props.pendingPlan?.desiredState === 'removed');
+
+function updateStateFilter(value: string) {
+  if (value === 'all' || value === 'enabled' || value === 'disabled') stateFilter.value = value;
+}
+
 watch(
   backgroundTasksNeedPermission,
   needsPermission => {
@@ -498,18 +514,13 @@ function updateChangeOpen(open: boolean) {
 
       <template v-if="catalog" #header>
         <MdResultFilterToolbar>
-          <div class="startup-filters scrollbar-hidden" :aria-label="t('startup.filterLabel')">
-            <button
-              v-for="filterId in ['all', 'enabled', 'disabled'] as const"
-              :key="filterId"
-              type="button"
-              :class="{ active: stateFilter === filterId }"
-              @click="stateFilter = filterId"
-            >
-              {{ t('startup.filters.' + filterId) }}
-              <span>{{ FormatUtils.integer(filterCounts[filterId]) }}</span>
-            </button>
-          </div>
+          <MdCategoryFilter
+            :model-value="stateFilter"
+            :options="filterOptions"
+            :aria-label="t('startup.filterLabel')"
+            :disabled="changeQueueBusy"
+            @update:model-value="updateStateFilter"
+          />
           <template #aside>
             <MdResultSearch v-model="query" :placeholder="t('startup.searchPlaceholderCompact')" />
           </template>
@@ -589,16 +600,15 @@ function updateChangeOpen(open: boolean) {
     </MdResultWorkspace>
 
     <Dialog v-model:open="permissionPromptOpen">
-      <MdDialogContent class="startup-permission-dialog p-0 sm:max-w-md">
-        <MdDialogHeader class="px-5 pt-5 pr-14 pb-3">
+      <MdDialogContent size="compact">
+        <MdDialogHeader>
           <DialogTitle>{{ t('startup.permission.title') }}</DialogTitle>
           <DialogDescription>{{ t('startup.permission.description') }}</DialogDescription>
         </MdDialogHeader>
-        <p class="permission-instructions">
-          <MdIcon :name="ICON_NAMES.info" :size="16" />
+        <MdInlineNotice class="permission-instructions" :icon-name="ICON_NAMES.info" tone="info">
           {{ t('startup.permission.instructions') }}
-        </p>
-        <DialogFooter class="border-t border-border/70 px-5 py-3.5">
+        </MdInlineNotice>
+        <MdDialogFooter>
           <Button variant="outline" type="button" @click="permissionPromptOpen = false">
             {{ t('startup.permission.skip') }}
           </Button>
@@ -606,13 +616,13 @@ function updateChangeOpen(open: boolean) {
             <MdIcon :name="ICON_NAMES.external" :size="15" />
             {{ t('startup.permission.openSettings') }}
           </Button>
-        </DialogFooter>
+        </MdDialogFooter>
       </MdDialogContent>
     </Dialog>
 
     <Dialog :open="changeOpen" @update:open="updateChangeOpen">
-      <MdDialogContent class="startup-change-dialog max-h-[78vh] overflow-hidden p-0 sm:max-w-lg">
-        <MdDialogHeader class="px-5 pt-5 pr-14 pb-3">
+      <MdDialogContent class="startup-change-dialog" size="standard">
+        <MdDialogHeader>
           <DialogTitle>{{
             t(pendingPlanRemovesOrphans ? 'startup.cleanup.title' : 'startup.change.title')
           }}</DialogTitle>
@@ -629,7 +639,7 @@ function updateChangeOpen(open: boolean) {
 
         <div class="change-plan-body scrollbar-stable-end">
           <div v-if="preparingChange" class="change-loading" role="status">
-            <span class="change-spinner md-operational-motion" aria-hidden="true" />
+            <MdSpinner />
             {{ t('startup.change.checking') }}
           </div>
           <template v-else-if="pendingPlan">
@@ -672,7 +682,7 @@ function updateChangeOpen(open: boolean) {
           </template>
         </div>
 
-        <DialogFooter class="border-t border-border/70 px-5 py-3.5">
+        <MdDialogFooter>
           <Button
             variant="outline"
             type="button"
@@ -688,18 +698,14 @@ function updateChangeOpen(open: boolean) {
             :aria-busy="executingChange"
             @click="emit('executeChange')"
           >
-            <span
-              v-if="executingChange"
-              class="change-action-spinner change-spinner md-operational-motion"
-              aria-hidden="true"
-            />
+            <MdSpinner v-if="executingChange" size="small" />
             {{
               executingChange
                 ? t('startup.change.applying')
                 : t(pendingPlanRemovesOrphans ? 'startup.cleanup.confirm' : 'startup.change.confirm')
             }}
           </Button>
-        </DialogFooter>
+        </MdDialogFooter>
       </MdDialogContent>
     </Dialog>
   </MdPageShell>
@@ -726,77 +732,7 @@ function updateChangeOpen(open: boolean) {
 }
 
 .permission-instructions {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  margin: 0 20px 18px;
-  border-radius: 10px;
-  padding: 10px 12px;
-  background: var(--surface-primary-subtle);
-  color: var(--muted-foreground);
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.permission-instructions :deep(svg) {
-  flex: none;
-  margin-top: 1px;
-  color: var(--primary);
-}
-
-.startup-filters {
-  display: flex;
-  min-width: 0;
-  gap: 4px;
-  overflow-x: auto;
-}
-
-.startup-filters button {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: 6px;
-  border: 0;
-  border-radius: 9px;
-  min-height: 32px;
-  padding: 5px 9px;
-  background: transparent;
-  color: var(--muted-foreground);
-  font: inherit;
-  font-size: 13px;
-  cursor: pointer;
-}
-
-.startup-filters button:hover,
-.startup-filters button.active {
-  @apply text-primary;
-  background: var(--surface-primary-subtle);
-}
-
-.startup-filters button:focus-visible {
-  outline: 2px solid var(--focus-ring-subtle);
-  outline-offset: -2px;
-}
-
-.startup-filters button span {
-  min-width: 16px;
-  padding: 2px;
-  color: var(--muted-foreground);
-  font-size: 11px;
-  text-align: center;
-}
-
-.change-spinner {
-  flex: none;
-  border: 1.5px solid var(--border-primary-subtle);
-  border-top-color: currentColor;
-  border-radius: 50%;
-  animation: startup-change-spin 0.72s linear infinite;
-}
-
-.change-action-spinner {
-  width: 13px;
-  height: 13px;
+  margin: 0 var(--layout-dialog-body-inline-padding) 14px;
 }
 
 .startup-change-dialog {
@@ -807,7 +743,7 @@ function updateChangeOpen(open: boolean) {
 .change-plan-body {
   min-height: 90px;
   overflow-y: auto;
-  padding: 0 20px 16px;
+  padding: 0 var(--layout-dialog-body-inline-padding) 14px;
 }
 
 .change-loading {
@@ -817,17 +753,6 @@ function updateChangeOpen(open: boolean) {
   gap: 8px;
   color: var(--muted-foreground);
   font-size: 12px;
-}
-
-.change-loading .change-spinner {
-  width: 15px;
-  height: 15px;
-}
-
-@keyframes startup-change-spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 .change-item {
@@ -885,11 +810,5 @@ function updateChangeOpen(open: boolean) {
   flex: none;
   margin-top: 1px;
   color: var(--primary);
-}
-
-@container startup (max-width: 520px) {
-  .startup-filters {
-    gap: 2px;
-  }
 }
 </style>

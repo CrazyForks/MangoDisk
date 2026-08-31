@@ -3,9 +3,10 @@ import { useI18n } from 'vue-i18n';
 import { computed, ref, watch } from 'vue';
 import MdApplicationClosePanel from '@/components/custom/md-application-close-panel.vue';
 import MdDialogContent from '@/components/custom/md-dialog-content.vue';
+import MdDialogFooter from '@/components/custom/md-dialog-footer.vue';
 import MdDialogHeader from '@/components/custom/md-dialog-header.vue';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import type { PresentedScanRuleResult } from '@/lib/models/cleanup';
 import type { CleanupApplicationIcon } from '@/lib/models/cleanup';
 import type {
@@ -131,11 +132,8 @@ function preventOutsideDismiss(event: Event) {
 
 <template>
   <Dialog :open="modelValue" @update:open="emit('update:modelValue', $event)">
-    <MdDialogContent
-      class="flex max-h-[calc(100dvh-1.5rem)] min-h-0 flex-col gap-0 overflow-hidden p-0 sm:max-h-[86dvh] sm:max-w-[720px]"
-      @interact-outside="preventOutsideDismiss"
-    >
-      <MdDialogHeader class="plan-header flex-none px-5 pt-4 pr-12">
+    <MdDialogContent class="flex min-h-0 flex-col" size="wide" @interact-outside="preventOutsideDismiss">
+      <MdDialogHeader class="flex-none">
         <DialogTitle>{{ t('cleanup.planDialogTitle') }}</DialogTitle>
         <DialogDescription class="plan-summary">
           <span>
@@ -176,7 +174,7 @@ function preventOutsideDismiss(event: Event) {
         </div>
       </div>
 
-      <DialogFooter v-if="closePhase === 'selection'" class="flex-none border-t border-border/70 px-5 py-3">
+      <MdDialogFooter v-if="closePhase === 'selection'">
         <Button variant="outline" type="button" :disabled="interactionBusy" @click="emit('update:modelValue', false)">
           {{ t('cleanup.adjustSelection') }}
         </Button>
@@ -193,25 +191,21 @@ function preventOutsideDismiss(event: Event) {
                 : t('cleanup.execute')
           }}
         </Button>
-      </DialogFooter>
-      <DialogFooter v-else class="flex-none border-t border-border/70 px-5 py-3">
+      </MdDialogFooter>
+      <MdDialogFooter v-else>
         <Button type="button" variant="outline" :disabled="interactionBusy" @click="emit('execute')">
           {{ t('applicationClose.skipAndContinue') }}
         </Button>
         <Button type="button" variant="destructive" :disabled="interactionBusy" @click="closeApplications('force')">
           {{ closingApplications ? t('applicationClose.closing') : t('applicationClose.forceAndContinue') }}
         </Button>
-      </DialogFooter>
+      </MdDialogFooter>
     </MdDialogContent>
   </Dialog>
 </template>
 
 <style scoped>
 @reference "@assets/main.css";
-
-.plan-header {
-  gap: 4px;
-}
 
 .plan-summary {
   display: flex;

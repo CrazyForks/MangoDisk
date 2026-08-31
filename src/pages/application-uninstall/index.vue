@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { toast } from 'vue-sonner';
 
+import MdCategoryFilter from '@/components/custom/md-category-filter.vue';
 import MdEmptyState from '@/components/custom/md-empty-state.vue';
 import MdOperationProgress from '@/components/custom/md-operation-progress.vue';
 import MdOperationWorkspace from '@/components/custom/md-operation-workspace.vue';
@@ -16,11 +17,14 @@ import MdResultWorkspace from '@/components/custom/md-result-workspace.vue';
 import MdSelectionActionBar from '@/components/custom/md-selection-action-bar.vue';
 import MdDestructiveActionDialog from '@/components/custom/md-destructive-action-dialog.vue';
 import MdApplicationClosePanel from '@/components/custom/md-application-close-panel.vue';
+import MdConfirmDialog from '@/components/custom/md-confirm-dialog.vue';
 import MdDialogContent from '@/components/custom/md-dialog-content.vue';
+import MdDialogFooter from '@/components/custom/md-dialog-footer.vue';
 import MdDialogHeader from '@/components/custom/md-dialog-header.vue';
+import MdInlineNotice from '@/components/custom/md-inline-notice.vue';
 import MdIcon from '@/components/icons/md-icon.vue';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import type {
   ApplicationUninstallBatchPlan,
   ApplicationUninstallBatchResult,
@@ -166,6 +170,13 @@ const filterCounts = computed(() => ({
   running: candidates.value.filter(candidate => applicationMatchesCatalogFilter(candidate, 'running')).length,
   unavailable: candidates.value.filter(candidate => applicationMatchesCatalogFilter(candidate, 'unavailable')).length,
 }));
+const filterOptions = computed(() =>
+  catalogFilters.map(value => ({
+    value,
+    label: t(`applicationUninstall.${value}`),
+    count: filterCounts.value[value],
+  }))
+);
 const nativeBatch = computed(
   () =>
     (Boolean(props.plan?.plans.length) &&
@@ -177,6 +188,11 @@ const nativeBatch = computed(
         candidate.components.some(component => component.kind === 'nativeInstaller')
       ))
 );
+
+function updateCatalogFilter(value: string) {
+  const nextFilter = catalogFilters.find(option => option === value);
+  if (nextFilter) filter.value = nextFilter;
+}
 const scanStage = computed(() => props.progress?.currentStage ?? 'discoveringApplications');
 const scanStageText = computed(() => {
   if (scanStage.value === 'checkingProcesses') return t('applicationUninstall.checkingProcesses');
@@ -607,18 +623,13 @@ function confirmCancelExecution() {
 
       <template v-if="catalog?.catalogActionable" #header>
         <MdResultFilterToolbar>
-          <div class="catalog-filters scrollbar-hidden">
-            <button
-              v-for="option in catalogFilters"
-              :key="option"
-              type="button"
-              :class="{ active: filter === option }"
-              @click="filter = option"
-            >
-              {{ t(`applicationUninstall.${option}`) }}
-              <span>{{ FormatUtils.integer(filterCounts[option]) }}</span>
-            </button>
-          </div>
+          <MdCategoryFilter
+            :model-value="filter"
+            :options="filterOptions"
+            :aria-label="t('applicationUninstall.filterLabel')"
+            :disabled="busy"
+            @update:model-value="updateCatalogFilter"
+          />
           <template #aside>
             <MdResultSearch v-model="query" :placeholder="t('applicationUninstall.searchPlaceholder')" />
           </template>
@@ -626,13 +637,16 @@ function confirmCancelExecution() {
       </template>
 
       <template v-if="catalog">
-        <div v-if="preview?.failedItemCount && !plan" class="preflight-notice">
-          <span><MdIcon :name="ICON_NAMES.info" :size="17" /></span>
-          <p>
-            <strong>{{ t('applicationUninstall.preflightFailed') }}</strong>
-            {{ t('applicationUninstall.batchPreflightFailedSummary') }}
-          </p>
-        </div>
+        <MdInlineNotice
+          v-if="preview?.failedItemCount && !plan"
+          class="catalog-notice"
+          :icon-name="ICON_NAMES.info"
+          :title="t('applicationUninstall.preflightFailed')"
+          tone="warning"
+          role="alert"
+        >
+          {{ t('applicationUninstall.batchPreflightFailedSummary') }}
+        </MdInlineNotice>
 
         <MdEmptyState
           v-if="!catalog.catalogActionable"
@@ -641,13 +655,14 @@ function confirmCancelExecution() {
           :description="t('applicationUninstall.incompleteDescription')"
         />
         <template v-else>
-          <section v-if="!catalog.executionSupported" class="capability-notice">
-            <MdIcon :name="ICON_NAMES.info" :size="19" />
-            <div>
-              <strong>{{ t('applicationUninstall.viewOnlyTitle') }}</strong>
-              <p>{{ t('applicationUninstall.viewOnlyDescription') }}</p>
-            </div>
-          </section>
+          <MdInlineNotice
+            v-if="!catalog.executionSupported"
+            class="catalog-notice"
+            :icon-name="ICON_NAMES.info"
+            :title="t('applicationUninstall.viewOnlyTitle')"
+          >
+            {{ t('applicationUninstall.viewOnlyDescription') }}
+          </MdInlineNotice>
 
           <section class="catalog">
             <MdEmptyState
@@ -867,10 +882,10 @@ function confirmCancelExecution() {
     </MdDestructiveActionDialog>
 
     <Dialog :open="closeDialogOpen" @update:open="updateCloseDialog">
-      <MdDialogContent class="flex max-h-[calc(100vh-3rem)] w-[calc(100%-3rem)] max-w-[620px] flex-col gap-0 p-0">
-        <MdDialogHeader class="px-6 pt-6 pr-14 pb-4">
+      <MdDialogContent class="flex min-h-0 flex-col" size="large" :show-close="!closingApplications">
+        <MdDialogHeader>
           <DialogTitle>{{ t('applicationUninstall.closeBeforeUninstallTitle') }}</DialogTitle>
-          <DialogDescription class="mt-2 leading-6">
+          <DialogDescription>
             {{
               closePhase === 'selection'
                 ? t('applicationUninstall.closeBeforeUninstallDescription')
@@ -892,7 +907,7 @@ function confirmCancelExecution() {
           <MdApplicationClosePanel v-else :items="remainingCloseItems" :selectable="false" />
         </div>
 
-        <DialogFooter class="border-t border-border/70 px-6 py-3.5">
+        <MdDialogFooter>
           <Button
             v-if="closePhase === 'selection'"
             variant="outline"
@@ -931,28 +946,19 @@ function confirmCancelExecution() {
                     : t('applicationClose.skipAndContinue')
             }}
           </Button>
-        </DialogFooter>
+        </MdDialogFooter>
       </MdDialogContent>
     </Dialog>
 
-    <Dialog :open="cancellationConfirmOpen" @update:open="cancellationConfirmOpen = $event">
-      <MdDialogContent class="w-[calc(100%-3rem)] max-w-[440px] gap-0 p-0">
-        <MdDialogHeader class="px-6 pt-6 pr-14 pb-4">
-          <DialogTitle>{{ t('applicationUninstall.cancelExecutionConfirmTitle') }}</DialogTitle>
-          <DialogDescription class="mt-2 leading-6">
-            {{ t('applicationUninstall.cancelExecutionConfirmDescription') }}
-          </DialogDescription>
-        </MdDialogHeader>
-        <DialogFooter class="border-t border-border/70 px-6 py-3.5">
-          <Button variant="outline" type="button" @click="cancellationConfirmOpen = false">
-            {{ t('common.cancel') }}
-          </Button>
-          <Button variant="destructive" type="button" @click="confirmCancelExecution">
-            {{ t('applicationUninstall.stopExecutionAction') }}
-          </Button>
-        </DialogFooter>
-      </MdDialogContent>
-    </Dialog>
+    <MdConfirmDialog
+      v-model:open="cancellationConfirmOpen"
+      :title="t('applicationUninstall.cancelExecutionConfirmTitle')"
+      :description="t('applicationUninstall.cancelExecutionConfirmDescription')"
+      :cancel-label="t('common.cancel')"
+      :confirm-label="t('applicationUninstall.stopExecutionAction')"
+      confirm-variant="destructive"
+      @confirm="confirmCancelExecution"
+    />
   </MdPageShell>
 </template>
 

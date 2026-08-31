@@ -3,12 +3,13 @@ import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 
 import MdDialogContent from '@/components/custom/md-dialog-content.vue';
+import MdDialogFooter from '@/components/custom/md-dialog-footer.vue';
 import MdDialogHeader from '@/components/custom/md-dialog-header.vue';
 import MdSafeRichText from '@/components/custom/md-safe-rich-text.vue';
 import MdIcon from '@/components/icons/md-icon.vue';
 import MdIconMangodisk from '@/components/icons/md-icon-mangodisk.vue';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import {
   APP_UPDATE_ACTION_IDS,
   APP_UPDATE_FAILURE_STAGE_IDS,
@@ -127,12 +128,8 @@ function downloadUpdate() {
 
 <template>
   <Dialog :open="open" @update:open="updateOpen">
-    <MdDialogContent
-      class="w-[calc(100%-2rem)] max-w-[520px] gap-0 overflow-hidden p-0"
-      :class="{ 'is-update-focused': updateFocused }"
-      :show-close="!closeLocked"
-    >
-      <MdDialogHeader class="about-dialog-header" :class="{ focused: updateFocused }">
+    <MdDialogContent :class="{ 'is-update-focused': updateFocused }" :show-close="!closeLocked" size="standard">
+      <MdDialogHeader class="about-dialog-header" :class="{ focused: updateFocused }" variant="brand">
         <span class="about-dialog-mark" aria-hidden="true">
           <MdIconMangodisk :size="updateFocused ? 46 : 58" />
         </span>
@@ -229,7 +226,7 @@ function downloadUpdate() {
         </div>
       </div>
 
-      <DialogFooter class="about-dialog-footer">
+      <MdDialogFooter class="about-dialog-footer">
         <template v-if="updateAvailable">
           <Button type="button" variant="outline" @click="emit('close')">{{ t('updates.notNow') }}</Button>
           <Button v-if="manualDownload" type="button" @click="emit('manualDownload')">
@@ -272,7 +269,7 @@ function downloadUpdate() {
             }}
           </Button>
         </template>
-      </DialogFooter>
+      </MdDialogFooter>
     </MdDialogContent>
   </Dialog>
 </template>
@@ -502,9 +499,6 @@ function downloadUpdate() {
 
 .about-dialog-footer {
   align-items: center;
-  border-top: 1px solid;
-  padding: 14px 28px 22px;
-  @apply border-border/70;
 }
 
 .about-dialog-footer :deep(button) {

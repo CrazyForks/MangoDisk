@@ -163,20 +163,6 @@ const selectionMode = computed<CleanupSelectionMode>(() => {
   if (cleanupMode === 'all' && selectedLeftoverCount === leftoverCount) return 'all';
   return 'manual';
 });
-const selectedRunningProcesses = computed(() => [
-  ...new Set(selectedRules.value.flatMap(rule => rule.runningProcesses)),
-]);
-const selectedRequiresAppClose = computed(() => selectedRules.value.some(rule => rule.requiresAppClose));
-const selectionHint = computed(() => {
-  if (selectedRunningProcesses.value.length) {
-    return t(
-      'cleanup.appsToCloseCount',
-      { count: FormatUtils.integer(selectedRunningProcesses.value.length) },
-      selectedRunningProcesses.value.length
-    );
-  }
-  return selectedRequiresAppClose.value ? t('cleanup.requiresClose') : undefined;
-});
 const scanning = computed(
   () =>
     props.scanningLeftovers ||
@@ -403,7 +389,6 @@ watch(
         :selected-value="t('common.itemCount', { count: FormatUtils.integer(selectedItemCount) }, selectedItemCount)"
         :space-label="t('common.estimatedRelease')"
         :space-value="ByteSizeService.bytes(totalSelectedBytes)"
-        :hint="selectionHint"
         :action-label="t('cleanup.clean')"
         :disabled="!selectedItemCount"
         :busy="busy"
@@ -446,7 +431,7 @@ watch(
       </template>
 
       <MdCleanupRuleGroups
-        class="embedded"
+        :embedded="true"
         :busy="busy"
         :leftovers="leftovers"
         :rules="scan.rules"

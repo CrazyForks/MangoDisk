@@ -7,12 +7,171 @@
     "large-files": "Large File Cleanup",
     "duplicate-files": "Duplicate Cleanup",
     "application-uninstall": "App Uninstaller",
+    "privacy": "Privacy Cleanup",
     "startup": "Startup Items",
     "history": "Operation History",
     "settings": "Settings"
   },
+  "privacy": {
+    "title": "Privacy Cleanup",
+    "idleTitle": "Find privacy traces",
+    "idleDescription": "Scan browser, app, and system activity",
+    "scan": "Scan now",
+    "rescan": "Scan again",
+    "scanning": "Finding privacy traces",
+    "scanningSource": "Checking {source}",
+    "scanningDescription": "Scanning does not change any data",
+    "executing": "Clearing",
+    "cancelling": "Stopping",
+    "clearSelected": "Clear selected",
+    "selectedSummary": "Selected",
+    "selectedPendingSummary": "{count} traces · {pending} pending scan",
+    "pendingScan": "Pending scan",
+    "categoryNavigation": "Privacy cleanup categories",
+    "traceCount": "{count} trace | {count} traces",
+    "categorySelected": "{count} trace selected | {count} traces selected",
+    "selectAllInCategory": "Select category",
+    "profileCount": "{count} profile | {count} profiles",
+    "toggleSource": "Toggle actionable items in {source}",
+    "toggleSourceDetails": "Expand or collapse cleanup details for {source}",
+    "toggleProfile": "Toggle actionable items in profile {profile}",
+    "timeRangeLabel": "Cleanup time range",
+    "toggleItem": "Toggle {item}",
+    "permission": {
+      "badge": "Full Disk Access required",
+      "summary": "Some data requires Full Disk Access",
+      "title": "Full Disk Access required",
+      "description": "Enable it to scan more app and system activity",
+      "instructions": "Enable Full Disk Access for MangoDisk in System Settings, then scan again",
+      "skip": "Not now",
+      "openSettings": "Open System Settings"
+    },
+    "details": {
+      "open": "View {item} details",
+      "title": "{item} details",
+      "loading": "Loading details",
+      "failed": "Details could not be loaded",
+      "retry": "Try again",
+      "aggregateOnly": "Only a total count is available",
+      "empty": "No details to display",
+      "loadMore": "Show more",
+      "unknown": "Unnamed record"
+    },
+    "completedTitle": "Privacy cleanup completed",
+    "completedDescription": "Cleared and verified {count} privacy traces",
+    "timeRanges": { "lastHour": "Last hour", "today": "Today", "lastSevenDays": "Last 7 days", "allTime": "All time" },
+    "selectionMode": {
+      "label": "Selection",
+      "smart": "Smart recommendation",
+      "all": "Select all",
+      "none": "Select none",
+      "manual": "Manual selection"
+    },
+    "categories": {
+      "browserActivity": "Browser activity",
+      "browserAccountState": "Browser accounts",
+      "applicationActivity": "Application activity",
+      "systemActivity": "System activity"
+    },
+    "categoryDescriptions": {
+      "browserActivity": "Browsing, search, download, and session records",
+      "browserAccountState": "Cookies, site data, and permissions",
+      "applicationActivity": "App caches, logs, sessions, and recent activity",
+      "systemActivity": "Clipboard, recent items, and system activity"
+    },
+    "emptyResultsTitle": "No privacy traces found",
+    "emptyResultsDescription": "There are no privacy cleanup items to show for this time range",
+    "kinds": {
+      "browsingHistory": "Browsing history",
+      "downloadHistory": "Download history",
+      "cookies": "Cookies and sign-in state",
+      "siteStorage": "Site storage",
+      "sitePermissions": "Site permissions",
+      "sessions": "Browser sessions",
+      "browserCache": "Browser cache",
+      "searchHistory": "Search history",
+      "websiteIcons": "Website icon records",
+      "frequentlyVisitedSites": "Frequently visited sites",
+      "addressBarShortcuts": "Address bar shortcuts",
+      "savedPasswords": "Saved passwords",
+      "autofillData": "Autofill data",
+      "currentClipboard": "Current clipboard",
+      "clipboardHistory": "Clipboard history",
+      "recentItems": "Recent items",
+      "recentApplications": "Recently used applications",
+      "applicationUsageHistory": "Application usage history",
+      "networkConnectionHistory": "Network connection history",
+      "folderViewHistory": "Folder view history",
+      "printerHistory": "Printer connection history",
+      "shellHistory": "Terminal and command history",
+      "jumpLists": "Application jump lists",
+      "runDialogHistory": "Run command history",
+      "fileDialogHistory": "File dialog history",
+      "systemSearchHistory": "File Explorer search history",
+      "explorerPathHistory": "File Explorer path history",
+      "applicationCache": "Application cache",
+      "applicationLogs": "Application logs",
+      "applicationSessions": "Application sessions",
+      "editorLocalHistory": "Editor local history",
+      "recentDocuments": "Recent documents",
+      "recentProjects": "Recent projects",
+      "recentConnections": "Recent connections",
+      "playbackHistory": "Playback history",
+      "recentPaths": "Recent paths",
+      "recentSearches": "Recent searches"
+    },
+    "capabilities": {
+      "ready": "Ready",
+      "empty": "No traces",
+      "browserRunning": "Close browser to clean",
+      "applicationRunning": "Close application to clean",
+      "scanAfterClose": "Scan after closing",
+      "permissionRequired": "Permission required",
+      "unsupported": "Not supported",
+      "schemaUnsupported": "Unknown data schema",
+      "unavailable": "Unavailable"
+    },
+    "recommendations": {
+      "reviewOnly": "View only"
+    },
+    "impacts": {
+      "workflow": "May affect recent workflows",
+      "signOut": "May sign out accounts",
+      "crossDevice": "May affect other devices",
+      "dataLoss": "May delete personal content",
+      "unknown": "Unknown impact"
+    },
+    "confirmation": {
+      "title": "Confirm privacy cleanup",
+      "closeBrowsers": "Some apps are running. Save your work, then choose whether to quit them",
+      "riskAcceptance": "I understand that selected items may sign out accounts or permanently delete personal data",
+      "confirm": "Clear now",
+      "skipRunningAndContinue": "Skip running apps and continue"
+    },
+    "result": {
+      "title": "Privacy cleanup result",
+      "successDescription": "Cleared and verified {count} privacy traces",
+      "partialDescription": "Cleared {count} privacy traces; {failed} items could not be completed",
+      "cleanedTraces": "Traces cleared",
+      "processedItems": "Items processed",
+      "incompleteItems": "Skipped or failed",
+      "unknownSource": "Privacy source",
+      "statuses": {
+        "cleared": "Cleared and verified",
+        "unchanged": "No change needed",
+        "failed": "Could not complete",
+        "cancelled": "Skipped"
+      }
+    },
+    "feedback": {
+      "completed": "Cleared and verified {count} privacy traces",
+      "completedWithWarnings": "Cleared {count} privacy traces; {failed} items could not be completed",
+      "noRemainingSelection": "Running browsers were skipped and no selected items remain"
+    }
+  },
   "navigationGroups": {
     "storage": "Storage",
+    "privacy": "Privacy & Security",
     "system": "System Tools"
   },
   "systemMaintenance": {
@@ -1187,14 +1346,14 @@
     "noManageableDescription": "No programs that can be turned on or off were found",
     "summary": {
       "programs": "{count} apps start automatically",
-      "permissionRequired": "Some startup items are hidden—Full Disk Access is required",
+      "permissionRequired": "Enable Full Disk Access for more startup items",
       "openPrivacySettings": "Open Full Disk Access settings",
       "enabled": "Enabled"
     },
     "permission": {
       "title": "Some startup items are not shown",
       "description": "Enable Full Disk Access to scan more startup items",
-      "instructions": "Allow MangoDisk in System Settings, then return and scan again",
+      "instructions": "Enable Full Disk Access for MangoDisk in System Settings, then return and scan again",
       "skip": "Not Now",
       "openSettings": "Open System Settings"
     },
@@ -1458,7 +1617,6 @@
     },
     "estimated": "Estimated cleanable data",
     "selectedSummary": "Selected items",
-    "requiresClose": "Apps to close",
     "clean": "Clean",
     "scanFirst": "Find cleanable items",
     "emptyDescription": "Scan system and app caches, logs, and temporary files to find cleanable data",
@@ -1482,7 +1640,6 @@
     "emptyCleanTitle": "Your computer is looking clean",
     "emptyCleanDescription": "No cleanable items found — keep it up",
     "selectedItemCount": "{count} item selected | {count} items selected",
-    "appsToCloseCount": "{count} app to close | {count} apps to close",
     "closeAppsBeforeCleanup": "Save your work first. Selected apps close before cleanup; items still in use are skipped",
     "requiresCloseProcesses": "Apps to close: {processes}",
     "applicationComponentCount": "No items available to optimize | {count} item available to optimize | {count} items available to optimize",
@@ -1847,6 +2004,14 @@
     "clearConfirmTitle": "Clear all operation history?",
     "clearConfirmDescription": "All operation records will be removed permanently. This cannot be undone, but no files will be deleted",
     "clearConfirmAction": "Clear History",
+    "privacyRecordSummary": "Selected {selected} privacy items and cleared {changed} traces",
+    "privacyItems": "Privacy cleanup items",
+    "privacyStatuses": {
+      "cleared": "Cleared and verified",
+      "unchanged": "No change needed",
+      "failed": "Could not complete",
+      "cancelled": "Cancelled"
+    },
     "emptyTitle": "No operation history yet",
     "emptyDescription": "Completed cleanup and system management operations will appear here",
     "categories": {
@@ -1855,7 +2020,8 @@
       "duplicateFileCleanup": "Duplicate File Cleanup",
       "applicationUninstall": "App Uninstaller",
       "startupManagement": "Startup Management",
-      "systemOptimization": "System Optimization"
+      "systemOptimization": "System Optimization",
+      "privacyCleanup": "Privacy Cleanup"
     },
     "operation": "Operation",
     "planned": "Planned",
@@ -2120,6 +2286,9 @@
     "cleanupItemPartial": "{count} processed and {size} released; some content was skipped",
     "cleanupItemSkipped": "This item was not processed; see the result for details",
     "cleanupItemDone": "Done",
+    "cleanupItemUnchanged": "No change needed",
+    "cleanupItemFailed": "Could not complete",
+    "cleanupItemCancelled": "Cancelled",
     "cleanupItemSkippedLabel": "Skipped",
     "cleanupItemActive": "Processing",
     "cleanupItemPending": "Waiting",

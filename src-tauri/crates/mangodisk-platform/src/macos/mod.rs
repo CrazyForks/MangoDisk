@@ -5,6 +5,7 @@ mod change_tracking;
 mod directories;
 mod directory_aggregate;
 mod inventory;
+mod privacy;
 mod privileged_uninstall;
 mod process_control;
 mod project_markers;
@@ -39,10 +40,10 @@ use crate::{
     FilesystemChangeImpactOutcome, FilesystemChangeMonitor, FilesystemChangeToken,
     LargeFileCandidateScanError, LargeFileCandidateSummary, Platform, PlatformCancellation,
     PlatformError, PlatformResult, PlatformSystemSettingChangeRequest,
-    PlatformSystemSettingChangeResult, PlatformSystemSettingState, ProjectMarkerCandidateProgress,
-    ProjectMarkerCandidateQuery, ProjectMarkerCandidateScanError, ProjectMarkerCandidateSummary,
-    ScanPurpose, SkipReason, StartupPlatform, SystemInventory, SystemMaintenancePlatform,
-    SystemSettingsPlatform, UserDirectories, VolumeInfo,
+    PlatformSystemSettingChangeResult, PlatformSystemSettingState, PrivacyPlatform,
+    ProjectMarkerCandidateProgress, ProjectMarkerCandidateQuery, ProjectMarkerCandidateScanError,
+    ProjectMarkerCandidateSummary, ScanPurpose, SkipReason, StartupPlatform, SystemInventory,
+    SystemMaintenancePlatform, SystemSettingsPlatform, UserDirectories, VolumeInfo,
 };
 
 const SPOTLIGHT_CANDIDATE_CHANNEL_CAPACITY: usize = 128;
@@ -50,6 +51,47 @@ const SPOTLIGHT_MAX_PATH_BYTES: u64 = 16 * 1024;
 const COMMAND_DIAGNOSTIC_LIMIT_BYTES: usize = 64 * 1024;
 
 pub struct MacOsPlatform;
+
+impl PrivacyPlatform for MacOsPlatform {
+    fn discover_privacy_sources(
+        &self,
+        cancellation: &PlatformCancellation,
+    ) -> PlatformResult<crate::PlatformPrivacyDiscovery> {
+        privacy::discover(cancellation)
+    }
+
+    fn clear_system_privacy_trace(
+        &self,
+        trace: crate::PlatformPrivacySystemTraceKind,
+    ) -> PlatformResult<bool> {
+        privacy::clear(trace)
+    }
+
+    fn clear_application_privacy_trace(
+        &self,
+        trace: crate::PlatformPrivacyApplicationNativeTraceKind,
+    ) -> PlatformResult<bool> {
+        privacy::clear_application_trace(trace)
+    }
+
+    fn system_privacy_trace_details(
+        &self,
+        trace: crate::PlatformPrivacySystemTraceKind,
+        offset: u64,
+        limit: u32,
+    ) -> PlatformResult<Vec<crate::PlatformPrivacyDetailEntry>> {
+        privacy::system_details(trace, offset, limit)
+    }
+
+    fn application_privacy_trace_details(
+        &self,
+        trace: crate::PlatformPrivacyApplicationNativeTraceKind,
+        offset: u64,
+        limit: u32,
+    ) -> PlatformResult<Vec<crate::PlatformPrivacyDetailEntry>> {
+        privacy::application_details(trace, offset, limit)
+    }
+}
 
 impl StartupPlatform for MacOsPlatform {
     fn scan_startup_sources(

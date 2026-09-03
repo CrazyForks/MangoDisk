@@ -45,7 +45,25 @@ pub enum MacOsPrivacyDestination {
 }
 
 impl MacOsPrivacyDestination {
-    fn settings_uri(self) -> &'static str {
+    fn settings_uri(self, macos_major_version: Option<u32>) -> &'static str {
+        // macOS 13 replaced the Security & Privacy preference pane with the
+        // Privacy & Security Settings extension. Opening a Ventura-style URI
+        // on Monterey merely raises System Preferences at its current pane,
+        // which leaves the user without actionable permission guidance.
+        if macos_major_version.is_some_and(|major| major < 13) {
+            return match self {
+                Self::ApplicationData => {
+                    "x-apple.systempreferences:com.apple.preference.security?Privacy_AppData"
+                }
+                Self::FilesAndFolders => {
+                    "x-apple.systempreferences:com.apple.preference.security?Privacy_FilesAndFolders"
+                }
+                Self::FullDiskAccess => {
+                    "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"
+                }
+            };
+        }
+
         match self {
             Self::ApplicationData => {
                 "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_AppData"
@@ -74,13 +92,35 @@ impl MacOsPrivacyDestination {
 #[tauri::command]
 pub async fn open_privacy_settings(destination: MacOsPrivacyDestination) -> CommandResult<()> {
     run_blocking("open_macos_privacy_settings", move || {
+        let macos_major_version = current_macos_major_version();
+        let settings_generation = if macos_major_version.is_some_and(|major| major < 13) {
+            "legacy"
+        } else {
+            "modern"
+        };
         log::info!(
-            "macos_privacy_settings_open_requested destination={}",
-            destination.diagnostic_name()
+            "macos_privacy_settings_open_requested destination={} settings_generation={} os_major={:?}",
+            destination.diagnostic_name(),
+            settings_generation,
+            macos_major_version
         );
-        open_settings_uri(destination.settings_uri())
+        open_settings_uri(destination.settings_uri(macos_major_version))
     })
     .await
+}
+
+#[cfg(target_os = "macos")]
+fn current_macos_major_version() -> Option<u32> {
+    tauri_plugin_os::version()
+        .to_string()
+        .split('.')
+        .next()
+        .and_then(|major| major.parse().ok())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn current_macos_major_version() -> Option<u32> {
+    None
 }
 
 /// Opens the fixed Login Items pane without exposing an arbitrary URL opener
@@ -116,10 +156,25 @@ mod tests {
             MacOsPrivacyDestination::FilesAndFolders,
             MacOsPrivacyDestination::FullDiskAccess,
         ] {
-            let uri = destination.settings_uri();
+            let uri = destination.settings_uri(Some(13));
             assert!(uri.starts_with(
                 "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_"
             ));
+            assert!(!uri.contains([' ', '\n', '\r']));
+        }
+    }
+
+    #[test]
+    fn monterey_uses_the_legacy_security_preference_pane() {
+        for destination in [
+            MacOsPrivacyDestination::ApplicationData,
+            MacOsPrivacyDestination::FilesAndFolders,
+            MacOsPrivacyDestination::FullDiskAccess,
+        ] {
+            let uri = destination.settings_uri(Some(12));
+            assert!(
+                uri.starts_with("x-apple.systempreferences:com.apple.preference.security?Privacy_")
+            );
             assert!(!uri.contains([' ', '\n', '\r']));
         }
     }

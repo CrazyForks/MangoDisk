@@ -8,11 +8,11 @@ import MdDialogContent from '@/components/custom/md-dialog-content.vue';
 import MdDialogFooter from '@/components/custom/md-dialog-footer.vue';
 import MdDialogHeader from '@/components/custom/md-dialog-header.vue';
 import MdEmptyState from '@/components/custom/md-empty-state.vue';
-import MdInlineNotice from '@/components/custom/md-inline-notice.vue';
 import MdLoadMoreButton from '@/components/custom/md-load-more-button.vue';
 import MdOperationProgress from '@/components/custom/md-operation-progress.vue';
 import MdOperationWorkspace from '@/components/custom/md-operation-workspace.vue';
 import MdPageShell from '@/components/custom/md-page-shell.vue';
+import MdPermissionGuidance from '@/components/custom/md-permission-guidance.vue';
 import MdResultFilterToolbar from '@/components/custom/md-result-filter-toolbar.vue';
 import MdResultSearch from '@/components/custom/md-result-search.vue';
 import MdResultSummary from '@/components/custom/md-result-summary.vue';
@@ -152,10 +152,6 @@ const pendingPlanOnlyAffectsFutureLaunches = computed(
 );
 const pendingPlanRemovesOrphans = computed(() => props.pendingPlan?.desiredState === 'removed');
 
-function updateStateFilter(value: string) {
-  if (value === 'all' || value === 'enabled' || value === 'disabled') stateFilter.value = value;
-}
-
 watch(
   backgroundTasksNeedPermission,
   needsPermission => {
@@ -169,6 +165,10 @@ watch(
   },
   { immediate: true }
 );
+
+function updateStateFilter(value: string) {
+  if (value === 'all' || value === 'enabled' || value === 'disabled') stateFilter.value = value;
+}
 
 watch([() => props.catalog?.scanId, query, stateFilter], () => {
   // Startup catalogs can still contain thousands of hidden system entries.
@@ -421,10 +421,6 @@ async function openBackgroundTaskPrivacySettings(): Promise<boolean> {
   }
 }
 
-async function confirmBackgroundTaskPrivacySettings() {
-  if (await openBackgroundTaskPrivacySettings()) permissionPromptOpen.value = false;
-}
-
 async function openLoginItemsSettings() {
   try {
     await MacOsSystemSettingsService.openLoginItems();
@@ -504,15 +500,17 @@ function updateChangeOpen(open: boolean) {
           :metric-value="FormatUtils.integer(filterCounts.enabled)"
         >
           <template #actions>
-            <button
+            <MdPermissionGuidance
               v-if="backgroundTasksNeedPermission"
-              class="summary-permission"
-              type="button"
-              @click="openBackgroundTaskPrivacySettings"
-            >
-              {{ t('startup.summary.permissionRequired') }}
-              <MdIcon :name="ICON_NAMES.external" :size="13" />
-            </button>
+              v-model="permissionPromptOpen"
+              :summary="t('startup.summary.permissionRequired')"
+              :title="t('startup.permission.title')"
+              :description="t('startup.permission.description')"
+              :instructions="t('startup.permission.instructions')"
+              :skip-label="t('startup.permission.skip')"
+              :open-settings-label="t('startup.permission.openSettings')"
+              :open-settings="openBackgroundTaskPrivacySettings"
+            />
           </template>
         </MdResultSummary>
       </template>
@@ -603,27 +601,6 @@ function updateChangeOpen(open: boolean) {
         />
       </MdResultTable>
     </MdResultWorkspace>
-
-    <Dialog v-model:open="permissionPromptOpen">
-      <MdDialogContent size="compact">
-        <MdDialogHeader>
-          <DialogTitle>{{ t('startup.permission.title') }}</DialogTitle>
-          <DialogDescription>{{ t('startup.permission.description') }}</DialogDescription>
-        </MdDialogHeader>
-        <MdInlineNotice class="permission-instructions" :icon-name="ICON_NAMES.info" tone="info">
-          {{ t('startup.permission.instructions') }}
-        </MdInlineNotice>
-        <MdDialogFooter>
-          <Button variant="outline" type="button" @click="permissionPromptOpen = false">
-            {{ t('startup.permission.skip') }}
-          </Button>
-          <Button type="button" @click="confirmBackgroundTaskPrivacySettings">
-            <MdIcon :name="ICON_NAMES.external" :size="15" />
-            {{ t('startup.permission.openSettings') }}
-          </Button>
-        </MdDialogFooter>
-      </MdDialogContent>
-    </Dialog>
 
     <Dialog :open="changeOpen" @update:open="updateChangeOpen">
       <MdDialogContent class="startup-change-dialog" size="standard">
@@ -718,27 +695,6 @@ function updateChangeOpen(open: boolean) {
 
 <style scoped>
 @reference "@assets/main.css";
-
-.summary-permission {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  border: 0;
-  padding: 4px 0;
-  background: transparent;
-  color: var(--primary);
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.summary-permission:hover {
-  text-decoration: underline;
-}
-
-.permission-instructions {
-  margin: 0 var(--layout-dialog-body-inline-padding) 14px;
-}
 
 .startup-change-dialog {
   display: grid;

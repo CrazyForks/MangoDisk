@@ -2,6 +2,7 @@ mod applications;
 mod cleanup;
 mod filesystem;
 mod history;
+mod privacy;
 mod reporting;
 mod shared;
 mod startup;
@@ -56,10 +57,23 @@ pub use history::{
     ApplicationLeftoverOperationDetails, ApplicationUninstallOperationDetails,
     CleanupOperationDetails, DeepCleanupOperationDetails, FileCleanupHistoryItem,
     FileCleanupHistoryItemStatus, FileCleanupOperationDetails, HistoryService, OperationCategory,
-    OperationDetails, OperationOutcome, OperationRecord, StartupHistoryItem,
+    OperationDetails, OperationOutcome, OperationRecord, PrivacyCleanupHistoryItem,
+    PrivacyCleanupHistoryItemStatus, PrivacyCleanupOperationDetails, StartupHistoryItem,
     StartupHistoryItemStatus, StartupHistoryState, StartupManagementOperationDetails,
     SystemOptimizationHistoryItem, SystemOptimizationHistoryItemStatus,
     SystemOptimizationOperationDetails, OPERATION_RECORD_SCHEMA_VERSION,
+};
+pub use privacy::{
+    PrivacyBrowserCloseRequest, PrivacyBrowserCloseRequirement, PrivacyBrowserStatusRequest,
+    PrivacyBrowserStatusResult, PrivacyBrowserStatusTarget, PrivacyCapabilityState,
+    PrivacyCategory, PrivacyDataKind, PrivacyDetailEntry, PrivacyDetailsPage,
+    PrivacyDetailsPresentation, PrivacyDetailsRequest, PrivacyExecutionItemResult,
+    PrivacyExecutionItemStatus, PrivacyExecutionPlan, PrivacyExecutionPlanItem,
+    PrivacyExecutionProgress, PrivacyExecutionProgressItem, PrivacyExecutionRequest,
+    PrivacyExecutionResult, PrivacyExecutionRunRequest, PrivacyExecutionStage, PrivacyImpact,
+    PrivacyItem, PrivacyRecommendation, PrivacyScanRequest, PrivacyScanResult, PrivacySensitivity,
+    PrivacyService, PrivacySourceCoverage, PrivacyTimeRange, PRIVACY_DETAILS_SCHEMA_VERSION,
+    PRIVACY_PLAN_SCHEMA_VERSION, PRIVACY_SCAN_SCHEMA_VERSION,
 };
 pub use reporting::{
     BaselineArtifacts, BaselineComparisonArtifacts, BaselineComparisonOptions,

@@ -1,6 +1,6 @@
 use std::{error::Error, fmt};
 
-use mangodisk_platform::{PlatformError, PlatformErrorCode};
+use mangodisk_platform::{PlatformError, PlatformErrorCode, PlatformMutationState};
 
 /// Stable error categories shared by GUI, CLI, and automation adapters.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -43,6 +43,7 @@ pub struct CoreError {
     code: CoreErrorCode,
     diagnostic: String,
     reason: Option<CoreErrorReason>,
+    mutation_state: PlatformMutationState,
 }
 
 impl CoreError {
@@ -51,6 +52,7 @@ impl CoreError {
             code,
             diagnostic: diagnostic.into(),
             reason: None,
+            mutation_state: PlatformMutationState::NotAttempted,
         }
     }
 
@@ -66,8 +68,20 @@ impl CoreError {
         self.reason
     }
 
+    /// Preserves whether a failed platform operation may already have changed native state.
+    /// Destructive domains use this evidence to avoid reporting an uncertain write as a clean
+    /// zero-effect failure.
+    pub fn mutation_state(&self) -> PlatformMutationState {
+        self.mutation_state
+    }
+
     pub fn with_reason(mut self, reason: CoreErrorReason) -> Self {
         self.reason = Some(reason);
+        self
+    }
+
+    pub fn with_possible_side_effects(mut self) -> Self {
+        self.mutation_state = PlatformMutationState::MayHaveChanged;
         self
     }
 
@@ -119,12 +133,14 @@ impl From<&str> for CoreError {
 
 impl From<PlatformError> for CoreError {
     fn from(error: PlatformError) -> Self {
+        let mutation_state = error.mutation_state();
         let code = match error.code() {
             PlatformErrorCode::AccessDenied => CoreErrorCode::PermissionDenied,
             PlatformErrorCode::ItemChanged => CoreErrorCode::OperationFailed,
             _ => CoreErrorCode::Platform,
         };
-        let core_error = Self::new(code, error.to_string());
+        let mut core_error = Self::new(code, error.to_string());
+        core_error.mutation_state = mutation_state;
         if error.code() == PlatformErrorCode::ItemChanged {
             core_error.with_reason(CoreErrorReason::ItemChanged)
         } else {
@@ -134,3 +150,23 @@ impl From<PlatformError> for CoreError {
 }
 
 pub type CoreResult<T> = Result<T, CoreError>;
+
+#[cfg(test)]
+mod tests {
+    use mangodisk_platform::{PlatformError, PlatformMutationState};
+
+    use super::CoreError;
+
+    #[test]
+    fn platform_mutation_uncertainty_survives_core_conversion() {
+        let error = CoreError::from(
+            PlatformError::operation_failed("post-write verification failed")
+                .with_possible_side_effects(),
+        );
+
+        assert_eq!(
+            error.mutation_state(),
+            PlatformMutationState::MayHaveChanged
+        );
+    }
+}

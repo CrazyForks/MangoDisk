@@ -120,6 +120,7 @@ describe('privacy store', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     for (const mock of Object.values(serviceMocks)) mock.mockReset();
+    vi.spyOn(useAppStore(), 'refreshSystemDisk').mockResolvedValue(true);
   });
 
   afterEach(() => vi.restoreAllMocks());
@@ -148,6 +149,7 @@ describe('privacy store', () => {
         return structuredClone(executionResult);
       }
     );
+    const refreshDisk = vi.mocked(useAppStore().refreshSystemDisk);
     const store = usePrivacyStore();
 
     await store.scan();
@@ -161,6 +163,7 @@ describe('privacy store', () => {
     expect(serviceMocks.prepare).toHaveBeenCalledWith({ scanId: 'scan-1', tokens: ['manual'] });
 
     await store.execute();
+    expect(refreshDisk).toHaveBeenCalledOnce();
     expect(store.result).toEqual(executionResult);
     expect(store.completedPlan).toEqual(plan);
     expect(store.scanResult?.items[1]).toMatchObject({

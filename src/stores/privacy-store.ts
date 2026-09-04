@@ -267,6 +267,7 @@ export const usePrivacyStore = defineStore('privacy', {
     },
     async execute(excludedSourceIds: string[] = []) {
       if (!this.plan || this.refreshingBrowserStatus || this.executing) return;
+      const appStore = useAppStore();
       const completedPlan = this.plan;
       const planId = this.plan.planId;
       const previousScan = this.scanResult;
@@ -276,7 +277,7 @@ export const usePrivacyStore = defineStore('privacy', {
       this.executionItems = completedPlan.items.filter(item => !excludedSources.has(item.sourceId));
       this.executionStartedAtMs = Date.now();
       this.result = null;
-      useAppStore().clearError();
+      appStore.clearError();
       const startedAt = performance.now();
       LoggerService.info(LOG_DOMAINS.privacy, LOG_EVENTS.privacyExecutionRequested, {
         selectedItemCount: completedPlan.items.length,
@@ -299,11 +300,12 @@ export const usePrivacyStore = defineStore('privacy', {
           failedItemCount: result.failedItemCount,
           elapsedMs: Math.round(performance.now() - startedAt),
         });
+        await appStore.refreshSystemDisk();
       } catch (error) {
         const code = parseCommandError(error)?.code;
         if (code !== 'operationCancelled') {
           LoggerService.warn(LOG_DOMAINS.privacy, LOG_EVENTS.privacyExecutionFailed, { code: code ?? 'unknown' });
-          useAppStore().reportError(error);
+          appStore.reportError(error);
         }
       } finally {
         this.plan = null;

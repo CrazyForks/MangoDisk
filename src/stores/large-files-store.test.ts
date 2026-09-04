@@ -56,6 +56,7 @@ describe('large files store deletion', () => {
     vi.spyOn(useHistoryStore(), 'load').mockResolvedValue();
     const warn = vi.spyOn(LoggerService, 'warn').mockImplementation(() => undefined);
     const appStore = useAppStore();
+    const refreshDisk = vi.spyOn(appStore, 'refreshSystemDisk').mockResolvedValue(true);
     const store = useLargeFilesStore();
     store.result = createResult();
 
@@ -63,6 +64,7 @@ describe('large files store deletion', () => {
 
     expect(result).toEqual(operation);
     expect(appStore.errorCode).toBeNull();
+    expect(refreshDisk).toHaveBeenCalledOnce();
     expect(store.result?.entries).toEqual([failed]);
     expect(warn).toHaveBeenCalledWith('large-files', 'delete_completed_with_failures', {
       removedCount: 1,

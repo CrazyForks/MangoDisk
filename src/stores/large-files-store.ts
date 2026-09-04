@@ -91,6 +91,7 @@ export const useLargeFilesStore = defineStore('large-files', {
           this.result = LargeFileResultUtils.removePaths(sourceResult, removedPaths, result.releasedBytes);
         }
         await useHistoryStore().load({ reportError: false });
+        await appStore.refreshSystemDisk();
         if (result.failed.length) {
           // Item-level failures are part of a completed batch and are shown by
           // the page as one warning summary. Logging only aggregate evidence

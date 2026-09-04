@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { i18n } from '@/i18n';
 import type { PrivacyExecutionPlan, PrivacyExecutionResult, PrivacyScanResult } from '@/lib/models/privacy';
+import { useAppStore } from '@/stores/app-store';
 import { usePrivacyStore } from '@/stores/privacy-store';
 
 import PrivacyPage from './index.vue';
@@ -147,6 +148,7 @@ describe('privacy page cleanup flow', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     for (const mock of Object.values(serviceMocks)) mock.mockReset();
+    vi.spyOn(useAppStore(), 'refreshSystemDisk').mockResolvedValue(true);
   });
 
   it('uses the standard large primary action for the initial scan', () => {

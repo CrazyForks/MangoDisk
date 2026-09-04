@@ -134,6 +134,43 @@ pub async fn open_macos_login_items_settings() -> CommandResult<()> {
     .await
 }
 
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum WindowsStartupTool {
+    Services,
+    TaskScheduler,
+}
+
+impl WindowsStartupTool {
+    fn snap_in(self) -> &'static str {
+        match self {
+            Self::Services => "services.msc",
+            Self::TaskScheduler => "taskschd.msc",
+        }
+    }
+
+    fn diagnostic_name(self) -> &'static str {
+        match self {
+            Self::Services => "services",
+            Self::TaskScheduler => "task_scheduler",
+        }
+    }
+}
+
+/// Opens one fixed Windows management console snap-in for startup entries that MangoDisk cannot
+/// safely remove. The enum prevents the webview from passing arbitrary programs or arguments.
+#[tauri::command]
+pub async fn open_windows_startup_tool(tool: WindowsStartupTool) -> CommandResult<()> {
+    run_blocking("open_windows_startup_tool", move || {
+        log::info!(
+            "windows_startup_tool_open_requested tool={}",
+            tool.diagnostic_name()
+        );
+        open_windows_management_console(tool.snap_in())
+    })
+    .await
+}
+
 #[cfg(target_os = "macos")]
 fn open_settings_uri(uri: &str) -> Result<(), String> {
     tauri_plugin_opener::open_url(uri, None::<&str>)
@@ -143,6 +180,20 @@ fn open_settings_uri(uri: &str) -> Result<(), String> {
 #[cfg(not(target_os = "macos"))]
 fn open_settings_uri(_uri: &str) -> Result<(), String> {
     Err("macOS privacy settings are unavailable on this platform".to_string())
+}
+
+#[cfg(target_os = "windows")]
+fn open_windows_management_console(snap_in: &str) -> Result<(), String> {
+    std::process::Command::new("mmc.exe")
+        .arg(snap_in)
+        .spawn()
+        .map(|_| ())
+        .map_err(|error| format!("failed to open Windows startup tool: {error}"))
+}
+
+#[cfg(not(target_os = "windows"))]
+fn open_windows_management_console(_snap_in: &str) -> Result<(), String> {
+    Err("Windows startup tools are unavailable on this platform".to_string())
 }
 
 #[cfg(test)]
@@ -177,6 +228,12 @@ mod tests {
             );
             assert!(!uri.contains([' ', '\n', '\r']));
         }
+    }
+
+    #[test]
+    fn startup_tools_map_only_to_fixed_management_console_snap_ins() {
+        assert_eq!(WindowsStartupTool::Services.snap_in(), "services.msc");
+        assert_eq!(WindowsStartupTool::TaskScheduler.snap_in(), "taskschd.msc");
     }
 
     #[test]

@@ -1283,7 +1283,7 @@
       "skip": "暫時略過",
       "openSettings": "開啟系統設定"
     },
-    "filters": { "all": "全部", "enabled": "已啟用", "disabled": "已停用" },
+    "filters": { "all": "全部", "enabled": "已啟用", "disabled": "已停用", "leftover": "殘留項目" },
     "sourceKinds": {
       "registryRun": "登錄檔啟動",
       "startupFolder": "啟動資料夾",
@@ -1301,7 +1301,7 @@
       "mixed": "部分啟用",
       "enabled": "已啟用",
       "disabled": "已停用",
-      "removed": "已清除",
+      "removed": "已刪除",
       "unknown": "狀態未知",
       "notApplicable": "不適用"
     },
@@ -1340,7 +1340,7 @@
       "descriptions": {
         "enabled": "將開啟 {count} 個啟動項目",
         "disabled": "將關閉 {count} 個啟動項目",
-        "removed": "將清除 {count} 個殘留啟動項目"
+        "removed": "將刪除 {count} 個啟動項目"
       },
       "batchName": "{count} 個啟動項目",
       "enableNamedGroup": "啟用 {name}",
@@ -1374,13 +1374,20 @@
         "targetUnavailable": "程式檔案遺失或啟動設定無效"
       }
     },
+    "remove": {
+      "action": "刪除啟動項目",
+      "title": "刪除啟動項目",
+      "guidance": "僅刪除自動啟動設定，不會刪除程式檔案",
+      "confirm": "刪除",
+      "successResult": "已刪除「{name}」的啟動項目",
+      "partialResult": "「{name}」已刪除 {changed} 項，{failed} 項刪除失敗"
+    },
     "cleanup": {
-      "action": "清除殘留項目",
-      "title": "清除殘留啟動項目",
-      "guidance": "僅刪除已失效的啟動設定，不會刪除其他程式檔案",
-      "confirm": "清除",
-      "successResult": "已清除「{name}」的殘留啟動項目",
-      "partialResult": "「{name}」已清除 {changed} 項，{failed} 項清除失敗"
+      "manualGuidance": "此項目已失效，但為避免誤刪，需要在系統工具中處理",
+      "openTools": {
+        "services": "開啟服務",
+        "taskScheduler": "開啟工作排程器"
+      }
     },
     "detail": {
       "timing": "何時啟動",

@@ -9,15 +9,18 @@ import MdResultTableRow from '@/components/custom/md-result-table-row.vue';
 import MdIcon from '@/components/icons/md-icon.vue';
 import { Button } from '@/components/ui/button';
 import type { StartupArtifact, StartupOwnerGroup } from '@/lib/models/startup';
+import type { WindowsStartupTool } from '@/lib/services/windows-startup-tool-service';
 import { ICON_NAMES } from '@/lib/models/ui';
 import * as FormatUtils from '@/lib/utils/format';
 import * as StartupCommandUtils from '@/lib/utils/startup-command';
 
 import {
   canManageStartupArtifact,
-  isRemovableOrphanStartupArtifact,
+  isManualCleanupStartupArtifact,
+  manualCleanupToolForStartupArtifacts,
   nextStartupDesiredState,
   startupArtifactRevealPath,
+  supportsStartupRemoval,
   type StartupManageableState,
 } from '../startup-view';
 
@@ -43,7 +46,8 @@ const emit = defineEmits<{
   reveal: [path: string];
   copy: [request: { actionKey: string; value: string }];
   openSystemSettings: [];
-  removeOrphans: [];
+  openWindowsTool: [tool: WindowsStartupTool];
+  removeItems: [];
 }>();
 const { locale, t } = useI18n({ useScope: 'global' });
 
@@ -51,7 +55,11 @@ const manageableArtifacts = computed(() => props.artifacts.filter(canManageStart
 const groupManageable = computed(() => manageableArtifacts.value.length > 0);
 const systemManaged = computed(() => props.artifacts.some(artifact => artifact.controlCapability === 'systemManaged'));
 const hasMultipleArtifacts = computed(() => props.artifacts.length > 1);
-const removableOrphans = computed(() => props.artifacts.filter(isRemovableOrphanStartupArtifact));
+const removableItems = computed(() => props.artifacts.filter(supportsStartupRemoval));
+const manualCleanupArtifacts = computed(() => props.artifacts.filter(isManualCleanupStartupArtifact));
+const manualCleanupTool = computed<WindowsStartupTool | null>(() =>
+  manualCleanupToolForStartupArtifacts(props.artifacts)
+);
 
 function targetCommand(artifact: StartupArtifact): string {
   return StartupCommandUtils.display(artifact, false);
@@ -95,20 +103,22 @@ function localizedDiagnostics(artifact: StartupArtifact): string {
         </button>
 
         <span
-          v-if="revealPath || removableOrphans.length"
+          v-if="revealPath || removableItems.length"
           class="startup-actions"
-          :class="{ 'has-cleanup': removableOrphans.length }"
+          :class="{ 'has-cleanup': removableItems.length, 'has-location': revealPath }"
         >
-          <button
-            v-if="removableOrphans.length"
+          <MdIconAction
+            v-if="removableItems.length"
             class="startup-cleanup-action"
-            type="button"
+            variant="ghost"
+            destructive
+            :label="t('startup.remove.action')"
+            :aria-label="t('startup.remove.action')"
             :disabled="busy"
-            @click.stop="emit('removeOrphans')"
+            @click.stop="emit('removeItems')"
           >
-            <MdIcon :name="ICON_NAMES.trash" :size="14" />
-            {{ t('startup.cleanup.action') }}
-          </button>
+            <MdIcon :name="ICON_NAMES.trash" :size="16" />
+          </MdIconAction>
           <MdIconAction
             v-if="revealPath"
             class="startup-location-action"
@@ -160,10 +170,19 @@ function localizedDiagnostics(artifact: StartupArtifact): string {
     </MdResultTableRow>
 
     <div v-if="expanded" class="startup-details">
-      <div v-if="!groupManageable && !removableOrphans.length" class="startup-management-note">
+      <div
+        v-if="manualCleanupArtifacts.length || (!groupManageable && !removableItems.length)"
+        class="startup-management-note"
+      >
         <span>
           <MdIcon :name="ICON_NAMES.info" :size="15" />
-          {{ isMacOs && systemManaged ? t('startup.detail.systemManaged') : t('startup.detail.viewOnly') }}
+          {{
+            manualCleanupArtifacts.length
+              ? t('startup.cleanup.manualGuidance')
+              : isMacOs && systemManaged
+                ? t('startup.detail.systemManaged')
+                : t('startup.detail.viewOnly')
+          }}
         </span>
         <Button
           v-if="isMacOs && systemManaged"
@@ -174,6 +193,16 @@ function localizedDiagnostics(artifact: StartupArtifact): string {
         >
           <MdIcon :name="ICON_NAMES.external" :size="14" />
           {{ t('startup.detail.openLoginItemsSettings') }}
+        </Button>
+        <Button
+          v-else-if="isWindows && manualCleanupTool"
+          variant="outline"
+          size="sm"
+          type="button"
+          @click="emit('openWindowsTool', manualCleanupTool)"
+        >
+          <MdIcon :name="ICON_NAMES.external" :size="14" />
+          {{ t(`startup.cleanup.openTools.${manualCleanupTool}`) }}
         </Button>
       </div>
 

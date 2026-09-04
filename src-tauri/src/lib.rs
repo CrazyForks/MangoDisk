@@ -231,6 +231,7 @@ pub fn run() {
             commands::history::clear_history,
             commands::system_settings::open_privacy_settings,
             commands::system_settings::open_macos_login_items_settings,
+            commands::system_settings::open_windows_startup_tool,
             commands::system_settings::scan_system_settings,
             commands::system_settings::cancel_system_settings_scan,
             commands::system_settings::prepare_system_settings_change,

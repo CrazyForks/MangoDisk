@@ -7,13 +7,15 @@ import type {
 } from '@/lib/models/startup';
 
 export type StartupManageableState = 'enabled' | 'disabled' | 'mixed' | 'unknown';
-export type StartupStateFilter = 'all' | 'enabled' | 'disabled';
+export type StartupStateFilter = 'all' | 'enabled' | 'disabled' | 'leftover';
 export type StartupStartTiming = 'boot' | 'userLogon' | 'background' | 'automatic';
+export type StartupManualCleanupTool = 'services' | 'taskScheduler';
 
 export interface StartupFilterCounts {
   all: number;
   enabled: number;
   disabled: number;
+  leftover: number;
 }
 
 export function indexStartupArtifacts(artifacts: readonly StartupArtifact[]): ReadonlyMap<string, StartupArtifact> {
@@ -48,11 +50,45 @@ export function isRemovableOrphanStartupArtifact(artifact: StartupArtifact): boo
   return artifact.removableOrphan;
 }
 
+export function supportsStartupRemoval(artifact: StartupArtifact): boolean {
+  return artifact.removalSupported;
+}
+
+export function isManualCleanupStartupArtifact(artifact: StartupArtifact): boolean {
+  return (
+    artifact.diagnostics.includes('missingTarget') &&
+    !artifact.removalSupported &&
+    artifact.controlCapability !== 'systemManaged' &&
+    artifact.controlCapability !== 'policyManaged'
+  );
+}
+
+export function isLeftoverStartupArtifact(artifact: StartupArtifact): boolean {
+  return isRemovableOrphanStartupArtifact(artifact) || isManualCleanupStartupArtifact(artifact);
+}
+
+export function manualCleanupToolForStartupArtifacts(
+  artifacts: readonly StartupArtifact[]
+): StartupManualCleanupTool | null {
+  const sourceKinds = new Set(artifacts.filter(isManualCleanupStartupArtifact).map(artifact => artifact.sourceKind));
+  if (sourceKinds.size !== 1) return null;
+  if (sourceKinds.has('service')) return 'services';
+  if (sourceKinds.has('scheduledTask')) return 'taskScheduler';
+  return null;
+}
+
 export function removableOrphanArtifactsForGroup(
   group: StartupOwnerGroup,
   artifactsById: ReadonlyMap<string, StartupArtifact>
 ): StartupArtifact[] {
   return artifactsForStartupGroup(group, artifactsById).filter(isRemovableOrphanStartupArtifact);
+}
+
+export function removableStartupArtifactsForGroup(
+  group: StartupOwnerGroup,
+  artifactsById: ReadonlyMap<string, StartupArtifact>
+): StartupArtifact[] {
+  return artifactsForStartupGroup(group, artifactsById).filter(supportsStartupRemoval);
 }
 
 export function isInformativeReadOnlyStartupArtifact(artifact: StartupArtifact): boolean {
@@ -71,7 +107,9 @@ export function displayedArtifactsForGroup(
   return artifactsForStartupGroup(group, artifactsById).filter(
     artifact =>
       canManageStartupArtifact(artifact) ||
+      supportsStartupRemoval(artifact) ||
       isRemovableOrphanStartupArtifact(artifact) ||
+      isManualCleanupStartupArtifact(artifact) ||
       isInformativeReadOnlyStartupArtifact(artifact)
   );
 }
@@ -131,12 +169,14 @@ export function startupFilterCounts(
 ): StartupFilterCounts {
   let enabled = 0;
   let disabled = 0;
+  let leftover = 0;
   for (const group of groups) {
     const state = startupGroupManageableState(group, artifactsById);
     if (state === 'enabled') enabled += 1;
     if (state === 'disabled') disabled += 1;
+    if (artifactsForStartupGroup(group, artifactsById).some(isLeftoverStartupArtifact)) leftover += 1;
   }
-  return { all: groups.length, enabled, disabled };
+  return { all: groups.length, enabled, disabled, leftover };
 }
 
 export function filterAndSortStartupGroups(
@@ -150,7 +190,12 @@ export function filterAndSortStartupGroups(
   return groups
     .filter(group => {
       const state = startupGroupManageableState(group, artifactsById);
-      if (stateFilter !== 'all' && state !== stateFilter) return false;
+      if (
+        stateFilter === 'leftover'
+          ? !artifactsForStartupGroup(group, artifactsById).some(isLeftoverStartupArtifact)
+          : stateFilter !== 'all' && state !== stateFilter
+      )
+        return false;
       if (!normalizedQuery) return true;
       const artifactValues = artifactsForStartupGroup(group, artifactsById).flatMap(artifact => [
         artifact.displayName,

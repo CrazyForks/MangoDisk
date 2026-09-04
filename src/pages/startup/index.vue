@@ -39,6 +39,7 @@ import { MacOsPermissionService } from '@/lib/services/macos-permission-service'
 import { MacOsSystemSettingsService } from '@/lib/services/macos-system-settings-service';
 import { LoggerService } from '@/lib/services/logger-service';
 import { OperatingSystemService } from '@/lib/services/operating-system-service';
+import { WindowsStartupToolService, type WindowsStartupTool } from '@/lib/services/windows-startup-tool-service';
 import * as FormatUtils from '@/lib/utils/format';
 import * as RenderBatchUtils from '@/lib/utils/render-batch';
 
@@ -61,7 +62,7 @@ import {
   manageableArtifactsForGroup,
   needsBackgroundTaskPermission,
   nextStartupDesiredState,
-  removableOrphanArtifactsForGroup,
+  removableStartupArtifactsForGroup,
   startupFilterCounts,
   startupGroupManageableState,
   startupGroupStartTiming,
@@ -123,7 +124,7 @@ const artifactsById = computed(() => indexStartupArtifacts(props.catalog?.artifa
 const defaultGroups = computed(() => defaultStartupGroups(props.catalog?.groups ?? [], artifactsById.value));
 const filterCounts = computed(() => startupFilterCounts(defaultGroups.value, artifactsById.value));
 const filterOptions = computed(() =>
-  (['all', 'enabled', 'disabled'] as const).map(value => ({
+  (['all', 'enabled', 'disabled', 'leftover'] as const).map(value => ({
     value,
     label: t(`startup.filters.${value}`),
     count: filterCounts.value[value],
@@ -150,7 +151,7 @@ const pendingPlanRequiresElevation = computed(() =>
 const pendingPlanOnlyAffectsFutureLaunches = computed(
   () => props.pendingPlan?.desiredState === 'disabled' && Boolean(props.pendingPlan.items.length)
 );
-const pendingPlanRemovesOrphans = computed(() => props.pendingPlan?.desiredState === 'removed');
+const pendingPlanRemovesItems = computed(() => props.pendingPlan?.desiredState === 'removed');
 
 watch(
   backgroundTasksNeedPermission,
@@ -167,7 +168,9 @@ watch(
 );
 
 function updateStateFilter(value: string) {
-  if (value === 'all' || value === 'enabled' || value === 'disabled') stateFilter.value = value;
+  if (value === 'all' || value === 'enabled' || value === 'disabled' || value === 'leftover') {
+    stateFilter.value = value;
+  }
 }
 
 watch([() => props.catalog?.scanId, query, stateFilter], () => {
@@ -237,7 +240,7 @@ watch(
             : feedback?.desiredState === 'enabled'
               ? 'startup.change.partialEnableResult'
               : feedback?.desiredState === 'removed'
-                ? 'startup.cleanup.partialResult'
+                ? 'startup.remove.partialResult'
                 : 'startup.change.partialDisableResult',
           {
             name: feedback?.displayName ?? t('startup.title'),
@@ -255,7 +258,7 @@ watch(
         : feedback?.desiredState === 'enabled'
           ? 'startup.change.enableSuccessResult'
           : feedback?.desiredState === 'removed'
-            ? 'startup.cleanup.successResult'
+            ? 'startup.remove.successResult'
             : 'startup.change.disableSuccessResult';
       toast.success(
         t(messageKey, {
@@ -329,9 +332,9 @@ function isGroupChangePending(group: StartupOwnerGroup): boolean {
   return displayedArtifacts(group).some(artifact => pendingChangeItemIds.value.has(artifact.itemId));
 }
 
-function requestOrphanRemoval(group: StartupOwnerGroup) {
+function requestStartupRemoval(group: StartupOwnerGroup) {
   requestChange(
-    removableOrphanArtifactsForGroup(group, artifactsById.value).map(artifact => artifact.itemId),
+    removableStartupArtifactsForGroup(group, artifactsById.value).map(artifact => artifact.itemId),
     'removed'
   );
 }
@@ -424,6 +427,14 @@ async function openBackgroundTaskPrivacySettings(): Promise<boolean> {
 async function openLoginItemsSettings() {
   try {
     await MacOsSystemSettingsService.openLoginItems();
+  } catch (error) {
+    emit('error', error);
+  }
+}
+
+async function openWindowsStartupTool(tool: WindowsStartupTool) {
+  try {
+    await WindowsStartupToolService.open(tool);
   } catch (error) {
     emit('error', error);
   }
@@ -588,10 +599,11 @@ function updateChangeOpen(open: boolean) {
           @toggle-expanded="expandedGroupId = expandedGroupId === group.groupId ? null : group.groupId"
           @toggle-group="requestGroupChange(group)"
           @toggle-artifact="requestArtifactChange"
-          @remove-orphans="requestOrphanRemoval(group)"
+          @remove-items="requestStartupRemoval(group)"
           @reveal="emit('open', $event)"
           @copy="copyStartupValue"
           @open-system-settings="openLoginItemsSettings"
+          @open-windows-tool="openWindowsStartupTool"
         />
 
         <MdLoadMoreButton
@@ -605,9 +617,7 @@ function updateChangeOpen(open: boolean) {
     <Dialog :open="changeOpen" @update:open="updateChangeOpen">
       <MdDialogContent class="startup-change-dialog" size="standard">
         <MdDialogHeader>
-          <DialogTitle>{{
-            t(pendingPlanRemovesOrphans ? 'startup.cleanup.title' : 'startup.change.title')
-          }}</DialogTitle>
+          <DialogTitle>{{ t(pendingPlanRemovesItems ? 'startup.remove.title' : 'startup.change.title') }}</DialogTitle>
           <DialogDescription :class="{ 'sr-only': !pendingPlan }">
             {{
               pendingPlan
@@ -626,7 +636,7 @@ function updateChangeOpen(open: boolean) {
           </div>
           <template v-else-if="pendingPlan">
             <div
-              v-if="pendingPlanRequiresElevation || pendingPlanOnlyAffectsFutureLaunches || pendingPlanRemovesOrphans"
+              v-if="pendingPlanRequiresElevation || pendingPlanOnlyAffectsFutureLaunches || pendingPlanRemovesItems"
               class="change-guidance"
             >
               <p v-if="pendingPlanRequiresElevation">
@@ -637,9 +647,9 @@ function updateChangeOpen(open: boolean) {
                 <MdIcon :name="ICON_NAMES.info" :size="15" />
                 {{ t('startup.change.futureOnly') }}
               </p>
-              <p v-if="pendingPlanRemovesOrphans">
+              <p v-if="pendingPlanRemovesItems">
                 <MdIcon :name="ICON_NAMES.info" :size="15" />
-                {{ t('startup.cleanup.guidance') }}
+                {{ t('startup.remove.guidance') }}
               </p>
             </div>
             <article v-for="item in pendingPlan.items" :key="item.itemId" class="change-item">
@@ -674,7 +684,7 @@ function updateChangeOpen(open: boolean) {
             {{ cancellingChange ? t('startup.cancelling') : t('common.cancel') }}
           </Button>
           <Button
-            :variant="pendingPlanRemovesOrphans ? 'destructive' : 'default'"
+            :variant="pendingPlanRemovesItems ? 'destructive' : 'default'"
             type="button"
             :disabled="!pendingPlan?.items.length || preparingChange || executingChange"
             :aria-busy="executingChange"
@@ -684,7 +694,7 @@ function updateChangeOpen(open: boolean) {
             {{
               executingChange
                 ? t('startup.change.applying')
-                : t(pendingPlanRemovesOrphans ? 'startup.cleanup.confirm' : 'startup.change.confirm')
+                : t(pendingPlanRemovesItems ? 'startup.remove.confirm' : 'startup.change.confirm')
             }}
           </Button>
         </MdDialogFooter>

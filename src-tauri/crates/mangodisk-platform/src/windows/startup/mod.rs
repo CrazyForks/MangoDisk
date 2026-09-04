@@ -222,7 +222,9 @@ fn requires_privileges(request: &PlatformStartupChangeRequest) -> bool {
         || (request.desired_state == PlatformStartupDesiredState::Removed
             && matches!(
                 request.expected_artifact.scope,
-                crate::PlatformStartupScope::AllUsers | crate::PlatformStartupScope::Machine
+                crate::PlatformStartupScope::AllUsers
+                    | crate::PlatformStartupScope::Machine
+                    | crate::PlatformStartupScope::System
             ))
 }
 
@@ -235,6 +237,7 @@ fn change_direct(
             startup_folder::change(request)
         }
         "windows.scheduled_tasks" => tasks::change(request),
+        "windows.advanced_autoruns" => advanced::change(request),
         _ => Err(PlatformError::new(
             PlatformErrorCode::Unsupported,
             "startup source does not support configured-state changes",
@@ -283,6 +286,12 @@ pub(super) fn helper_change_many(
     {
         results.push(tasks::scan(&cancellation));
     }
+    if requests
+        .iter()
+        .any(|request| request.source_id == "windows.advanced_autoruns")
+    {
+        results.push(advanced::scan(&cancellation));
+    }
     requests
         .iter()
         .map(|request| {
@@ -324,8 +333,17 @@ fn helper_change_from_snapshot(
     let authorized = artifact.control_capability
         == PlatformStartupControlCapability::ElevationRequired
         || (desired_state == PlatformStartupDesiredState::Removed
-            && artifact.control_capability == PlatformStartupControlCapability::RemoveOnly
-            && matches!(artifact.scope, crate::PlatformStartupScope::Machine));
+            && matches!(
+                artifact.control_capability,
+                PlatformStartupControlCapability::Toggleable
+                    | PlatformStartupControlCapability::RemoveOnly
+            )
+            && matches!(
+                artifact.scope,
+                crate::PlatformStartupScope::AllUsers
+                    | crate::PlatformStartupScope::Machine
+                    | crate::PlatformStartupScope::System
+            ));
     if !authorized || crate::startup_helper::artifact_digest(&artifact) != expected_artifact_digest
     {
         return Err(PlatformError::item_changed(
@@ -347,6 +365,7 @@ fn helper_source_is_allowlisted(source_id: &str) -> bool {
             | "windows.startup_folder.user"
             | "windows.startup_folder.common"
             | "windows.scheduled_tasks"
+            | "windows.advanced_autoruns"
     )
 }
 
@@ -354,6 +373,7 @@ fn helper_source_is_allowlisted(source_id: &str) -> bool {
 mod tests {
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+    use crate::PlatformStartupConfiguredState;
     use winreg::{
         enums::{HKEY_LOCAL_MACHINE, KEY_READ, KEY_SET_VALUE, KEY_WOW64_64KEY},
         RegKey,
@@ -366,10 +386,10 @@ mod tests {
         r"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run";
 
     #[test]
-    fn helper_allowlist_includes_scheduled_tasks_but_not_view_only_sources() {
+    fn helper_allowlist_includes_removable_sources_but_not_services() {
         assert!(helper_source_is_allowlisted("windows.scheduled_tasks"));
+        assert!(helper_source_is_allowlisted("windows.advanced_autoruns"));
         assert!(!helper_source_is_allowlisted("windows.services"));
-        assert!(!helper_source_is_allowlisted("windows.advanced_autoruns"));
     }
 
     #[test]
@@ -411,7 +431,7 @@ mod tests {
 
     #[test]
     #[ignore = "requires an elevated Windows fixture"]
-    fn actual_machine_registry_helper_revalidates_and_toggles() {
+    fn actual_machine_registry_helper_revalidates_toggles_and_removes() {
         let suffix = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("system time must be available")
@@ -457,6 +477,22 @@ mod tests {
         )
         .expect("the elevated helper boundary must restore the fixture");
         assert!(restored.verified);
+        assert!(approval.get_raw_value(&value_name).is_err());
+
+        let enabled_artifact = machine_fixture(&value_name);
+        let removed = helper_change(
+            "windows.registry.run",
+            &enabled_artifact.provider_item_id,
+            &crate::startup_helper::artifact_digest(&enabled_artifact),
+            PlatformStartupDesiredState::Removed,
+        )
+        .expect("the elevated helper boundary must remove the fixture");
+        assert!(removed.verified);
+        assert_eq!(
+            removed.configured_state,
+            PlatformStartupConfiguredState::NotApplicable
+        );
+        assert!(run.get_raw_value(&value_name).is_err());
         assert!(approval.get_raw_value(&value_name).is_err());
     }
 

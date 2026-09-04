@@ -1359,7 +1359,7 @@
       "skip": "今はしない",
       "openSettings": "システム設定を開く"
     },
-    "filters": { "all": "すべて", "enabled": "有効", "disabled": "無効" },
+    "filters": { "all": "すべて", "enabled": "有効", "disabled": "無効", "leftover": "残存項目" },
     "sourceKinds": {
       "registryRun": "レジストリ起動",
       "startupFolder": "スタートアップフォルダー",
@@ -1416,7 +1416,7 @@
       "descriptions": {
         "enabled": "{count} 件のスタートアップ項目を有効化します",
         "disabled": "{count} 件のスタートアップ項目を無効化します",
-        "removed": "{count} 件の残存スタートアップ項目を削除します"
+        "removed": "{count} 件のスタートアップ項目を削除します"
       },
       "batchName": "{count} 件のスタートアップ項目",
       "enableNamedGroup": "{name} を有効化",
@@ -1450,13 +1450,20 @@
         "targetUnavailable": "プログラムが見つからないか、起動設定が無効です"
       }
     },
-    "cleanup": {
-      "action": "残存項目を削除",
-      "title": "残存スタートアップ項目を削除",
-      "guidance": "不要になった起動設定のみを削除し、その他のプログラムファイルは削除しません",
+    "remove": {
+      "action": "スタートアップ項目を削除",
+      "title": "スタートアップ項目を削除",
+      "guidance": "自動起動設定のみを削除し、アプリのファイルは削除しません",
       "confirm": "削除",
-      "successResult": "「{name}」の残存スタートアップ項目を削除しました",
+      "successResult": "「{name}」のスタートアップ項目を削除しました",
       "partialResult": "「{name}」は {changed} 件を削除し、{failed} 件が失敗しました"
+    },
+    "cleanup": {
+      "manualGuidance": "不要な項目ですが、安全のためシステムツールで処理してください",
+      "openTools": {
+        "services": "サービスを開く",
+        "taskScheduler": "タスク スケジューラを開く"
+      }
     },
     "detail": {
       "timing": "起動するタイミング",

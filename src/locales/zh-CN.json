@@ -1286,7 +1286,8 @@
     "filters": {
       "all": "全部",
       "enabled": "已启用",
-      "disabled": "已禁用"
+      "disabled": "已禁用",
+      "leftover": "残留项"
     },
     "sourceKinds": {
       "registryRun": "注册表启动",
@@ -1305,7 +1306,7 @@
       "mixed": "部分启用",
       "enabled": "已启用",
       "disabled": "已禁用",
-      "removed": "已清除",
+      "removed": "已删除",
       "unknown": "状态未知",
       "notApplicable": "不适用"
     },
@@ -1344,7 +1345,7 @@
       "descriptions": {
         "enabled": "将开启 {count} 个启动项",
         "disabled": "将关闭 {count} 个启动项",
-        "removed": "将清除 {count} 个残留启动项"
+        "removed": "将删除 {count} 个启动项"
       },
       "batchName": "{count} 个启动项",
       "enableNamedGroup": "启用 {name}",
@@ -1378,13 +1379,20 @@
         "targetUnavailable": "程序文件缺失或启动配置无效"
       }
     },
+    "remove": {
+      "action": "删除启动项",
+      "title": "删除启动项",
+      "guidance": "仅删除自动启动配置，不会删除程序文件",
+      "confirm": "删除",
+      "successResult": "已删除“{name}”的启动项",
+      "partialResult": "“{name}”已删除 {changed} 项，{failed} 项删除失败"
+    },
     "cleanup": {
-      "action": "清除残留项",
-      "title": "清除残留启动项",
-      "guidance": "仅删除已失效的启动配置，不会删除其他程序文件",
-      "confirm": "清除",
-      "successResult": "已清除“{name}”的残留启动项",
-      "partialResult": "“{name}”已清除 {changed} 项，{failed} 项清除失败"
+      "manualGuidance": "已失效，但为避免误删，需要在系统工具中处理",
+      "openTools": {
+        "services": "打开服务",
+        "taskScheduler": "打开任务计划程序"
+      }
     },
     "detail": {
       "timing": "何时启动",

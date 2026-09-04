@@ -112,7 +112,8 @@ const dynamicKeyGroups = {
   'applicationUninstall.componentRisks': ['required', 'rebuildable', 'userData'],
   'duplicateFiles.keeperRuleLabels': ['shortestPath', 'shortestName', 'oldestModified', 'newestModified'],
   'settings.permissionStatus': ['notChecked', 'available', 'limited'],
-  'startup.filters': ['all', 'enabled', 'disabled'],
+  'startup.filters': ['all', 'enabled', 'disabled', 'leftover'],
+  'startup.cleanup.openTools': ['services', 'taskScheduler'],
   'startup.sourceKinds': [
     'registryRun',
     'startupFolder',

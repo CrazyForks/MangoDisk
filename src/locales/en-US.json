@@ -1357,7 +1357,7 @@
       "skip": "Not Now",
       "openSettings": "Open System Settings"
     },
-    "filters": { "all": "All", "enabled": "Enabled", "disabled": "Disabled" },
+    "filters": { "all": "All", "enabled": "Enabled", "disabled": "Disabled", "leftover": "Leftovers" },
     "sourceKinds": {
       "registryRun": "Registry startup",
       "startupFolder": "Startup folder",
@@ -1414,7 +1414,7 @@
       "descriptions": {
         "enabled": "Turn on {count} startup items",
         "disabled": "Turn off {count} startup items",
-        "removed": "Remove {count} leftover startup items"
+        "removed": "Delete {count} startup items"
       },
       "batchName": "{count} startup items",
       "enableNamedGroup": "Enable {name}",
@@ -1448,13 +1448,20 @@
         "targetUnavailable": "The program is missing or its startup configuration is invalid"
       }
     },
+    "remove": {
+      "action": "Delete Startup Item",
+      "title": "Delete Startup Items",
+      "guidance": "Only startup settings will be deleted; application files will remain",
+      "confirm": "Delete",
+      "successResult": "Deleted startup items for “{name}”",
+      "partialResult": "Deleted {changed} items for “{name}”; {failed} failed"
+    },
     "cleanup": {
-      "action": "Remove Leftover",
-      "title": "Remove Leftover Startup Items",
-      "guidance": "Only obsolete startup settings will be removed; other program files will not be deleted",
-      "confirm": "Remove",
-      "successResult": "Removed leftover startup items for “{name}”",
-      "partialResult": "Removed {changed} items for “{name}”; {failed} failed"
+      "manualGuidance": "This item is obsolete but needs to be handled in a system tool to avoid unsafe removal",
+      "openTools": {
+        "services": "Open Services",
+        "taskScheduler": "Open Task Scheduler"
+      }
     },
     "detail": {
       "timing": "When it starts",

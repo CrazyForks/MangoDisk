@@ -9,7 +9,7 @@
   width: 100%;
   min-width: 0;
   min-height: var(--layout-result-group-height);
-  grid-template-columns: minmax(0, 1fr) minmax(48px, auto) minmax(58px, auto) 30px;
+  grid-template-columns: minmax(0, 1fr) minmax(48px, auto) minmax(34px, auto) 30px;
   align-items: center;
   gap: 14px;
 }
@@ -70,43 +70,6 @@
 
 .startup-actions.has-cleanup {
   gap: 2px;
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.startup-cleanup-action {
-  display: inline-flex;
-  min-height: 28px;
-  align-items: center;
-  gap: 5px;
-  border: 0;
-  border-radius: 8px;
-  padding: 4px 7px;
-  background: transparent;
-  @apply text-muted-foreground transition-colors;
-  font: inherit;
-  font-size: 11px;
-  cursor: pointer;
-}
-
-.startup-cleanup-action:not(:disabled):hover {
-  @apply text-destructive;
-  background: var(--surface-destructive-subtle);
-}
-
-.startup-cleanup-action:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.startup-actions.has-cleanup :deep(.startup-location-action) {
-  opacity: 0;
-  pointer-events: none;
-}
-
-.startup-row-line:is(:hover, :has(:focus-visible)) .startup-actions.has-cleanup :deep(.startup-location-action) {
-  opacity: 1;
-  pointer-events: auto;
 }
 
 .startup-row-line:is(:hover, :has(:focus-visible)) .startup-actions {
@@ -118,8 +81,8 @@
   padding-right: 34px;
 }
 
-.startup-row-line:has(.startup-cleanup-action) .startup-identity {
-  padding-right: 112px;
+.startup-row-line:has(.startup-actions.has-cleanup.has-location):is(:hover, :has(:focus-visible)) .startup-identity {
+  padding-right: 68px;
 }
 
 .startup-item-count,
@@ -401,7 +364,7 @@
 
 @container startup (max-width: 720px) {
   .startup-main {
-    grid-template-columns: minmax(0, 1fr) minmax(54px, auto) 30px;
+    grid-template-columns: minmax(0, 1fr) minmax(34px, auto) 30px;
     gap: 10px;
   }
 

@@ -258,7 +258,7 @@ async function openPrivacySettings(): Promise<boolean> {
   <MdPageShell class="privacy-page" content-mode="workspace" :title="t('privacy.title')">
     <template #actions>
       <Select :key="locale" :model-value="store.timeRange" :disabled="busy" @update:model-value="updateTimeRange">
-        <SelectTrigger class="time-range" :aria-label="t('privacy.timeRangeLabel')">
+        <SelectTrigger class="time-range h-9" :aria-label="t('privacy.timeRangeLabel')">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -392,6 +392,13 @@ async function openPrivacySettings(): Promise<boolean> {
 
 .time-range {
   width: 170px;
+  @apply border-border/70 bg-card/35 shadow-none hover:border-border hover:bg-card/55;
+}
+.time-range[data-state='open'] {
+  @apply border-border bg-card/55 ring-0;
+}
+.time-range:focus-visible {
+  @apply border-ring ring-3 ring-ring/20;
 }
 .privacy-result-content {
   display: flex;

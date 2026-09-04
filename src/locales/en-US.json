@@ -1773,6 +1773,23 @@
       "quickHint": "Searching with Spotlight; files not yet indexed may be missed",
       "completeHint": "Scanning the selected location; time depends on the number of files"
     },
+    "exclusions": {
+      "trigger": "Excluded folders",
+      "title": "Excluded folders",
+      "description": "Files in these folders are omitted from large-file scan results",
+      "chooseFolders": "Choose folders to exclude",
+      "folderCount": "{count} folder excluded | {count} folders excluded",
+      "addFolder": "Add Folder",
+      "addingFolder": "Adding…",
+      "removeFolder": "Remove this folder",
+      "emptyTitle": "Click to add folders, or drag them here",
+      "emptyDescription": "Quick and complete scans will skip these folders",
+      "systemProtectionNote": "System-protected folders are always skipped",
+      "limitReached": "You can exclude up to {count} folders",
+      "save": "Save",
+      "saving": "Saving…",
+      "saveAndScan": "Save and Scan Again"
+    },
     "deleteConfirmTitle": "Permanently delete this file?",
     "deleteConfirmDescription": "This cannot be undone",
     "deleteConfirmAction": "Delete Permanently",

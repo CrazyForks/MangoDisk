@@ -51,6 +51,7 @@ fn real_redirected_share_supports_storage_scans() {
         Some(root.clone()),
         1,
         LargeFileScanMode::Complete,
+        vec![],
         |_| {},
     )
     .unwrap();
@@ -114,6 +115,7 @@ fn native_large_file_candidate_below_physical_threshold_is_not_skipped() {
         .allocated_bytes;
     let progress = Arc::new(ProgressTracker::new(0, |_| {}, 0));
     let cancelled = AtomicBool::new(false);
+    let exclusions = LargeFileExclusions::resolve(&root, vec![]).expect("prepare empty exclusions");
     let mut validation = LargeFileStreamValidation::new(
         &root,
         allocated.saturating_add(1),
@@ -121,6 +123,7 @@ fn native_large_file_candidate_below_physical_threshold_is_not_skipped() {
         &progress,
         &cancelled,
         true,
+        &exclusions,
     )
     .expect("prepare native large-file validation");
     let mut sink = IndexRecordSink::memory(None);
@@ -151,9 +154,17 @@ fn duplicate_native_large_file_candidate_is_idempotent() {
     let usage = current_platform().file_space_usage(&path, &metadata);
     let progress = Arc::new(ProgressTracker::new(0, |_| {}, 0));
     let cancelled = AtomicBool::new(false);
-    let mut validation =
-        LargeFileStreamValidation::new(&root, 0, now_ms(), &progress, &cancelled, true)
-            .expect("prepare native large-file validation");
+    let exclusions = LargeFileExclusions::resolve(&root, vec![]).expect("prepare empty exclusions");
+    let mut validation = LargeFileStreamValidation::new(
+        &root,
+        0,
+        now_ms(),
+        &progress,
+        &cancelled,
+        true,
+        &exclusions,
+    )
+    .expect("prepare native large-file validation");
     let mut sink = IndexRecordSink::memory(None);
 
     validation
@@ -480,6 +491,7 @@ fn real_large_file_scan_completes_fast_path_or_recursive_fallback() {
         Some(root),
         LARGE_FILE_CANDIDATE_FLOOR_BYTES,
         LargeFileScanMode::Complete,
+        vec![],
         |_| {},
     )
     .expect("the real large-file scan should succeed");
@@ -521,6 +533,7 @@ fn real_quick_large_file_scan_uses_platform_index() {
         Some(root),
         LARGE_FILE_CANDIDATE_FLOOR_BYTES,
         LargeFileScanMode::Quick,
+        vec![],
         |_| {},
     )
     .expect("the platform index should serve the real quick scan");
@@ -607,6 +620,7 @@ fn complete_large_file_scan_preserves_real_analysis_snapshot() {
         Some(root),
         LARGE_FILE_CANDIDATE_FLOOR_BYTES,
         LargeFileScanMode::Complete,
+        vec![],
         |_| {},
     )
     .expect("the large-file query should succeed");

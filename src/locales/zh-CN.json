@@ -1703,6 +1703,23 @@
       "quickHint": "正在通过 Spotlight 快速查找，可能遗漏尚未索引的文件",
       "completeHint": "正在遍历所选位置，耗时取决于文件数量"
     },
+    "exclusions": {
+      "trigger": "排除文件夹",
+      "title": "排除文件夹",
+      "description": "这些文件夹不会出现在大文件扫描结果中",
+      "chooseFolders": "选择要排除的文件夹",
+      "folderCount": "已排除 {count} 个文件夹",
+      "addFolder": "添加文件夹",
+      "addingFolder": "正在添加…",
+      "removeFolder": "移除此文件夹",
+      "emptyTitle": "点击添加文件夹，或直接拖入",
+      "emptyDescription": "快速扫描和完整扫描都会跳过这些文件夹",
+      "systemProtectionNote": "系统保护目录始终会自动跳过",
+      "limitReached": "最多可以排除 {count} 个文件夹",
+      "save": "保存",
+      "saving": "正在保存…",
+      "saveAndScan": "保存并重新扫描"
+    },
     "deleteConfirmTitle": "彻底删除此文件？",
     "deleteConfirmDescription": "删除后无法恢复",
     "deleteConfirmAction": "彻底删除",

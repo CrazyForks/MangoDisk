@@ -1699,6 +1699,23 @@
       "quickHint": "正在透過 Spotlight 快速尋找，可能遺漏尚未建立索引的檔案",
       "completeHint": "正在走訪所選位置，所需時間取決於檔案數量"
     },
+    "exclusions": {
+      "trigger": "排除資料夾",
+      "title": "排除資料夾",
+      "description": "這些資料夾不會出現在大型檔案掃描結果中",
+      "chooseFolders": "選擇要排除的資料夾",
+      "folderCount": "已排除 {count} 個資料夾",
+      "addFolder": "加入資料夾",
+      "addingFolder": "正在加入…",
+      "removeFolder": "移除此資料夾",
+      "emptyTitle": "點擊加入資料夾，或直接拖入",
+      "emptyDescription": "快速掃描和完整掃描都會略過這些資料夾",
+      "systemProtectionNote": "系統保護目錄一律會自動略過",
+      "limitReached": "最多可以排除 {count} 個資料夾",
+      "save": "儲存",
+      "saving": "正在儲存…",
+      "saveAndScan": "儲存並重新掃描"
+    },
     "deleteConfirmTitle": "永久刪除此檔案？",
     "deleteConfirmDescription": "刪除後無法復原",
     "deleteConfirmAction": "永久刪除",

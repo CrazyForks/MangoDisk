@@ -6,11 +6,17 @@ import type { LargeFileScanMode, LargeFilesResult } from '@/lib/models/large-fil
 import type { TraversalProgress } from '@/lib/models/progress';
 
 export class LargeFileService {
-  static find(path: string | undefined, minimumBytes: number, scanMode: LargeFileScanMode): Promise<LargeFilesResult> {
+  static find(
+    path: string | undefined,
+    minimumBytes: number,
+    scanMode: LargeFileScanMode,
+    excludedFolders: string[]
+  ): Promise<LargeFilesResult> {
     return invoke<LargeFilesResult>('find_large_files', {
       path: path?.trim() || null,
       minimumBytes,
       scanMode,
+      excludedPaths: excludedFolders,
     });
   }
 

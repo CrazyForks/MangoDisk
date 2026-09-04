@@ -29,12 +29,14 @@ impl LargeFileService {
         path: Option<String>,
         minimum_bytes: u64,
         scan_mode: LargeFileScanMode,
+        excluded_paths: Vec<String>,
         callback: impl ProgressSink,
     ) -> CoreResult<LargeFilesResult> {
         let result = StorageTraversal::find_large_files_with_progress(
             path,
             minimum_bytes,
             scan_mode,
+            excluded_paths,
             move |progress| callback.report(progress),
         )?;
         Ok(publish_result_session(result)?)
@@ -61,12 +63,14 @@ impl LargeFileService {
         path: Option<String>,
         minimum_bytes: u64,
         scan_mode: LargeFileScanMode,
+        excluded_paths: Vec<String>,
         callback: impl Fn(TraversalProgress) + Send + Sync + 'static,
     ) -> CoreResult<(LargeFilesResult, LargeFileScanDiagnostics)> {
         StorageTraversal::find_large_files_with_diagnostics(
             path,
             minimum_bytes,
             scan_mode,
+            excluded_paths,
             callback,
         )
     }
@@ -156,6 +160,8 @@ impl LargeFileService {
 mod tests {
     use std::{fs, io::Write, path::PathBuf};
 
+    use mangodisk_platform::{current_platform, Platform};
+
     use super::*;
     use crate::storage::large_files::LARGE_FILE_CANDIDATE_FLOOR_BYTES;
 
@@ -177,6 +183,47 @@ mod tests {
         fn file(&self) -> PathBuf {
             self.root.join("candidate.bin")
         }
+
+        fn write_dense_candidate(&self, path: &Path) {
+            fs::write(
+                path,
+                vec![3_u8; (LARGE_FILE_CANDIDATE_FLOOR_BYTES + 1024) as usize],
+            )
+            .expect("the dense large-file candidate should be written");
+        }
+    }
+
+    #[test]
+    fn complete_scan_omits_candidates_below_a_user_exclusion() {
+        let _operation_lock = crate::shared::operation::test_operation_lock();
+        cache::clear_all().expect("the large-file cache should be clear before the service test");
+        let fixture = LargeFileFixture::new();
+        let excluded = fixture.root.join("excluded");
+        fs::create_dir_all(&excluded).expect("the excluded directory should be created");
+        let included_file = fixture.root.join("included.bin");
+        let excluded_file = excluded.join("excluded.bin");
+        fixture.write_dense_candidate(&included_file);
+        fixture.write_dense_candidate(&excluded_file);
+
+        let result = LargeFileService::find_with_progress(
+            Some(fixture.root.to_string_lossy().into_owned()),
+            LARGE_FILE_CANDIDATE_FLOOR_BYTES,
+            LargeFileScanMode::Complete,
+            vec![excluded.to_string_lossy().into_owned()],
+            |_| {},
+        )
+        .expect("the complete scan should apply the user exclusion");
+
+        assert_eq!(result.entries.len(), 1);
+        let included_file =
+            fs::canonicalize(&included_file).expect("the included candidate should resolve");
+        let excluded_file =
+            fs::canonicalize(&excluded_file).expect("the excluded candidate should resolve");
+        assert!(current_platform().paths_equal(Path::new(&result.entries[0].path), &included_file));
+        assert!(result
+            .entries
+            .iter()
+            .all(|entry| !current_platform().paths_equal(Path::new(&entry.path), &excluded_file)));
     }
 
     impl Drop for LargeFileFixture {
@@ -200,6 +247,7 @@ mod tests {
             Some(fixture.root.to_string_lossy().into_owned()),
             1,
             LargeFileScanMode::Complete,
+            vec![],
             |_| {},
         )
         .expect("the large-file service should scan the isolated fixture");
@@ -240,6 +288,7 @@ mod tests {
             Some(fixture.root.to_string_lossy().into_owned()),
             1,
             LargeFileScanMode::Complete,
+            vec![],
             |_| {},
         )
         .expect("the changed large-file fixture should rescan successfully");

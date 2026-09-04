@@ -10,11 +10,18 @@ pub async fn find_large_files(
     path: Option<String>,
     minimum_bytes: u64,
     scan_mode: LargeFileScanMode,
+    excluded_paths: Vec<String>,
 ) -> CommandResult<LargeFilesResult> {
     run_blocking("find_large_files", move || {
-        LargeFileService::find_with_progress(path, minimum_bytes, scan_mode, move |progress| {
-            events::emit(&app, events::LARGE_FILES_PROGRESS, progress);
-        })
+        LargeFileService::find_with_progress(
+            path,
+            minimum_bytes,
+            scan_mode,
+            excluded_paths,
+            move |progress| {
+                events::emit(&app, events::LARGE_FILES_PROGRESS, progress);
+            },
+        )
     })
     .await
 }

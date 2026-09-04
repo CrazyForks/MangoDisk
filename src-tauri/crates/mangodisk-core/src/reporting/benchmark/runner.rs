@@ -638,6 +638,7 @@ fn benchmark_large_files(
             Some(display_path(root)),
             LARGE_FILE_MINIMUM_BYTES,
             LargeFileScanMode::Complete,
+            vec![],
             move |progress| {
                 if let Ok(mut capture) = callback_capture.lock() {
                     capture.record(progress);

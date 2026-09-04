@@ -1775,6 +1775,23 @@
       "quickHint": "Spotlight で検索中です。未索引のファイルは見つからない場合があります",
       "completeHint": "選択した場所を走査中です。所要時間はファイル数によって変わります"
     },
+    "exclusions": {
+      "trigger": "除外フォルダ",
+      "title": "除外フォルダ",
+      "description": "これらのフォルダ内のファイルは大容量ファイルの検索結果に表示されません",
+      "chooseFolders": "除外するフォルダを選択",
+      "folderCount": "{count} 個のフォルダを除外中",
+      "addFolder": "フォルダを追加",
+      "addingFolder": "追加中…",
+      "removeFolder": "このフォルダを削除",
+      "emptyTitle": "クリックして追加、またはフォルダをドロップ",
+      "emptyDescription": "クイック検索と完全検索の両方でこれらのフォルダをスキップします",
+      "systemProtectionNote": "システム保護フォルダは常に自動でスキップされます",
+      "limitReached": "除外できるフォルダは最大 {count} 個です",
+      "save": "保存",
+      "saving": "保存中…",
+      "saveAndScan": "保存して再検索"
+    },
     "deleteConfirmTitle": "このファイルを完全に削除しますか？",
     "deleteConfirmDescription": "これは元に戻せません",
     "deleteConfirmAction": "完全に削除",

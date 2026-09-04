@@ -5,6 +5,7 @@ import type { LargeFileEntry, LargeFilesResult } from '@/lib/models/large-file';
 import { LargeFileService } from '@/lib/services/large-file-service';
 import { LoggerService } from '@/lib/services/logger-service';
 import { PermanentDeleteService } from '@/lib/services/permanent-delete-service';
+import { PreferenceStorageService } from '@/lib/services/preference-storage-service';
 
 import { useAppStore } from './app-store';
 import { useHistoryStore } from './history-store';
@@ -108,5 +109,38 @@ describe('large files store', () => {
 
     expect(filter).toHaveBeenCalledWith(source.scanId, 500);
     expect(store.result).toEqual(filtered);
+  });
+
+  it('restores and saves a normalized exclusion list', async () => {
+    vi.spyOn(PreferenceStorageService, 'loadLargeFilePreferences').mockResolvedValue({
+      schemaVersion: 1,
+      excludedFolders: ['/fixture/cache'],
+    });
+    const save = vi.spyOn(PreferenceStorageService, 'saveLargeFilePreferences').mockResolvedValue();
+    const store = useLargeFilesStore();
+
+    await store.initializePreferences();
+    await store.saveExcludedFolders(['/fixture/cache/nested', '/fixture/cache', '/fixture/downloads']);
+
+    expect(store.excludedFolders).toEqual(['/fixture/cache', '/fixture/downloads']);
+    expect(save).toHaveBeenCalledWith({
+      schemaVersion: 1,
+      excludedFolders: ['/fixture/cache', '/fixture/downloads'],
+    });
+  });
+
+  it('passes exclusions to Core and remembers the scan configuration', async () => {
+    vi.spyOn(PreferenceStorageService, 'loadLargeFilePreferences').mockResolvedValue({
+      schemaVersion: 1,
+      excludedFolders: ['/fixture/cache'],
+    });
+    vi.spyOn(LargeFileService, 'listenProgress').mockResolvedValue(() => undefined);
+    const find = vi.spyOn(LargeFileService, 'find').mockResolvedValue(createResult());
+    const store = useLargeFilesStore();
+
+    await store.find('/fixture', 50, 'complete');
+
+    expect(find).toHaveBeenCalledWith('/fixture', 50, 'complete', ['/fixture/cache']);
+    expect(store.resultExcludedFolders).toEqual(['/fixture/cache']);
   });
 });

@@ -20,7 +20,7 @@ use crate::shared::{CoreError, CoreErrorReason, CoreResult, TraversalProgress, T
 use crate::storage::analysis::AnalysisResult;
 use crate::storage::index::cache::{self, CacheReuseDecision, DirectoryAggregate, IndexedFile};
 use crate::storage::large_files::{
-    LargeFileScanMode, LargeFilesResult, LARGE_FILE_CANDIDATE_FLOOR_BYTES,
+    LargeFileExclusions, LargeFileScanMode, LargeFilesResult, LARGE_FILE_CANDIDATE_FLOOR_BYTES,
 };
 use mangodisk_platform::{
     current_platform, FastAnalysisQuery, FastAnalysisRecord, FastAnalysisScanError,
@@ -70,6 +70,7 @@ struct AnalysisTraversal<'a> {
     scanned_at_ms: u64,
     sink: &'a mut IndexRecordSink,
     cancelled: &'a AtomicBool,
+    large_file_exclusions: Option<&'a LargeFileExclusions>,
 }
 
 struct LargeFileStreamValidation<'a> {
@@ -81,6 +82,7 @@ struct LargeFileStreamValidation<'a> {
     aggregate: DirectoryAggregate,
     valid_count: usize,
     report_candidate_progress: bool,
+    exclusions: &'a LargeFileExclusions,
 }
 
 struct FastAnalysisStreamValidation<'a> {
@@ -230,6 +232,7 @@ impl StorageTraversal {
                     change_token,
                     &progress,
                     operation.cancelled(),
+                    None,
                 )
                 .map_err(traversal_core_error)?
             }
@@ -250,6 +253,7 @@ impl StorageTraversal {
                     change_token,
                     &progress,
                     operation.cancelled(),
+                    None,
                 )
                 .map_err(traversal_core_error)?
             }
@@ -295,16 +299,24 @@ impl StorageTraversal {
         path: Option<String>,
         minimum_bytes: u64,
         scan_mode: LargeFileScanMode,
+        excluded_paths: Vec<String>,
         callback: impl Fn(TraversalProgress) + Send + Sync + 'static,
     ) -> CoreResult<LargeFilesResult> {
-        Self::find_large_files_with_diagnostics(path, minimum_bytes, scan_mode, callback)
-            .map(|(result, _)| result)
+        Self::find_large_files_with_diagnostics(
+            path,
+            minimum_bytes,
+            scan_mode,
+            excluded_paths,
+            callback,
+        )
+        .map(|(result, _)| result)
     }
 
     pub(crate) fn find_large_files_with_diagnostics(
         path: Option<String>,
         minimum_bytes: u64,
         scan_mode: LargeFileScanMode,
+        excluded_paths: Vec<String>,
         callback: impl Fn(TraversalProgress) + Send + Sync + 'static,
     ) -> CoreResult<(LargeFilesResult, LargeFileScanDiagnostics)> {
         let operation = OperationGuard::start(CoordinatedOperationKind::LargeFiles)?;
@@ -322,18 +334,23 @@ impl StorageTraversal {
                 "the scan root must be a directory or volume",
             ));
         }
+        let exclusions = LargeFileExclusions::resolve(&root, excluded_paths)?;
 
         let result_minimum_bytes = minimum_bytes.max(LARGE_FILE_CANDIDATE_FLOOR_BYTES);
         let progress = Arc::new(ProgressTracker::new(operation.id(), callback, 0));
         log::info!(
-            "large_file_scan_started operation_id={} platform={} root={} mode={} requested_minimum_bytes={} result_minimum_bytes={} candidate_floor_bytes={}",
+            "large_file_scan_started operation_id={} platform={} root={} mode={} requested_minimum_bytes={} result_minimum_bytes={} candidate_floor_bytes={} requested_exclusions={} active_exclusions={} unavailable_exclusions={} out_of_scope_exclusions={}",
             operation.id(),
             current_platform().os_name(),
             diagnostic_path(&root),
             scan_mode.as_str(),
             minimum_bytes,
             result_minimum_bytes,
-            LARGE_FILE_CANDIDATE_FLOOR_BYTES
+            LARGE_FILE_CANDIDATE_FLOOR_BYTES,
+            exclusions.requested_count(),
+            exclusions.active_count(),
+            exclusions.unavailable_count(),
+            exclusions.out_of_scope_count()
         );
 
         progress.emit(TraversalStage::Analyzing, &root);
@@ -349,6 +366,7 @@ impl StorageTraversal {
                 None,
                 &progress,
                 operation.cancelled(),
+                &exclusions,
             )
             .map_err(traversal_core_error)?
         } else {
@@ -358,6 +376,7 @@ impl StorageTraversal {
                 scanned_at_ms,
                 &progress,
                 operation.cancelled(),
+                &exclusions,
             )
             .map_err(|error| analysis_stream_core_error(&operation, error))?
         };
@@ -442,6 +461,7 @@ impl StorageTraversal {
                     None,
                     &progress,
                     operation.cancelled(),
+                    Some(&exclusions),
                 )
                 .map_err(traversal_core_error)?;
                 diagnostics.validation_or_traversal_ms =
@@ -572,6 +592,12 @@ fn measure_analysis_directory(
             continue;
         };
         let child_path = entry.path();
+        if traversal
+            .large_file_exclusions
+            .is_some_and(|exclusions| exclusions.matches(&child_path))
+        {
+            continue;
+        }
         if current_platform()
             .should_skip(&child_path, traversal.scan_root, traversal.purpose)
             .is_some()
@@ -848,6 +874,7 @@ impl<'a> LargeFileStreamValidation<'a> {
         progress: &'a Arc<ProgressTracker>,
         cancelled: &'a AtomicBool,
         report_candidate_progress: bool,
+        exclusions: &'a LargeFileExclusions,
     ) -> Result<Self, String> {
         let root_metadata = fs::symlink_metadata(root)
             .map_err(|error| format!("failed to read scan-root metadata: {error}"))?;
@@ -863,6 +890,7 @@ impl<'a> LargeFileStreamValidation<'a> {
             },
             valid_count: 0,
             report_candidate_progress,
+            exclusions,
         })
     }
 
@@ -873,6 +901,9 @@ impl<'a> LargeFileStreamValidation<'a> {
         // A platform index narrows the candidate set but is not a safety boundary. Files may move,
         // be replaced, or shrink after indexing, so every candidate still needs live validation of
         // scope, protection policy, link type, and size.
+        if self.exclusions.matches(&path) {
+            return Ok(());
+        }
         if !path.starts_with(self.root)
             || current_platform()
                 .should_skip(&path, self.root, ScanPurpose::LargeFiles)
@@ -935,6 +966,7 @@ fn stream_indexed_large_files_once(
     scanned_at_ms: u64,
     progress: &Arc<ProgressTracker>,
     cancelled: &AtomicBool,
+    exclusions: &LargeFileExclusions,
     sink: &mut IndexRecordSink,
 ) -> Result<
     Option<(DirectoryAggregate, usize, LargeFileCandidateSummary)>,
@@ -947,6 +979,7 @@ fn stream_indexed_large_files_once(
         progress,
         cancelled,
         true,
+        exclusions,
     )
     .map_err(LargeFileCandidateScanError::Consumer)?;
     let summary = current_platform().fast_large_file_candidates(
@@ -982,6 +1015,7 @@ fn stream_complete_large_files(
     scanned_at_ms: u64,
     progress: &Arc<ProgressTracker>,
     cancelled: &AtomicBool,
+    exclusions: &LargeFileExclusions,
 ) -> Result<FastLargeFileScanOutcome, AnalysisStreamError> {
     let mut sink = IndexRecordSink::memory(None);
     let mut validation = LargeFileStreamValidation::new(
@@ -991,12 +1025,16 @@ fn stream_complete_large_files(
         progress,
         cancelled,
         false,
+        exclusions,
     )?;
     let summary = current_platform().fast_analysis_records(
         FastAnalysisQuery {
             root,
             purpose: ScanPurpose::LargeFiles,
             large_file_minimum_bytes: minimum_bytes,
+            // Native adapters currently expose a non-capturing platform-prune callback. Core still
+            // applies user exclusions to every emitted candidate below; the generic traversal can
+            // additionally avoid descending into excluded subtrees.
             should_prune_directory: |_| false,
         },
         &|| cancelled.load(Ordering::Relaxed),
@@ -1056,52 +1094,21 @@ fn traverse_once(
     progress: &Arc<ProgressTracker>,
     cancelled: &AtomicBool,
     sink: &mut IndexRecordSink,
+    large_file_exclusions: Option<&LargeFileExclusions>,
 ) -> Result<DirectoryAggregate, String> {
-    traverse_subtree(
-        root,
-        root,
-        purpose,
-        scanned_at_ms,
-        progress,
-        cancelled,
-        sink,
-    )
-}
-
-fn traverse_subtree(
-    scan_root: &Path,
-    measurement_root: &Path,
-    purpose: ScanPurpose,
-    scanned_at_ms: u64,
-    progress: &Arc<ProgressTracker>,
-    cancelled: &AtomicBool,
-    sink: &mut IndexRecordSink,
-) -> Result<DirectoryAggregate, String> {
-    let root_metadata = fs::symlink_metadata(scan_root)
+    let root_metadata = fs::symlink_metadata(root)
         .map_err(|error| format!("failed to read scan-root metadata: {error}"))?;
-    if measurement_root != scan_root {
-        let measurement_metadata = fs::symlink_metadata(measurement_root)
-            .map_err(|error| format!("failed to read subtree metadata: {error}"))?;
-        if !current_platform().is_same_filesystem(&root_metadata, &measurement_metadata) {
-            let aggregate = DirectoryAggregate {
-                skipped_count: 1,
-                scanned_at_ms,
-                ..DirectoryAggregate::default()
-            };
-            sink.push_directory(measurement_root.to_path_buf(), aggregate)?;
-            return Ok(aggregate);
-        }
-    }
     let mut traversal = AnalysisTraversal {
-        scan_root,
+        scan_root: root,
         root_metadata,
         purpose,
         progress,
         scanned_at_ms,
         sink,
         cancelled,
+        large_file_exclusions,
     };
-    measure_analysis_directory(measurement_root, &mut traversal)
+    measure_analysis_directory(root, &mut traversal)
 }
 
 fn stream_fast_analysis_once(
@@ -1192,6 +1199,7 @@ fn stream_fast_large_files(
     change_token: Option<FilesystemChangeToken>,
     progress: &Arc<ProgressTracker>,
     cancelled: &AtomicBool,
+    exclusions: &LargeFileExclusions,
 ) -> Result<FastLargeFileScanOutcome, String> {
     let mut sink = IndexRecordSink::memory(change_token);
     let attempt = stream_indexed_large_files_once(
@@ -1200,6 +1208,7 @@ fn stream_fast_large_files(
         scanned_at_ms,
         progress,
         cancelled,
+        exclusions,
         &mut sink,
     );
     match attempt {
@@ -1233,10 +1242,19 @@ fn traverse_memory_only(
     change_token: Option<FilesystemChangeToken>,
     progress: &Arc<ProgressTracker>,
     cancelled: &AtomicBool,
+    large_file_exclusions: Option<&LargeFileExclusions>,
 ) -> Result<(DirectoryAggregate, CompletedIndexSink), String> {
     progress.reset_scan_observations_for_retry();
     let mut sink = IndexRecordSink::memory(change_token);
-    let aggregate = traverse_once(root, purpose, scanned_at_ms, progress, cancelled, &mut sink)?;
+    let aggregate = traverse_once(
+        root,
+        purpose,
+        scanned_at_ms,
+        progress,
+        cancelled,
+        &mut sink,
+        large_file_exclusions,
+    )?;
     let completed = sink.finish()?;
     Ok((aggregate, completed))
 }

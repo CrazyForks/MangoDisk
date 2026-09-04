@@ -12,13 +12,13 @@ use crate::{
         CoreResult, TraversalProgress,
     },
     storage::index::cache,
-    storage::large_files::LargeFilesResult,
+    storage::large_files::{LargeFileScanMode, LargeFilesResult},
     storage::traversal::{LargeFileScanDiagnostics, StorageTraversal},
     ProgressSink,
 };
 
 use super::session::{
-    publish_result_session, resolve_delete_candidates, resolve_open_target,
+    filter_result, publish_result_session, resolve_delete_candidates, resolve_open_target,
     synchronize_removed_paths,
 };
 
@@ -28,25 +28,47 @@ impl LargeFileService {
     pub fn find_with_progress(
         path: Option<String>,
         minimum_bytes: u64,
-        refresh: bool,
+        scan_mode: LargeFileScanMode,
         callback: impl ProgressSink,
     ) -> CoreResult<LargeFilesResult> {
         let result = StorageTraversal::find_large_files_with_progress(
             path,
             minimum_bytes,
-            refresh,
+            scan_mode,
             move |progress| callback.report(progress),
         )?;
         Ok(publish_result_session(result)?)
     }
 
+    pub fn filter(scan_id: u64, minimum_bytes: u64) -> CoreResult<LargeFilesResult> {
+        let started = Instant::now();
+        let result = filter_result(scan_id, minimum_bytes)?;
+        let result = publish_result_session(result)?;
+        log::info!(
+            "large_file_filter_finished source_scan_id={} scan_id={} mode={} minimum_bytes={} total_count={} returned_count={} elapsed_ms={}",
+            scan_id,
+            result.scan_id,
+            result.scan_mode.as_str(),
+            result.minimum_bytes,
+            result.total_count,
+            result.returned_count,
+            started.elapsed().as_millis()
+        );
+        Ok(result)
+    }
+
     pub(crate) fn find_with_diagnostics(
         path: Option<String>,
         minimum_bytes: u64,
-        refresh: bool,
+        scan_mode: LargeFileScanMode,
         callback: impl Fn(TraversalProgress) + Send + Sync + 'static,
     ) -> CoreResult<(LargeFilesResult, LargeFileScanDiagnostics)> {
-        StorageTraversal::find_large_files_with_diagnostics(path, minimum_bytes, refresh, callback)
+        StorageTraversal::find_large_files_with_diagnostics(
+            path,
+            minimum_bytes,
+            scan_mode,
+            callback,
+        )
     }
 
     pub fn cancel() {
@@ -135,7 +157,7 @@ mod tests {
     use std::{fs, io::Write, path::PathBuf};
 
     use super::*;
-    use crate::storage::index::cache::LARGE_FILE_INDEX_FLOOR_BYTES;
+    use crate::storage::large_files::LARGE_FILE_CANDIDATE_FLOOR_BYTES;
 
     struct LargeFileFixture {
         root: PathBuf,
@@ -170,18 +192,25 @@ mod tests {
         HistoryService::clear().expect("the test history should be clear before the service test");
         let fixture = LargeFileFixture::new();
         let path = fixture.file();
-        let initial_bytes = LARGE_FILE_INDEX_FLOOR_BYTES.saturating_add(1024 * 1024);
+        let initial_bytes = LARGE_FILE_CANDIDATE_FLOOR_BYTES.saturating_add(1024 * 1024);
         fs::write(&path, vec![3_u8; initial_bytes as usize])
             .expect("the dense large-file candidate should be written");
 
         let initial = LargeFileService::find_with_progress(
             Some(fixture.root.to_string_lossy().into_owned()),
             1,
-            true,
+            LargeFileScanMode::Complete,
             |_| {},
         )
         .expect("the large-file service should scan the isolated fixture");
         assert_eq!(initial.entries.len(), 1);
+        let filtered = LargeFileService::filter(initial.scan_id, initial_bytes + 1)
+            .expect("the active scan should support an in-memory threshold filter");
+        assert!(filtered.entries.is_empty());
+        let restored = LargeFileService::filter(filtered.scan_id, LARGE_FILE_CANDIDATE_FLOOR_BYTES)
+            .expect("lowering the threshold should restore the retained candidate");
+        assert_eq!(restored.entries.len(), 1);
+        assert_eq!(restored.scan_mode, LargeFileScanMode::Complete);
         let selected_path = initial.entries[0].path.clone();
         assert_eq!(
             LargeFileService::resolve_open_target(initial.scan_id, selected_path.clone())
@@ -210,7 +239,7 @@ mod tests {
         let refreshed = LargeFileService::find_with_progress(
             Some(fixture.root.to_string_lossy().into_owned()),
             1,
-            true,
+            LargeFileScanMode::Complete,
             |_| {},
         )
         .expect("the changed large-file fixture should rescan successfully");

@@ -631,6 +631,10 @@ impl Platform for WindowsPlatform {
         large_files::find_candidates(self, root, minimum_bytes, is_cancelled, consumer).map(Some)
     }
 
+    fn fast_large_file_candidates_are_complete(&self) -> bool {
+        true
+    }
+
     fn fast_project_marker_candidates(
         &self,
         query: ProjectMarkerCandidateQuery<'_>,

@@ -8,7 +8,7 @@ import type { ApplicationLeftoverCandidate, ApplicationUninstallBatchSelection }
 import type { ApplicationCloseMode } from '@/lib/models/application-close';
 import type { DirectoryEntryInfo } from '@/lib/models/analysis';
 import type { DuplicateFileEntry } from '@/lib/models/duplicate-file';
-import type { LargeFileEntry } from '@/lib/models/large-file';
+import type { LargeFileEntry, LargeFileScanMode } from '@/lib/models/large-file';
 import { CLEANUP_OPERATION_IDS, CLEANUP_SCAN_SCOPE_MODES, type CleanupScanScope } from '@/lib/models/cleanup';
 import {
   createSidebarLayoutState,
@@ -357,13 +357,14 @@ function deleteAnalysisEntryPermanently(entry: DirectoryEntryInfo) {
   return analysisStore.deletePermanently(entry);
 }
 
-function findLargeFiles(path: string | undefined, refresh = false) {
-  return largeFilesStore.find(path, store.settings.largeFileMinimumBytes, refresh);
+function findLargeFiles(path: string | undefined, scanMode: LargeFileScanMode) {
+  return largeFilesStore.find(path, store.settings.largeFileMinimumBytes, scanMode);
 }
 
 function updateLargeFileMinimum(minimumBytes: number) {
   if (minimumBytes === store.settings.largeFileMinimumBytes) return;
   saveSettings({ ...store.settings, largeFileMinimumBytes: minimumBytes });
+  void largeFilesStore.filter(minimumBytes);
 }
 
 async function deleteLargeFilesPermanently(entries: LargeFileEntry[]) {

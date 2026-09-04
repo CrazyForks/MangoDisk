@@ -1540,6 +1540,10 @@
     "scanResourcesReleasing": {
       "title": "Previous scan is finishing",
       "message": "The system is releasing resources from the previous disk scan. Try again in a moment"
+    },
+    "quickScanUnavailable": {
+      "title": "Quick Scan is unavailable",
+      "message": "Spotlight is not ready for this location. Use Complete Scan instead"
     }
   },
   "folderPicker": {
@@ -1760,7 +1764,15 @@
     "summaryCount": "Found {count} file at least {size} | Found {count} files at least {size}",
     "summarySpace": "using",
     "scanning": "Scanning for large files…",
-    "scanHint": "Scans file information across the disk and skips protected folders",
+    "scanMode": {
+      "label": "Choose scan method",
+      "quick": "Quick Scan",
+      "quickDescription": "Uses Spotlight for speed, but may miss files not yet indexed",
+      "complete": "Complete Scan",
+      "completeDescription": "Walks the selected location for more complete results",
+      "quickHint": "Searching with Spotlight; files not yet indexed may be missed",
+      "completeHint": "Scanning the selected location; time depends on the number of files"
+    },
     "deleteConfirmTitle": "Permanently delete this file?",
     "deleteConfirmDescription": "This cannot be undone",
     "deleteConfirmAction": "Delete Permanently",

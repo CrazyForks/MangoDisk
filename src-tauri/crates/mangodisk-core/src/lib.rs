@@ -105,7 +105,9 @@ pub use storage::duplicates::{
     DuplicateFileEntry, DuplicateFileService, DuplicateFilesResult, DuplicateGroup,
     DuplicateGroupBatch, DuplicateGroupPage,
 };
-pub use storage::large_files::{LargeFileEntry, LargeFileService, LargeFilesResult};
+pub use storage::large_files::{
+    LargeFileEntry, LargeFileScanMode, LargeFileService, LargeFilesResult,
+};
 pub use system_maintenance::{
     SystemMaintenanceCatalog, SystemMaintenanceCatalogSummary, SystemMaintenanceCategory,
     SystemMaintenanceExecutionItemResult, SystemMaintenanceExecutionRequest,

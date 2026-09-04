@@ -25,6 +25,7 @@ pub enum CoreErrorReason {
     AccessDeniedOrBusy,
     ItemChanged,
     ScanResourcesReleasing,
+    QuickScanUnavailable,
 }
 
 impl CoreErrorReason {
@@ -34,6 +35,7 @@ impl CoreErrorReason {
             Self::AccessDeniedOrBusy => "accessDeniedOrBusy",
             Self::ItemChanged => "itemChanged",
             Self::ScanResourcesReleasing => "scanResourcesReleasing",
+            Self::QuickScanUnavailable => "quickScanUnavailable",
         }
     }
 }

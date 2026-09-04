@@ -1470,6 +1470,10 @@
     "scanResourcesReleasing": {
       "title": "正在结束上一次扫描",
       "message": "系统正在释放上一次磁盘扫描占用的资源，请稍候片刻再重试"
+    },
+    "quickScanUnavailable": {
+      "title": "快速扫描暂不可用",
+      "message": "Spotlight 尚未准备好此位置，请改用完整扫描"
     }
   },
   "folderPicker": {
@@ -1690,7 +1694,15 @@
     "summaryCount": "发现 {count} 个大于等于 {size} 的文件",
     "summarySpace": "共占用",
     "scanning": "正在扫描大文件…",
-    "scanHint": "扫描磁盘中的文件信息，并跳过受保护目录",
+    "scanMode": {
+      "label": "选择扫描方式",
+      "quick": "快速扫描",
+      "quickDescription": "使用 Spotlight，速度快，但可能遗漏尚未索引的文件",
+      "complete": "完整扫描",
+      "completeDescription": "遍历所选位置，结果更完整，耗时更长",
+      "quickHint": "正在通过 Spotlight 快速查找，可能遗漏尚未索引的文件",
+      "completeHint": "正在遍历所选位置，耗时取决于文件数量"
+    },
     "deleteConfirmTitle": "彻底删除此文件？",
     "deleteConfirmDescription": "删除后无法恢复",
     "deleteConfirmAction": "彻底删除",

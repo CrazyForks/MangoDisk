@@ -6,6 +6,13 @@ export const LARGE_FILE_SORT_KEYS = {
   modified: 'modified',
 } as const;
 
+export const LARGE_FILE_SCAN_MODES = {
+  quick: 'quick',
+  complete: 'complete',
+} as const;
+
+export type LargeFileScanMode = (typeof LARGE_FILE_SCAN_MODES)[keyof typeof LARGE_FILE_SCAN_MODES];
+
 export const LARGE_FILE_MINIMUM_PRESETS = [
   { amount: 50, unit: BYTE_SIZE_UNITS.megabytes },
   { amount: 100, unit: BYTE_SIZE_UNITS.megabytes },
@@ -29,12 +36,12 @@ export interface LargeFilesResult {
   scanId: number;
   root: string;
   scannedAtMs: number;
+  scanMode: LargeFileScanMode;
   minimumBytes: number;
   totalBytes: number;
   totalCount: number;
   returnedCount: number;
   truncated: boolean;
   skippedCount: number;
-  cacheReused: boolean;
   entries: LargeFileEntry[];
 }

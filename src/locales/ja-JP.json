@@ -1542,6 +1542,10 @@
     "scanResourcesReleasing": {
       "title": "前回のスキャンを終了しています",
       "message": "前回のディスクスキャンで使用したリソースを解放しています。しばらくしてから再試行してください"
+    },
+    "quickScanUnavailable": {
+      "title": "クイックスキャンを使用できません",
+      "message": "この場所では Spotlight の準備ができていません。完全スキャンを使用してください"
     }
   },
   "folderPicker": {
@@ -1762,7 +1766,15 @@
     "summaryCount": "{size} 以上のファイルが {count} 件見つかりました | {size} 以上のファイルが {count} 件見つかりました",
     "summarySpace": "合計使用量",
     "scanning": "大容量ファイルをスキャン中…",
-    "scanHint": "ディスク全体のファイル情報をスキャンし、保護されたフォルダーはスキップします",
+    "scanMode": {
+      "label": "スキャン方法を選択",
+      "quick": "クイックスキャン",
+      "quickDescription": "Spotlight ですばやく検索しますが、未索引のファイルは見つからない場合があります",
+      "complete": "完全スキャン",
+      "completeDescription": "選択した場所を走査し、より完全な結果を表示します",
+      "quickHint": "Spotlight で検索中です。未索引のファイルは見つからない場合があります",
+      "completeHint": "選択した場所を走査中です。所要時間はファイル数によって変わります"
+    },
     "deleteConfirmTitle": "このファイルを完全に削除しますか？",
     "deleteConfirmDescription": "これは元に戻せません",
     "deleteConfirmAction": "完全に削除",

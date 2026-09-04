@@ -2,6 +2,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LargeFileEntry, LargeFilesResult } from '@/lib/models/large-file';
+import { LargeFileService } from '@/lib/services/large-file-service';
 import { LoggerService } from '@/lib/services/logger-service';
 import { PermanentDeleteService } from '@/lib/services/permanent-delete-service';
 
@@ -29,18 +30,18 @@ function createResult(): LargeFilesResult {
     scanId: 9,
     root: '/fixture',
     scannedAtMs: 1,
+    scanMode: 'complete',
     minimumBytes: 1,
     totalBytes: removed.bytes + failed.bytes,
     totalCount: 2,
     returnedCount: 2,
     truncated: false,
     skippedCount: 0,
-    cacheReused: false,
     entries: [removed, failed],
   };
 }
 
-describe('large files store deletion', () => {
+describe('large files store', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     vi.restoreAllMocks();
@@ -84,5 +85,28 @@ describe('large files store deletion', () => {
     expect(result).toBeUndefined();
     expect(remove).not.toHaveBeenCalled();
     expect(store.deleting).toBe(false);
+  });
+
+  it('filters the active scan without starting another filesystem scan', async () => {
+    const source = createResult();
+    const filtered = {
+      ...source,
+      scanId: 10,
+      minimumBytes: 500,
+      totalBytes: 0,
+      totalCount: 0,
+      returnedCount: 0,
+      entries: [],
+    };
+    const filter = vi.spyOn(LargeFileService, 'filter').mockResolvedValue(filtered);
+    const appStore = useAppStore();
+    appStore.settings.largeFileMinimumBytes = 500;
+    const store = useLargeFilesStore();
+    store.result = source;
+
+    await store.filter(500);
+
+    expect(filter).toHaveBeenCalledWith(source.scanId, 500);
+    expect(store.result).toEqual(filtered);
   });
 });

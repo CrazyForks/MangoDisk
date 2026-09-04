@@ -1466,6 +1466,10 @@
     "scanResourcesReleasing": {
       "title": "正在結束上一次掃描",
       "message": "系統正在釋放上一次磁碟掃描占用的資源，請稍候片刻再重試"
+    },
+    "quickScanUnavailable": {
+      "title": "快速掃描暫時無法使用",
+      "message": "Spotlight 尚未準備好此位置，請改用完整掃描"
     }
   },
   "folderPicker": {
@@ -1686,7 +1690,15 @@
     "summaryCount": "找到 {count} 個大於或等於 {size} 的檔案",
     "summarySpace": "共佔用",
     "scanning": "正在掃描大型檔案…",
-    "scanHint": "掃描磁碟中的檔案資訊，並跳過受保護的資料夾",
+    "scanMode": {
+      "label": "選擇掃描方式",
+      "quick": "快速掃描",
+      "quickDescription": "使用 Spotlight，速度快，但可能遺漏尚未建立索引的檔案",
+      "complete": "完整掃描",
+      "completeDescription": "走訪所選位置，結果更完整，但需要較長時間",
+      "quickHint": "正在透過 Spotlight 快速尋找，可能遺漏尚未建立索引的檔案",
+      "completeHint": "正在走訪所選位置，所需時間取決於檔案數量"
+    },
     "deleteConfirmTitle": "永久刪除此檔案？",
     "deleteConfirmDescription": "刪除後無法復原",
     "deleteConfirmAction": "永久刪除",

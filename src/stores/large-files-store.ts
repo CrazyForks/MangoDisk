@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 
 import { LOG_DOMAINS, LOG_EVENTS } from '@/lib/models/telemetry';
-import type { LargeFileEntry, LargeFilesResult } from '@/lib/models/large-file';
+import type { LargeFileEntry, LargeFileScanMode, LargeFilesResult } from '@/lib/models/large-file';
 import type { TraversalProgress } from '@/lib/models/progress';
 import { LargeFileService } from '@/lib/services/large-file-service';
 import { LoggerService } from '@/lib/services/logger-service';
@@ -28,7 +28,7 @@ export const useLargeFilesStore = defineStore('large-files', {
     deleting: false,
   }),
   actions: {
-    async find(path: string | undefined, minimumBytes: number, refresh = false) {
+    async find(path: string | undefined, minimumBytes: number, scanMode: LargeFileScanMode) {
       if (this.loading || this.deleting) return;
       const appStore = useAppStore();
       this.loading = true;
@@ -40,9 +40,26 @@ export const useLargeFilesStore = defineStore('large-files', {
         unlisten = await LargeFileService.listenProgress(progress => {
           this.progress = progress;
         });
-        const result = await LargeFileService.find(path, minimumBytes, refresh);
-        // A scan started with an old threshold cannot replace current results.
-        if (appStore.settings.largeFileMinimumBytes === minimumBytes) {
+        const result = await LargeFileService.find(path, minimumBytes, scanMode);
+        this.result = result;
+      } catch (error) {
+        if (!this.cancelling) appStore.reportError(error);
+      } finally {
+        unlisten?.();
+        this.progress = null;
+        this.loading = false;
+        this.cancelling = false;
+      }
+    },
+    async filter(minimumBytes: number) {
+      const source = this.result;
+      if (!source || this.loading || this.deleting) return;
+      const appStore = useAppStore();
+      try {
+        const result = await LargeFileService.filter(source.scanId, minimumBytes);
+        // Threshold queries are intentionally concurrent and filesystem-free. Only the response
+        // matching the current preference may replace the visible result when users click quickly.
+        if (appStore.settings.largeFileMinimumBytes === minimumBytes && this.result === source) {
           this.result = result;
         } else {
           LoggerService.info(LOG_DOMAINS.largeFiles, LOG_EVENTS.staleScanResultIgnored, {
@@ -51,12 +68,7 @@ export const useLargeFilesStore = defineStore('large-files', {
           });
         }
       } catch (error) {
-        if (!this.cancelling) appStore.reportError(error);
-      } finally {
-        unlisten?.();
-        this.progress = null;
-        this.loading = false;
-        this.cancelling = false;
+        appStore.reportError(error);
       }
     },
     async cancel() {

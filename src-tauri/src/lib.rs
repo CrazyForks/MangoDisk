@@ -197,6 +197,7 @@ pub fn run() {
             commands::analysis::cancel_analysis,
             commands::analysis::analyze_path,
             commands::large_files::cancel_large_files,
+            commands::large_files::filter_large_files,
             commands::large_files::find_large_files,
             commands::duplicate_files::cancel_duplicate_files,
             commands::duplicate_files::find_duplicate_files,

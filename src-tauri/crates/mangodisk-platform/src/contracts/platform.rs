@@ -420,6 +420,14 @@ pub trait Platform: Send + Sync {
         Ok(None)
     }
 
+    /// Reports whether the native candidate source covers every reachable file in the scope.
+    ///
+    /// Advisory indexes such as Spotlight keep the default `false`. Authoritative filesystem
+    /// layout readers override this so complete scans can avoid a second enumeration pipeline.
+    fn fast_large_file_candidates_are_complete(&self) -> bool {
+        false
+    }
+
     /// Streams files whose names may identify a development project.
     ///
     /// `None` means the platform has no reliable native index for this scope.

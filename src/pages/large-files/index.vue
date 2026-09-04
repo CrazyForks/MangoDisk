@@ -14,10 +14,9 @@ import MdResultWorkspace from '@/components/custom/md-result-workspace.vue';
 import MdSelectionActionBar from '@/components/custom/md-selection-action-bar.vue';
 import MdDestructiveActionDialog from '@/components/custom/md-destructive-action-dialog.vue';
 import MdIcon from '@/components/icons/md-icon.vue';
-import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FILE_CATEGORY_FILTER_ORDER, FILE_CATEGORY_IDS } from '@/lib/models/file-category';
-import { LARGE_FILE_MINIMUM_PRESETS } from '@/lib/models/large-file';
+import { LARGE_FILE_MINIMUM_PRESETS, LARGE_FILE_SCAN_MODES, type LargeFileScanMode } from '@/lib/models/large-file';
 import { STORAGE_SCOPE_IDS } from '@/lib/models/storage-scope';
 import { ICON_NAMES } from '@/lib/models/ui';
 import type { DiskInfo } from '@/lib/models/disk';
@@ -27,12 +26,14 @@ import type { LargeFileEntry, LargeFilesResult } from '@/lib/models/large-file';
 import * as DiskUtils from '@/lib/utils/disk';
 import * as FileTypeUtils from '@/lib/utils/file-type';
 import { ByteSizeService } from '@/lib/services/byte-size-service';
+import { OperatingSystemService } from '@/lib/services/operating-system-service';
 import * as FormatUtils from '@/lib/utils/format';
 import * as LargeFileEntryUtils from '@/lib/utils/large-file-entry';
 import * as PathUtils from '@/lib/utils/path';
 import { useStorageScopeStore } from '@/stores/storage-scope-store';
 
 import MdLargeFileList from './components/md-large-file-list.vue';
+import MdLargeFileScanButton from './components/md-large-file-scan-button.vue';
 
 const { t } = useI18n({ useScope: 'global' });
 
@@ -48,7 +49,7 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  find: [path: string | undefined, refresh?: boolean];
+  find: [path: string | undefined, scanMode: LargeFileScanMode];
   cancel: [];
   error: [error: unknown];
   updateMinimum: [minimumBytes: number];
@@ -68,6 +69,15 @@ const selectedPaths = ref<string[]>([]);
 const pendingDelete = ref<LargeFileEntry[]>([]);
 const confirmOpen = ref(false);
 const deleteRequested = ref(false);
+const selectableScanModes = OperatingSystemService.isMacOs();
+const requestedScanMode = ref<LargeFileScanMode>(
+  selectableScanModes ? LARGE_FILE_SCAN_MODES.quick : LARGE_FILE_SCAN_MODES.complete
+);
+const scanHint = computed(() =>
+  requestedScanMode.value === LARGE_FILE_SCAN_MODES.quick
+    ? t('largeFiles.scanMode.quickHint')
+    : t('largeFiles.scanMode.completeHint')
+);
 
 const activeDisk = computed(() =>
   DiskUtils.findForPath(
@@ -135,6 +145,12 @@ watch(
     selectedScopePath.value = PathUtils.display(root);
   }
 );
+watch(
+  () => props.result?.scanMode,
+  scanMode => {
+    if (scanMode) requestedScanMode.value = scanMode;
+  }
+);
 watch(minimumEntries, entries => {
   const existingPaths = new Set(entries.map(entry => entry.path));
   selectedPaths.value = selectedPaths.value.filter(path => existingPaths.has(path));
@@ -148,9 +164,10 @@ watch(
     pendingDelete.value = [];
   }
 );
-function start(refresh = false) {
+function start(scanMode: LargeFileScanMode = requestedScanMode.value) {
   if (props.busy || props.deleting || !selectedScopePath.value) return;
-  emit('find', selectedScopePath.value, refresh);
+  requestedScanMode.value = scanMode;
+  emit('find', selectedScopePath.value, scanMode);
 }
 
 function updateMinimum(value: unknown) {
@@ -159,14 +176,9 @@ function updateMinimum(value: unknown) {
     return;
   }
 
-  // Increasing the threshold is an in-memory filter. A lower threshold may
-  // need rows that were omitted from the published result, so request them
-  // immediately after persisting the new preference. Core normally serves
-  // this from the existing 50 MB in-memory scan result without traversing the disk.
+  // Every scan retains candidates from the fixed 50 MiB floor. The shell asks Core to filter the
+  // active scan by ID, so changing this preference never starts another filesystem traversal.
   emit('updateMinimum', minimumBytes);
-  if (props.result && minimumBytes < props.result.minimumBytes && selectedScopePath.value) {
-    emit('find', selectedScopePath.value, false);
-  }
 }
 
 function selectScope(value: unknown) {
@@ -232,21 +244,21 @@ function confirmDelete() {
           @remove-folder="removeScopeFolder"
           @update:model-value="selectScope"
         />
-        <Button
+        <MdLargeFileScanButton
           v-if="result"
-          class="search-button"
-          :variant="resultMatchesScope ? 'outline' : 'default'"
-          type="button"
-          :disabled="busy || deleting || !selectedScopePath"
-          @click="start(resultMatchesScope)"
-        >
-          <MdIcon
-            :class="{ 'icon-spin': busy }"
-            :name="busy || resultMatchesScope ? ICON_NAMES.refresh : ICON_NAMES.largeFiles"
-            :size="17"
-          />
-          {{ t(resultMatchesScope ? 'largeFiles.rescan' : 'largeFiles.start') }}
-        </Button>
+          action="rescan"
+          :busy="busy || deleting || !selectedScopePath"
+          :emphasized="!resultMatchesScope"
+          :mode="
+            resultMatchesScope
+              ? requestedScanMode
+              : selectableScanModes
+                ? LARGE_FILE_SCAN_MODES.quick
+                : LARGE_FILE_SCAN_MODES.complete
+          "
+          :selectable-modes="selectableScanModes"
+          @scan="start"
+        />
       </div>
     </template>
 
@@ -341,10 +353,12 @@ function confirmDelete() {
           :title="t('largeFiles.emptyTitle')"
           :description="t('largeFiles.emptyDescription', { size: minimumLabel })"
         >
-          <Button size="lg" type="button" :disabled="busy || deleting || !selectedScopePath" @click="start(false)">
-            <MdIcon :name="ICON_NAMES.largeFiles" :size="17" />
-            {{ t('largeFiles.start') }}
-          </Button>
+          <MdLargeFileScanButton
+            :busy="busy || deleting || !selectedScopePath"
+            :mode="requestedScanMode"
+            :selectable-modes="selectableScanModes"
+            @scan="start"
+          />
         </MdEmptyState>
       </div>
 
@@ -355,7 +369,7 @@ function confirmDelete() {
           :progress="progress"
           :path-label="t('loading.currentAnalysisDirectory')"
           :preparing-text="t('loading.preparingAnalysisDirectory')"
-          :hint="t('largeFiles.scanHint')"
+          :hint="scanHint"
           :cancelable="true"
           :cancel-disabled="cancelling"
           @cancel="emit('cancel')"
@@ -395,11 +409,6 @@ function confirmDelete() {
   min-width: 120px;
   max-width: 176px;
   flex: 1 1 176px;
-}
-
-.search-button {
-  flex: none;
-  white-space: nowrap;
 }
 
 .result-content {

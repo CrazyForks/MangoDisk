@@ -238,6 +238,7 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 12px;
   padding: 16px 18px;
+  border-top: 1px solid var(--border-subtle);
 }
 
 .exclusion-toolbar {

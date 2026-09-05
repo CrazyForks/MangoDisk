@@ -311,7 +311,8 @@ onBeforeUnmount(() => {
 
 <template>
   <Dialog :open="modelValue" @update:open="emit('update:modelValue', $event)">
-    <MdDialogContent class="custom-dialog flex min-h-0 flex-col" size="large">
+    <!-- Keep unsaved rule edits open when the backdrop is clicked accidentally. -->
+    <MdDialogContent class="custom-dialog flex min-h-0 flex-col" size="large" @pointer-down-outside.prevent>
       <MdDialogHeader class="flex-none">
         <DialogTitle>{{ t('cleanup.customCleanup.title') }}</DialogTitle>
         <DialogDescription>{{ t('cleanup.customCleanup.description') }}</DialogDescription>

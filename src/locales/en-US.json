@@ -2647,7 +2647,12 @@
       "app.chatgpt-cache": {
         "name": "ChatGPT cache",
         "description": "Rebuildable rendering and diagnostic data saved by the ChatGPT and Codex desktop app.",
-        "impact": "Conversations, projects, credentials, browser state, and sign-in state are kept. Close ChatGPT before cleaning."
+        "impact": "Conversations, projects, credentials, browser state, and sign-in state are kept. Close ChatGPT and Codex before cleaning."
+      },
+      "app.codex-diagnostic-cache": {
+        "name": "Older Codex crash reports",
+        "description": "Pending Codex crash reports not modified for 7 days.",
+        "impact": "Conversations, projects, credentials, settings, and recent reports are kept. Close Codex and ChatGPT before cleaning."
       },
       "app.claude-cache": {
         "name": "Claude cache",

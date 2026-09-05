@@ -2573,7 +2573,12 @@
       "app.chatgpt-cache": {
         "name": "ChatGPT 應用程式快取",
         "description": "ChatGPT 與 Codex 桌面應用程式儲存的可重建渲染快取和診斷資料",
-        "impact": "不會刪除對話、專案、認證資訊、瀏覽器狀態或登入狀態；關閉 ChatGPT 後清理。"
+        "impact": "不會刪除對話、專案、認證資訊、瀏覽器狀態或登入狀態；關閉 ChatGPT 與 Codex 後清理。"
+      },
+      "app.codex-diagnostic-cache": {
+        "name": "較早的 Codex 當機報告",
+        "description": "超過 7 天未修改的 Codex 待處理當機報告",
+        "impact": "不會刪除對話、專案、認證資訊、設定或近期報告；關閉 Codex 與 ChatGPT 後清理。"
       },
       "app.claude-cache": {
         "name": "Claude 應用程式快取",

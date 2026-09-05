@@ -2649,7 +2649,12 @@
       "app.chatgpt-cache": {
         "name": "ChatGPT キャッシュ",
         "description": "ChatGPT と Codex のデスクトップアプリが保存する再作成可能なレンダリングデータと診断データ。",
-        "impact": "会話、プロジェクト、認証情報、ブラウザの状態、サインイン状態は保持されます。クリーンアップ前に ChatGPT を終了してください。"
+        "impact": "会話、プロジェクト、認証情報、ブラウザの状態、サインイン状態は保持されます。クリーンアップ前に ChatGPT と Codex を終了してください。"
+      },
+      "app.codex-diagnostic-cache": {
+        "name": "古い Codex クラッシュレポート",
+        "description": "7 日間更新されていない Codex の保留中クラッシュレポート。",
+        "impact": "会話、プロジェクト、認証情報、設定、最近のレポートは保持されます。クリーンアップ前に Codex と ChatGPT を終了してください。"
       },
       "app.claude-cache": {
         "name": "Claude キャッシュ",

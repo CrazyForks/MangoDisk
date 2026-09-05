@@ -2578,7 +2578,12 @@
       "app.chatgpt-cache": {
         "name": "ChatGPT 应用缓存",
         "description": "ChatGPT 与 Codex 桌面应用保存的可重建渲染缓存和诊断数据",
-        "impact": "不会删除对话、项目、凭据、浏览器状态或登录状态；关闭 ChatGPT 后清理。"
+        "impact": "不会删除对话、项目、凭据、浏览器状态或登录状态；关闭 ChatGPT 与 Codex 后清理。"
+      },
+      "app.codex-diagnostic-cache": {
+        "name": "较早的 Codex 崩溃报告",
+        "description": "超过 7 天未修改的 Codex 待处理崩溃报告",
+        "impact": "不会删除对话、项目、凭据、设置或近期报告；关闭 Codex 与 ChatGPT 后清理。"
       },
       "app.claude-cache": {
         "name": "Claude 应用缓存",

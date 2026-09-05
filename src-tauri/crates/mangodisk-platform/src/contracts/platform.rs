@@ -66,8 +66,9 @@ pub trait Platform: Send + Sync {
     ) -> Result<ApplicationUninstallExecutionOutcome, ApplicationUninstallPlatformError> {
         Err(ApplicationUninstallPlatformError::Unsupported)
     }
-    /// Process state changes too frequently to share the inventory cache. Each
-    /// scan or execution captures one snapshot for all relevant rules.
+    /// Process state changes too frequently to share the inventory cache.
+    /// Callers capture snapshots at the safety boundary appropriate to each
+    /// scan or destructive rule and may refresh them during long operations.
     fn running_process_names(&self) -> PlatformResult<Vec<String>>;
     fn running_process_names_with_cancellation(
         &self,

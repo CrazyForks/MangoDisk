@@ -21,6 +21,7 @@ import MdResultWorkspace from '@/components/custom/md-result-workspace.vue';
 import MdSpinner from '@/components/custom/md-spinner.vue';
 import MdIcon from '@/components/icons/md-icon.vue';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import type {
   StartupArtifact,
@@ -55,7 +56,7 @@ import {
 } from './startup-change-queue';
 
 import {
-  defaultStartupGroups,
+  displayedStartupGroups,
   displayedArtifactsForGroup,
   filterAndSortStartupGroups,
   indexStartupArtifacts,
@@ -119,10 +120,13 @@ let copyFeedbackTimer: ReturnType<typeof setTimeout> | null = null;
 let changeDispatchTimer: ReturnType<typeof setTimeout> | null = null;
 const isWindows = OperatingSystemService.isWindows();
 const isMacOs = OperatingSystemService.isMacOs();
+const showSystemItems = ref(false);
 
 const artifactsById = computed(() => indexStartupArtifacts(props.catalog?.artifacts ?? []));
-const defaultGroups = computed(() => defaultStartupGroups(props.catalog?.groups ?? [], artifactsById.value));
-const filterCounts = computed(() => startupFilterCounts(defaultGroups.value, artifactsById.value));
+const displayGroups = computed(() =>
+  displayedStartupGroups(props.catalog?.groups ?? [], artifactsById.value, showSystemItems.value)
+);
+const filterCounts = computed(() => startupFilterCounts(displayGroups.value, artifactsById.value));
 const filterOptions = computed(() =>
   (['all', 'enabled', 'disabled', 'leftover'] as const).map(value => ({
     value,
@@ -131,7 +135,7 @@ const filterOptions = computed(() =>
   }))
 );
 const filteredGroups = computed(() =>
-  filterAndSortStartupGroups(defaultGroups.value, artifactsById.value, query.value, stateFilter.value, locale.value)
+  filterAndSortStartupGroups(displayGroups.value, artifactsById.value, query.value, stateFilter.value, locale.value)
 );
 const visibleGroups = computed(() => RenderBatchUtils.visibleItems(filteredGroups.value, visibleCount.value));
 const remainingResultCount = computed(() =>
@@ -173,14 +177,14 @@ function updateStateFilter(value: string) {
   }
 }
 
-watch([() => props.catalog?.scanId, query, stateFilter], () => {
+watch([() => props.catalog?.scanId, query, stateFilter, showSystemItems], () => {
   // Startup catalogs can still contain thousands of hidden system entries.
   // Reset progressive rendering after each visible result change to keep scrolling responsive.
   visibleCount.value = STARTUP_RENDER_BATCH_SIZE;
 });
 
 watch(
-  () => defaultGroups.value.map(group => group.iconPath).filter((path): path is string => Boolean(path)),
+  () => displayGroups.value.map(group => group.iconPath).filter((path): path is string => Boolean(path)),
   paths => {
     void ApplicationIconService.resolveIncrementally(paths, icons => {
       iconUrls.value = icons;
@@ -506,11 +510,15 @@ function updateChangeOpen(open: boolean) {
     <MdResultWorkspace v-else>
       <template v-if="catalog" #summary>
         <MdResultSummary
-          :title="t('startup.summary.programs', { count: FormatUtils.integer(defaultGroups.length) })"
+          :title="t('startup.summary.programs', { count: FormatUtils.integer(displayGroups.length) })"
           :metric-label="t('startup.summary.enabled')"
           :metric-value="FormatUtils.integer(filterCounts.enabled)"
         >
           <template #actions>
+            <label v-if="isWindows" class="flex items-center gap-2 whitespace-nowrap text-sm text-muted-foreground">
+              <Checkbox v-model="showSystemItems" :disabled="changeQueueBusy" />
+              {{ t('startup.showSystemItems') }}
+            </label>
             <MdPermissionGuidance
               v-if="backgroundTasksNeedPermission"
               v-model="permissionPromptOpen"
@@ -554,7 +562,7 @@ function updateChangeOpen(open: boolean) {
       </MdEmptyState>
 
       <MdEmptyState
-        v-else-if="!defaultGroups.length"
+        v-else-if="!displayGroups.length"
         compact
         :icon-name="ICON_NAMES.check"
         :title="t('startup.noManageableTitle')"

@@ -9,9 +9,10 @@
   width: 100%;
   min-width: 0;
   min-height: var(--layout-result-group-height);
-  grid-template-columns: minmax(0, 1fr) minmax(48px, auto) minmax(34px, auto) 30px;
+  grid-template-columns: minmax(0, 1fr) 9em 3em minmax(34px, auto) 30px;
   align-items: center;
-  gap: 14px;
+  gap: 8px;
+  font-size: 11px;
 }
 
 .startup-disclosure {
@@ -38,8 +39,7 @@
   gap: 2px;
 }
 
-.startup-identity strong,
-.startup-identity small {
+.startup-identity strong {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -49,12 +49,33 @@
   font-size: 13px;
 }
 
-.startup-identity small,
+.startup-source-slot {
+  display: flex;
+  min-width: 0;
+  justify-content: flex-end;
+  font-size: 11px;
+}
+
+.startup-source-slot :deep(.md-status-badge) {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 400;
+}
+
 .startup-item-count,
 .startup-state,
 .startup-native-state {
   @apply text-muted-foreground;
   font-size: 11px;
+}
+
+/* Optional folder actions must not shift the switch into the action column. */
+.startup-native-row > .startup-switch,
+.startup-native-row > .startup-native-state {
+  grid-column: 4;
 }
 
 .startup-actions {
@@ -77,11 +98,12 @@
   pointer-events: auto;
 }
 
-.startup-row-line:is(:hover, :has(:focus-visible)) .startup-identity {
+/* Reserve hover actions before interaction to avoid changing text truncation on hover. */
+.startup-row-line:has(.startup-actions) .startup-identity {
   padding-right: 34px;
 }
 
-.startup-row-line:has(.startup-actions.has-cleanup.has-location):is(:hover, :has(:focus-visible)) .startup-identity {
+.startup-row-line:has(.startup-actions.has-cleanup.has-location) .startup-identity {
   padding-right: 68px;
 }
 
@@ -249,6 +271,8 @@
 .startup-native-identity {
   display: flex;
   min-width: 0;
+  align-items: center;
+  gap: 8px;
 }
 
 .startup-native-identity strong {
@@ -312,6 +336,10 @@
   line-height: 1.55;
 }
 
+.startup-description {
+  overflow-wrap: anywhere;
+}
+
 .startup-target-value {
   position: relative;
   display: block;
@@ -364,7 +392,9 @@
 
 @container startup (max-width: 720px) {
   .startup-main {
-    grid-template-columns: minmax(0, 1fr) minmax(34px, auto) 30px;
+    /* The source badge remains visible when the count is hidden. Reserve its
+       own column so the switch and disclosure stay on the same row. */
+    grid-template-columns: minmax(0, 1fr) minmax(0, 9em) minmax(34px, auto) 30px;
     gap: 10px;
   }
 

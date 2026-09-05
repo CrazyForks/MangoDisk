@@ -70,7 +70,20 @@ export function isLeftoverStartupArtifact(artifact: StartupArtifact): boolean {
 export function manualCleanupToolForStartupArtifacts(
   artifacts: readonly StartupArtifact[]
 ): StartupManualCleanupTool | null {
-  const sourceKinds = new Set(artifacts.filter(isManualCleanupStartupArtifact).map(artifact => artifact.sourceKind));
+  // Ordinary read-only services retain a system-tool exit. Protected services
+  // are not permission failures and must not suggest an editable alternative.
+  const sourceKinds = new Set(
+    artifacts
+      .filter(
+        artifact =>
+          isManualCleanupStartupArtifact(artifact) ||
+          (artifact.sourceKind === 'service' &&
+            artifact.controlCapability !== 'systemManaged' &&
+            !canManageStartupArtifact(artifact) &&
+            !supportsStartupRemoval(artifact))
+      )
+      .map(artifact => artifact.sourceKind)
+  );
   if (sourceKinds.size !== 1) return null;
   if (sourceKinds.has('service')) return 'services';
   if (sourceKinds.has('scheduledTask')) return 'taskScheduler';
@@ -92,6 +105,13 @@ export function removableStartupArtifactsForGroup(
 }
 
 export function isInformativeReadOnlyStartupArtifact(artifact: StartupArtifact): boolean {
+  // Keep read-only service details available. Group visibility separately hides
+  // protected/system entries by default without granting mutation capabilities.
+  if (
+    artifact.sourceKind === 'service' &&
+    (artifact.controlCapability === 'viewOnly' || artifact.controlCapability === 'systemManaged')
+  )
+    return true;
   return (
     artifact.sourceKind === 'backgroundTask' &&
     artifact.target.kind === 'application' &&
@@ -134,14 +154,30 @@ export function isDefaultStartupGroup(
   group: StartupOwnerGroup,
   artifactsById: ReadonlyMap<string, StartupArtifact>
 ): boolean {
-  return !group.systemItem && displayedArtifactsForGroup(group, artifactsById).length > 0;
+  return !isSystemStartupGroup(group, artifactsById) && displayedArtifactsForGroup(group, artifactsById).length > 0;
 }
 
-export function defaultStartupGroups(
+function isSystemStartupGroup(group: StartupOwnerGroup, artifactsById: ReadonlyMap<string, StartupArtifact>): boolean {
+  const artifacts = artifactsForStartupGroup(group, artifactsById);
+  // Protected services may live outside the Windows directory. Do not infer
+  // their identity from paths or hide unrelated third-party read-only entries.
+  return (
+    group.systemItem ||
+    (artifacts.length > 0 &&
+      artifacts.every(artifact => artifact.sourceKind === 'service' && artifact.controlCapability === 'systemManaged'))
+  );
+}
+
+export function displayedStartupGroups(
   groups: readonly StartupOwnerGroup[],
-  artifactsById: ReadonlyMap<string, StartupArtifact>
+  artifactsById: ReadonlyMap<string, StartupArtifact>,
+  showSystemItems = false
 ): StartupOwnerGroup[] {
-  return groups.filter(group => isDefaultStartupGroup(group, artifactsById));
+  return groups.filter(group =>
+    showSystemItems
+      ? displayedArtifactsForGroup(group, artifactsById).length > 0
+      : isDefaultStartupGroup(group, artifactsById)
+  );
 }
 
 export function manageableState(artifacts: readonly StartupArtifact[]): StartupManageableState {

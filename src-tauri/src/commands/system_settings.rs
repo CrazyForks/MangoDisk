@@ -166,7 +166,7 @@ pub async fn open_windows_startup_tool(tool: WindowsStartupTool) -> CommandResul
             "windows_startup_tool_open_requested tool={}",
             tool.diagnostic_name()
         );
-        open_windows_management_console(tool.snap_in())
+        open_windows_management_console(tool)
     })
     .await
 }
@@ -183,22 +183,138 @@ fn open_settings_uri(_uri: &str) -> Result<(), String> {
 }
 
 #[cfg(target_os = "windows")]
-fn open_windows_management_console(snap_in: &str) -> Result<(), String> {
-    std::process::Command::new("mmc.exe")
-        .arg(snap_in)
-        .spawn()
-        .map(|_| ())
-        .map_err(|error| format!("failed to open Windows startup tool: {error}"))
+fn open_windows_management_console(
+    tool: WindowsStartupTool,
+) -> Result<(), mangodisk_core::CoreError> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::{
+        Foundation::GetLastError,
+        System::{
+            Com::{
+                CoInitializeEx, CoUninitialize, COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE,
+            },
+            SystemInformation::GetSystemDirectoryW,
+        },
+        UI::{
+            Shell::{ShellExecuteExW, SEE_MASK_FLAG_NO_UI, SEE_MASK_NOASYNC, SHELLEXECUTEINFOW},
+            WindowsAndMessaging::SW_SHOWNORMAL,
+        },
+    };
+
+    // Resolve the trusted console from Windows, never from PATH or the working
+    // directory. Only the fixed enum-selected snap-in crosses the UAC boundary.
+    let mut directory = vec![0u16; 32_768];
+    let length = unsafe { GetSystemDirectoryW(directory.as_mut_ptr(), directory.len() as u32) };
+    if length == 0 || length as usize >= directory.len() {
+        let code = unsafe { GetLastError() };
+        log::warn!(
+            "windows_startup_tool_open_failed tool={} stage=system_directory os_error={code}",
+            tool.diagnostic_name()
+        );
+        return Err(management_console_error(code));
+    }
+    directory.truncate(length as usize);
+    let directory = String::from_utf16_lossy(&directory);
+    let wide = |value: &str| {
+        std::ffi::OsStr::new(value)
+            .encode_wide()
+            .chain(Some(0))
+            .collect::<Vec<_>>()
+    };
+    let executable = wide(&format!("{directory}\\mmc.exe"));
+    let arguments = wide(&format!("\"{directory}\\{}\"", tool.snap_in()));
+    let verb = wide("runas");
+    let com = unsafe {
+        CoInitializeEx(
+            std::ptr::null(),
+            (COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE) as u32,
+        )
+    };
+    if com < 0 {
+        log::warn!(
+            "windows_startup_tool_open_failed tool={} stage=com hresult={com}",
+            tool.diagnostic_name()
+        );
+        return Err(mangodisk_core::CoreError::operation_failed(
+            "initialize management console launcher failed",
+        ));
+    }
+    let mut execution = SHELLEXECUTEINFOW {
+        cbSize: std::mem::size_of::<SHELLEXECUTEINFOW>() as u32,
+        fMask: SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI,
+        lpVerb: verb.as_ptr(),
+        lpFile: executable.as_ptr(),
+        lpParameters: arguments.as_ptr(),
+        nShow: SW_SHOWNORMAL,
+        ..unsafe { std::mem::zeroed() }
+    };
+    // ShellExecute can display UAC; CreateProcess (Command::spawn) instead
+    // returns error 740. Do not wait for the user to close the console.
+    let launched = unsafe { ShellExecuteExW(&mut execution) } != 0;
+    let code = if launched {
+        0
+    } else {
+        unsafe { GetLastError() }
+    };
+    unsafe {
+        CoUninitialize();
+    }
+    if !launched {
+        let status = if code == 1223 { "cancelled" } else { "failed" };
+        log::info!("windows_startup_tool_open_finished tool={} status={status} os_error={code} elevation_requested=true", tool.diagnostic_name());
+        return Err(management_console_error(code));
+    }
+    log::info!(
+        "windows_startup_tool_open_finished tool={} status=launched elevation_requested=true",
+        tool.diagnostic_name()
+    );
+    Ok(())
 }
 
 #[cfg(not(target_os = "windows"))]
-fn open_windows_management_console(_snap_in: &str) -> Result<(), String> {
-    Err("Windows startup tools are unavailable on this platform".to_string())
+fn open_windows_management_console(
+    tool: WindowsStartupTool,
+) -> Result<(), mangodisk_core::CoreError> {
+    Err(mangodisk_core::CoreError::operation_failed(format!(
+        "Windows startup tool {} is unavailable on this platform",
+        tool.snap_in()
+    )))
+}
+
+#[cfg(any(target_os = "windows", test))]
+fn management_console_error(code: u32) -> mangodisk_core::CoreError {
+    match code {
+        1223 => mangodisk_core::CoreError::operation_cancelled(),
+        5 => mangodisk_core::CoreError::new(
+            mangodisk_core::CoreErrorCode::PermissionDenied,
+            "management console elevation was denied",
+        ),
+        _ => mangodisk_core::CoreError::operation_failed(format!(
+            "management console launch failed: os_error={code}"
+        )),
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn management_console_errors_distinguish_cancel_permission_and_failure() {
+        use mangodisk_core::CoreErrorCode;
+        assert_eq!(
+            management_console_error(1223).code(),
+            CoreErrorCode::OperationCancelled
+        );
+        assert_eq!(
+            management_console_error(5).code(),
+            CoreErrorCode::PermissionDenied
+        );
+        assert_eq!(
+            management_console_error(740).code(),
+            CoreErrorCode::OperationFailed
+        );
+    }
 
     #[test]
     fn every_destination_maps_to_a_fixed_privacy_uri() {

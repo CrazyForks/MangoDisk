@@ -2532,6 +2532,7 @@ dependencies = [
  "tauri-plugin-updater",
  "tauri-plugin-window-state",
  "uuid",
+ "windows-sys 0.61.2",
  "zip",
 ]
 

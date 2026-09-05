@@ -5,7 +5,7 @@ import type { StartupArtifact, StartupChangePlan, StartupOwnerGroup } from '@/li
 import {
   artifactsForStartupGroup,
   canManageStartupArtifact,
-  defaultStartupGroups,
+  displayedStartupGroups,
   displayedArtifactsForGroup,
   filterAndSortStartupGroups,
   indexStartupArtifacts,
@@ -109,6 +109,21 @@ function plan(overrides: Partial<StartupChangePlan> = {}): StartupChangePlan {
 }
 
 describe('startup default view', () => {
+  it('hides protected services by default without hiding ordinary read-only services', () => {
+    const protectedService = artifact({ sourceKind: 'service', controlCapability: 'systemManaged' });
+    const readOnlyService = artifact({ itemId: 'read-only', sourceKind: 'service', controlCapability: 'viewOnly' });
+    const artifacts = indexStartupArtifacts([protectedService, readOnlyService]);
+    const groups = [group(), group({ groupId: 'read-only-group', itemIds: [readOnlyService.itemId] })];
+
+    expect(displayedStartupGroups(groups, artifacts)).toEqual([groups[1]]);
+    expect(displayedStartupGroups(groups, artifacts, true)).toEqual(groups);
+    expect(displayedArtifactsForGroup(groups[0], artifacts)).toEqual([protectedService]);
+    expect(manageableArtifactsForGroup(groups[0], artifacts)).toEqual([]);
+    expect(manualCleanupToolForStartupArtifacts([protectedService])).toBeNull();
+    expect(startupFilterCounts(displayedStartupGroups(groups, artifacts), artifacts).all).toBe(1);
+    expect(startupFilterCounts(displayedStartupGroups(groups, artifacts, true), artifacts).all).toBe(2);
+    expect(displayedStartupGroups(groups, artifacts, false)).toEqual([groups[1]]);
+  });
   it('indexes artifacts and ignores missing group members', () => {
     const item = artifact();
     const artifacts = indexStartupArtifacts([item]);
@@ -246,6 +261,22 @@ describe('startup default view', () => {
     expect(manualCleanupToolForStartupArtifacts([systemTask])).toBeNull();
   });
 
+  it.each([{ diagnostics: [] }, { diagnostics: ['stateUnavailable'] }] as const)(
+    'keeps service management available without an orphan warning: $diagnostics',
+    ({ diagnostics }) => {
+      const service = artifact({ sourceKind: 'service', controlCapability: 'viewOnly', diagnostics: [...diagnostics] });
+      const artifacts = indexStartupArtifacts([service]);
+      expect(displayedArtifactsForGroup(group(), artifacts)).toEqual([service]);
+      expect(isDefaultStartupGroup(group(), artifacts)).toBe(true);
+      expect(isDefaultStartupGroup(group({ systemItem: true }), artifacts)).toBe(false);
+      expect(isManualCleanupStartupArtifact(service)).toBe(false);
+      expect(isLeftoverStartupArtifact(service)).toBe(false);
+      expect(canManageStartupArtifact(service)).toBe(false);
+      expect(supportsStartupRemoval(service)).toBe(false);
+      expect(manualCleanupToolForStartupArtifacts([service])).toBe('services');
+    }
+  );
+
   it('keeps an orphan with unavailable state out of enabled and disabled counts', () => {
     const orphan = artifact({
       configuredState: 'unknown',
@@ -342,7 +373,7 @@ describe('startup default view', () => {
     const artifacts = indexStartupArtifacts([item]);
     const groups = [group({ summary: 'Keeps Fixture ready' }), group({ groupId: 'system', systemItem: true })];
 
-    expect(defaultStartupGroups(groups, artifacts)).toEqual([groups[0]]);
+    expect(displayedStartupGroups(groups, artifacts)).toEqual([groups[0]]);
     expect(startupArtifactRevealPath(item)).toBe('/Library/LaunchAgents/fixture.plist');
     expect(startupGroupSubtitle(groups[0]!)).toBe('Keeps Fixture ready');
     expect(startupGroupSubtitle(group({ summary: null, publisher: 'ABCDEFGHIJ' }))).toBeNull();

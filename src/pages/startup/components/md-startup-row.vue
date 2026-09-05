@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 
 import MdApplicationIcon from '@/components/custom/md-application-icon.vue';
 import MdIconAction from '@/components/custom/md-icon-action.vue';
+import MdStatusBadge from '@/components/custom/md-status-badge.vue';
 import MdResultTableHierarchy from '@/components/custom/md-result-table-hierarchy.vue';
 import MdResultTableRow from '@/components/custom/md-result-table-row.vue';
 import MdIcon from '@/components/icons/md-icon.vue';
@@ -54,7 +55,16 @@ const { locale, t } = useI18n({ useScope: 'global' });
 const manageableArtifacts = computed(() => props.artifacts.filter(canManageStartupArtifact));
 const groupManageable = computed(() => manageableArtifacts.value.length > 0);
 const systemManaged = computed(() => props.artifacts.some(artifact => artifact.controlCapability === 'systemManaged'));
+const protectedService = computed(
+  () =>
+    props.isWindows &&
+    props.artifacts.length > 0 &&
+    props.artifacts.every(
+      artifact => artifact.sourceKind === 'service' && artifact.controlCapability === 'systemManaged'
+    )
+);
 const hasMultipleArtifacts = computed(() => props.artifacts.length > 1);
+const sourceKinds = computed(() => [...new Set(props.artifacts.map(artifact => artifact.sourceKind))]);
 const removableItems = computed(() => props.artifacts.filter(supportsStartupRemoval));
 const manualCleanupArtifacts = computed(() => props.artifacts.filter(isManualCleanupStartupArtifact));
 const manualCleanupTool = computed<WindowsStartupTool | null>(() =>
@@ -91,14 +101,7 @@ function localizedDiagnostics(artifact: StartupArtifact): string {
         >
           <MdApplicationIcon :src="iconSrc" :platform="isWindows ? 'windowsRegistry' : 'macosBundle'" :size="40" />
           <span class="startup-identity">
-            <strong class="md-result-primary">{{ group.name }}</strong>
-            <small v-if="subtitle || group.version">
-              <template v-if="subtitle">{{ subtitle }}</template>
-              <template v-if="group.version">
-                <template v-if="subtitle"> · </template>
-                {{ t('startup.detail.versionValue', { version: group.version }) }}</template
-              >
-            </small>
+            <strong class="md-result-primary" :title="group.name">{{ group.name }}</strong>
           </span>
         </button>
 
@@ -131,7 +134,19 @@ function localizedDiagnostics(artifact: StartupArtifact): string {
           </MdIconAction>
         </span>
 
-        <span class="startup-item-count">{{ t('startup.itemCount', { count: artifacts.length }) }}</span>
+        <span class="startup-source-slot">
+          <MdStatusBadge
+            v-if="sourceKinds.length"
+            size="compact"
+            :title="sourceKinds.length === 1 ? t(`startup.sourceKinds.${sourceKinds[0]}`) : t('startup.mixedSources')"
+          >
+            {{ sourceKinds.length === 1 ? t(`startup.sourceKinds.${sourceKinds[0]}`) : t('startup.mixedSources') }}
+          </MdStatusBadge>
+        </span>
+        <!-- Reserve the count slot so single and grouped rows keep their controls aligned. -->
+        <span class="startup-item-count">
+          <template v-if="hasMultipleArtifacts">{{ t('startup.itemCount', { count: artifacts.length }) }}</template>
+        </span>
 
         <button
           v-if="groupManageable"
@@ -179,9 +194,11 @@ function localizedDiagnostics(artifact: StartupArtifact): string {
           {{
             manualCleanupArtifacts.length
               ? t('startup.cleanup.manualGuidance')
-              : isMacOs && systemManaged
-                ? t('startup.detail.systemManaged')
-                : t('startup.detail.viewOnly')
+              : protectedService
+                ? t('startup.detail.protectedService')
+                : isMacOs && systemManaged
+                  ? t('startup.detail.systemManaged')
+                  : t('startup.detail.viewOnly')
           }}
         </span>
         <Button
@@ -206,8 +223,19 @@ function localizedDiagnostics(artifact: StartupArtifact): string {
         </Button>
       </div>
 
-      <dl v-if="hasMultipleArtifacts" class="startup-detail-list startup-group-detail-list">
-        <div class="startup-detail-row">
+      <dl
+        v-if="subtitle || group.version || hasMultipleArtifacts"
+        class="startup-detail-list startup-group-detail-list"
+      >
+        <div v-if="subtitle" class="startup-detail-row">
+          <dt>{{ t('startup.detail.description') }}</dt>
+          <dd class="startup-description">{{ subtitle }}</dd>
+        </div>
+        <div v-if="group.version" class="startup-detail-row">
+          <dt>{{ t('startup.detail.version') }}</dt>
+          <dd class="startup-description">{{ group.version }}</dd>
+        </div>
+        <div v-if="hasMultipleArtifacts" class="startup-detail-row">
           <dt>{{ t('startup.detail.timing') }}</dt>
           <dd>{{ startTiming }}</dd>
         </div>
@@ -225,6 +253,7 @@ function localizedDiagnostics(artifact: StartupArtifact): string {
             </span>
             <span class="startup-native-identity">
               <strong class="md-result-primary">{{ artifact.displayName }}</strong>
+              <MdStatusBadge size="compact">{{ t(`startup.sourceKinds.${artifact.sourceKind}`) }}</MdStatusBadge>
             </span>
             <span v-if="startupArtifactRevealPath(artifact)" class="startup-native-actions">
               <MdIconAction
@@ -345,7 +374,15 @@ function localizedDiagnostics(artifact: StartupArtifact): string {
             </div>
             <div v-if="artifact.runtimeState !== 'unknown'" class="startup-detail-row">
               <dt>{{ t('startup.detail.runtime') }}</dt>
-              <dd>{{ t(`startup.runtimeStates.${artifact.runtimeState}`) }}</dd>
+              <dd>
+                {{
+                  artifact.sourceKind === 'service' &&
+                  artifact.configuredState === 'disabled' &&
+                  artifact.runtimeState === 'running'
+                    ? t('startup.serviceStillRunning')
+                    : t(`startup.runtimeStates.${artifact.runtimeState}`)
+                }}
+              </dd>
             </div>
             <div v-if="artifact.trust !== 'unknown'" class="startup-detail-row">
               <dt>{{ t('startup.detail.trust') }}</dt>

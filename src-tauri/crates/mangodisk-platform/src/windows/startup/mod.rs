@@ -2,6 +2,8 @@ mod advanced;
 mod metadata;
 mod packaged;
 mod registry;
+mod service_control;
+mod service_target;
 mod services;
 mod startup_folder;
 mod tasks;
@@ -237,6 +239,7 @@ fn change_direct(
             startup_folder::change(request)
         }
         "windows.scheduled_tasks" => tasks::change(request),
+        "windows.services" => service_control::change(request),
         "windows.advanced_autoruns" => advanced::change(request),
         _ => Err(PlatformError::new(
             PlatformErrorCode::Unsupported,
@@ -268,6 +271,12 @@ pub(super) fn helper_change_many(
 ) -> Vec<PlatformResult<PlatformStartupChangeResult>> {
     let cancellation = PlatformCancellation::new(|| false);
     let mut results = Vec::new();
+    if requests
+        .iter()
+        .any(|request| request.source_id == "windows.services")
+    {
+        results.push(services::scan(&cancellation));
+    }
     if requests
         .iter()
         .any(|request| request.source_id == "windows.registry.run")
@@ -365,6 +374,7 @@ fn helper_source_is_allowlisted(source_id: &str) -> bool {
             | "windows.startup_folder.user"
             | "windows.startup_folder.common"
             | "windows.scheduled_tasks"
+            | "windows.services"
             | "windows.advanced_autoruns"
     )
 }
@@ -386,10 +396,10 @@ mod tests {
         r"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run";
 
     #[test]
-    fn helper_allowlist_includes_removable_sources_but_not_services() {
+    fn helper_allowlist_includes_service_configuration_changes() {
         assert!(helper_source_is_allowlisted("windows.scheduled_tasks"));
         assert!(helper_source_is_allowlisted("windows.advanced_autoruns"));
-        assert!(!helper_source_is_allowlisted("windows.services"));
+        assert!(helper_source_is_allowlisted("windows.services"));
     }
 
     #[test]

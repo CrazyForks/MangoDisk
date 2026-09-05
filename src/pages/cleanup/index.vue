@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n';
 import { computed, defineAsyncComponent, ref, watch } from 'vue';
+import { Button } from '@/components/ui/button';
 
 import MdEmptyState from '@/components/custom/md-empty-state.vue';
 import MdOperationWorkspace from '@/components/custom/md-operation-workspace.vue';
@@ -389,10 +390,34 @@ watch(
           :title="t('cleanup.summaryCount', { count: FormatUtils.integer(totalFoundItemCount) }, totalFoundItemCount)"
           :metric-label="t('cleanup.summarySpace')"
           :metric-value="ByteSizeService.bytes(totalFoundBytes)"
-        />
+        >
+          <template v-if="scan.missingCustomRootCount" #actions>
+            <span class="text-content-secondary text-muted-foreground" role="status">
+              {{
+                t(
+                  'cleanup.customCleanup.missingDirectoriesSkipped',
+                  { count: scan.missingCustomRootCount },
+                  scan.missingCustomRootCount
+                )
+              }}
+            </span>
+          </template>
+        </MdResultSummary>
       </template>
 
+      <MdEmptyState
+        v-if="scan.missingCustomRootCount && !scan.rules.length"
+        :icon-name="ICON_NAMES.folderPlus"
+        :title="t('cleanup.customCleanup.noAvailableDirectories')"
+        :description="t('cleanup.customCleanup.restoreDirectoriesHint')"
+      >
+        <Button type="button" variant="outline" @click="customDialogOpen = true">
+          {{ t('cleanup.customCleanup.editRules') }}
+        </Button>
+      </MdEmptyState>
+
       <MdCleanupRuleGroups
+        v-else
         :embedded="true"
         :busy="busy"
         :leftovers="leftovers"

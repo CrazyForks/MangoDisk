@@ -1605,6 +1605,10 @@
       "startSelectedScan": "開始掃描"
     },
     "customCleanup": {
+      "noAvailableDirectories": "沒有可掃描的目錄",
+      "restoreDirectoriesHint": "目錄恢復後可重新掃描，或編輯自訂規則",
+      "editRules": "編輯規則",
+      "missingDirectoriesSkipped": "已略過 {count} 個不存在的目錄",
       "title": "自訂清理",
       "description": "設定掃描資料夾與檔案條件",
       "addRule": "新增規則",

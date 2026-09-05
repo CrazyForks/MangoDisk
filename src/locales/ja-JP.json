@@ -1681,6 +1681,10 @@
       "startSelectedScan": "スキャン開始"
     },
     "customCleanup": {
+      "noAvailableDirectories": "スキャンできるフォルダーがありません",
+      "restoreDirectoriesHint": "フォルダーを復元して再スキャンするか、カスタムルールを編集してください",
+      "editRules": "ルールを編集",
+      "missingDirectoriesSkipped": "存在しないフォルダー {count} 件をスキップしました",
       "title": "カスタムクリーンアップ",
       "description": "スキャンするフォルダとファイル条件を設定します",
       "addRule": "ルールを追加",

@@ -1610,6 +1610,10 @@
       "startSelectedScan": "开始扫描"
     },
     "customCleanup": {
+      "noAvailableDirectories": "没有可扫描的目录",
+      "restoreDirectoriesHint": "目录恢复后可重新扫描，或编辑自定义规则",
+      "editRules": "编辑规则",
+      "missingDirectoriesSkipped": "已跳过 {count} 个不存在的目录",
       "title": "自定义清理",
       "description": "设置扫描目录和文件条件",
       "addRule": "添加规则",

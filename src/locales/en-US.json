@@ -1679,6 +1679,10 @@
       "startSelectedScan": "Start Scan"
     },
     "customCleanup": {
+      "noAvailableDirectories": "No folders available to scan",
+      "restoreDirectoriesHint": "Restore the folders and scan again, or edit your custom rules",
+      "editRules": "Edit rules",
+      "missingDirectoriesSkipped": "Skipped {count} missing folder | Skipped {count} missing folders",
       "title": "Custom Cleanup",
       "description": "Choose folders and file conditions",
       "addRule": "Add Rule",

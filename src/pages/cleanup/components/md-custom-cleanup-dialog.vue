@@ -683,7 +683,6 @@ onBeforeUnmount(() => {
 }
 
 .rule-sidebar {
-  @apply bg-muted/20;
   display: flex;
   min-height: 0;
   flex-direction: column;
@@ -717,7 +716,7 @@ onBeforeUnmount(() => {
 }
 
 .rule-list-item:hover {
-  @apply bg-accent/55;
+  background: var(--surface-accent-subtle);
 }
 
 .rule-list-item.active {
@@ -780,7 +779,8 @@ onBeforeUnmount(() => {
 }
 
 :deep(.rule-list-action:hover) {
-  @apply bg-background/75 text-foreground;
+  @apply text-foreground;
+  background: var(--card);
 }
 
 :deep(.rule-list-action[aria-disabled='true']) {
@@ -878,14 +878,15 @@ onBeforeUnmount(() => {
 }
 
 .directory-drop-zone {
-  @apply border-border/70 bg-muted/10;
   display: flex;
   height: 126px;
   min-height: 126px;
   flex-direction: column;
   overflow: hidden;
+  border-color: var(--border-subtle);
   border-width: 1px;
   border-radius: 7px;
+  background: transparent;
   transition:
     border-color 140ms ease,
     background-color 140ms ease;
@@ -893,7 +894,7 @@ onBeforeUnmount(() => {
 
 .directory-drop-zone.active {
   border-color: var(--primary);
-  background: color-mix(in srgb, var(--primary) 7%, transparent);
+  background: var(--surface-primary-subtle);
 }
 
 .directory-drop-zone.invalid {
@@ -910,12 +911,13 @@ onBeforeUnmount(() => {
 }
 
 .directory-item {
-  @apply border-border/50 text-muted-foreground;
+  @apply text-muted-foreground;
   display: grid;
   min-height: 28px;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 6px;
+  border-color: var(--border-subtle);
   border-bottom-width: 1px;
   padding: 3px 2px 3px 5px;
   font-size: var(--font-content-secondary);
@@ -982,7 +984,23 @@ onBeforeUnmount(() => {
 
 .compact-control.invalid {
   border-color: var(--destructive);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--destructive) 22%, transparent);
+}
+
+/*
+ * Older WebKit exposes platform steppers that do not follow the compact field
+ * geometry. Numeric values remain keyboard-editable, while hiding the native
+ * controls keeps the editor consistent across supported macOS versions.
+ */
+.compact-control[type='number'] {
+  -webkit-appearance: none;
+  appearance: textfield;
+}
+
+.compact-control[type='number']::-webkit-inner-spin-button,
+.compact-control[type='number']::-webkit-outer-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 .modified-select {

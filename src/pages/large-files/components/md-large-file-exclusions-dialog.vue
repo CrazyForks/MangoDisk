@@ -263,9 +263,21 @@ onBeforeUnmount(() => {
   border: 1px solid transparent;
   border-radius: 6px;
   box-shadow: none;
+  color: var(--muted-foreground);
   font-size: 12px;
   font-weight: 500;
-  @apply text-muted-foreground hover:border-border/70 hover:bg-muted/60 hover:text-foreground;
+  transition:
+    color 150ms ease,
+    background-color 150ms ease,
+    border-color 150ms ease;
+}
+
+@media (hover: hover) {
+  .exclusion-toolbar :deep(.exclusion-add-button:hover) {
+    border-color: var(--border-subtle);
+    background: var(--surface-muted-subtle);
+    color: var(--foreground);
+  }
 }
 
 .exclusion-drop-zone {
@@ -285,7 +297,9 @@ onBeforeUnmount(() => {
 }
 
 .exclusion-drop-zone.active {
-  @apply border-primary bg-primary/10 ring-2 ring-primary/20;
+  border-color: var(--primary);
+  background: var(--surface-primary-subtle);
+  box-shadow: 0 0 0 2px var(--border-primary-subtle);
 }
 
 .exclusion-list {
@@ -360,8 +374,15 @@ onBeforeUnmount(() => {
   transition: background-color 150ms ease;
 }
 
-.exclusion-empty-action:hover:not(:disabled) {
-  @apply bg-primary/10;
+/*
+ * Safari 15.6 cannot evaluate Tailwind's color-mix() opacity output. Using the
+ * shared semantic surface prevents the whole empty action from becoming a
+ * solid primary-color block while preserving the same hover affordance.
+ */
+@media (hover: hover) {
+  .exclusion-empty-action:hover:not(:disabled) {
+    background: var(--surface-primary-subtle);
+  }
 }
 
 .exclusion-empty-action:focus-visible {

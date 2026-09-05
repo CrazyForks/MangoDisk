@@ -24,6 +24,7 @@ vi.mock('@/lib/services/native-drag-drop-service', () => ({
 }));
 
 import MdLargeFileExclusionsDialog from './md-large-file-exclusions-dialog.vue';
+import exclusionsDialogSource from './md-large-file-exclusions-dialog.vue?raw';
 
 const passthroughStub = { template: '<div><slot /></div>' };
 const dialogContentStub = {
@@ -77,6 +78,13 @@ describe('large-file exclusions dialog', () => {
   afterEach(() => {
     nativeDropMock.listener = undefined;
     vi.restoreAllMocks();
+  });
+
+  it('uses legacy WebKit-safe semantic surfaces for folder interactions', () => {
+    expect(exclusionsDialogSource).toContain('background: var(--surface-primary-subtle)');
+    expect(exclusionsDialogSource).toContain('background: var(--surface-muted-subtle)');
+    expect(exclusionsDialogSource).not.toContain('bg-primary/10');
+    expect(exclusionsDialogSource).not.toContain('ring-primary/20');
   });
 
   it('renders every excluded folder in one bounded scroll region', () => {

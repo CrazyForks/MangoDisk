@@ -11,11 +11,105 @@ use crate::{
 
 static NEXT_FIXTURE_ID: AtomicU64 = AtomicU64::new(1);
 
+pub(super) fn initialize_git_admin(admin: &Path) {
+    fs::create_dir_all(admin.join("objects")).unwrap();
+    fs::create_dir_all(admin.join("refs/heads")).unwrap();
+    fs::write(admin.join("HEAD"), "ref: refs/heads/main\n").unwrap();
+}
+
+#[test]
+fn stale_artifact_plan_preserves_a_new_program_key() {
+    let _lock = test_operation_lock();
+    let fixture = Fixture::new("authored-race");
+    let project = fixture.0.join("project");
+    fs::create_dir_all(project.join("target/deploy")).unwrap();
+    fs::write(project.join("Cargo.toml"), "[package]\nname='fixture'\n").unwrap();
+    fs::write(project.join("target/output"), [1; 64]).unwrap();
+    let plan = build_plan(
+        &[display_path(&project)],
+        false,
+        current_platform_rules().unwrap(),
+        &|| false,
+    )
+    .unwrap();
+    let rule = plan
+        .rules
+        .iter()
+        .find(|rule| rule.source.id == "project.rust-build-artifacts")
+        .unwrap();
+    assert!(!rule.candidates[0].measurement_limited);
+    let key = project.join("target/deploy/program-keypair.json");
+    fs::write(&key, b"not a real key").unwrap();
+    let operation = OperationGuard::start(CoordinatedOperationKind::Cleanup).unwrap();
+    let action = execute_rule(rule, None, false, &operation);
+    assert_eq!(
+        action.reason_code,
+        Some(CleanupActionReason::PreflightFailed)
+    );
+    assert_eq!(action.released_bytes, 0);
+    assert_eq!(fs::read(&key).unwrap(), b"not a real key");
+    assert!(project.join("target/output").exists());
+    operation.complete();
+}
+
+#[test]
+fn authored_entry_keeps_preview_visible_but_limited() {
+    let fixture = Fixture::new("authored-preview");
+    let project = fixture.0.join("project");
+    fs::create_dir_all(project.join("target/deploy")).unwrap();
+    fs::write(project.join("Cargo.toml"), "[package]\nname='fixture'\n").unwrap();
+    fs::write(project.join("target/output"), [1; 64]).unwrap();
+    fs::write(
+        project.join("target/deploy/program-keypair.json"),
+        b"not a real key",
+    )
+    .unwrap();
+
+    let plan = build_plan(
+        &[display_path(&project)],
+        false,
+        current_platform_rules().unwrap(),
+        &|| false,
+    )
+    .unwrap();
+    let rule = plan
+        .rules
+        .iter()
+        .find(|rule| rule.source.id == "project.rust-build-artifacts")
+        .unwrap();
+
+    assert_eq!(rule.candidates.len(), 1);
+    assert!(rule.candidates[0].measurement_limited);
+    assert_eq!(rule.candidates[0].file_count, 2);
+    assert!(rule.candidates[0].bytes >= 64);
+}
+
+#[test]
+fn portable_measurement_flags_authored_entries_without_pruning_totals() {
+    let fixture = tempfile::tempdir().unwrap();
+    let root = fixture.path().join("target");
+    fs::create_dir_all(root.join("debug/.git")).unwrap();
+    fs::create_dir_all(root.join("deploy")).unwrap();
+    fs::write(root.join("debug/.git/index"), [0_u8; 3]).unwrap();
+    fs::write(root.join("debug.bin"), [0_u8; 4]).unwrap();
+    fs::write(root.join("deploy/program-keypair.json"), [0_u8; 5]).unwrap();
+
+    let measured =
+        portable_measure_directory_with_progress(&root, &|| false, &|_| {}, &|_, _, _| {});
+
+    assert_eq!(measured.measured.file_count, 3);
+    assert_eq!(measured.measured.bytes, 12);
+    assert_eq!(measured.measured.skipped_count, 0);
+    assert!(measured.authored_entry.is_some());
+    assert!(validate_artifact_protection(&root, &measured, &|| false).is_err());
+}
+
 #[test]
 fn codex_worktree_artifacts_use_regular_project_rules_and_preserve_durable_data() {
     let fixture = Fixture::new("codex-artifacts");
     let checkout = fixture.0.join("worktrees/1234/project");
     let admin = fixture.0.join("repository/.git/worktrees/project");
+    initialize_git_admin(&admin);
     fs::create_dir_all(checkout.join("target")).unwrap();
     fs::create_dir_all(&admin).unwrap();
     fs::write(
@@ -111,6 +205,7 @@ fn codex_discovery_failure_and_rebuilt_plans_preserve_automatic_source_protectio
     let fixture = Fixture::new("codex-discovery-failure");
     let checkout = fixture.0.join("worktrees/1234/project");
     let admin = fixture.0.join("repository/.git/worktrees/project");
+    initialize_git_admin(&admin);
     fs::create_dir_all(checkout.join("target")).unwrap();
     fs::create_dir_all(&admin).unwrap();
     fs::write(

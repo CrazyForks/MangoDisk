@@ -8,7 +8,7 @@ import MdDialogHeader from '@/components/custom/md-dialog-header.vue';
 import MdIconAction from '@/components/custom/md-icon-action.vue';
 import MdIcon from '@/components/icons/md-icon.vue';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
+import MdCheckbox from '@/components/custom/md-checkbox.vue';
 import { Dialog, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -590,7 +590,7 @@ onBeforeUnmount(() => {
 
           <div class="rule-options">
             <div class="rule-option">
-              <Checkbox
+              <MdCheckbox
                 :id="`custom-rule-recursive-${activeRule.id}`"
                 :model-value="activeRule.recursive"
                 @update:model-value="activeRule.recursive = Boolean($event)"
@@ -611,7 +611,7 @@ onBeforeUnmount(() => {
               </Tooltip>
             </div>
             <div class="rule-option">
-              <Checkbox
+              <MdCheckbox
                 :id="`custom-rule-remove-empty-${activeRule.id}`"
                 :model-value="activeRule.removeEmptyDirectories"
                 @update:model-value="activeRule.removeEmptyDirectories = Boolean($event)"
@@ -642,7 +642,7 @@ onBeforeUnmount(() => {
 
       <MdDialogFooter align="between">
         <label class="standard-scan-option">
-          <Checkbox v-model="includeStandardRules" />
+          <MdCheckbox v-model="includeStandardRules" />
           <span>{{ t('cleanup.customCleanup.includeStandardRules') }}</span>
         </label>
         <span class="dialog-actions">

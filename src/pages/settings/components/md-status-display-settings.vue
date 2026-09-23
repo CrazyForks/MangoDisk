@@ -4,6 +4,7 @@ import { METRIC_LABEL_KEYS } from '@/lib/models/system-resources';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import MdSwitch from '@/components/custom/md-switch.vue';
+import MdCheckbox from '@/components/custom/md-checkbox.vue';
 import MdIcon from '@/components/icons/md-icon.vue';
 import MdIconMangodisk from '@/components/icons/md-icon-mangodisk.vue';
 import MdSettingsRow from '@/components/custom/md-settings-row.vue';
@@ -409,12 +410,11 @@ onBeforeUnmount(() => {
                       <MdIconMangodisk :size="18" />
                     </span>
                     <label class="logo-label" for="status-app-icon">
-                      <input
+                      <MdCheckbox
                         id="status-app-icon"
-                        type="checkbox"
-                        :checked="showIcon"
+                        :model-value="showIcon"
                         :disabled="selectionLocked(showIcon)"
-                        @change="enableIcon(($event.target as HTMLInputElement).checked)"
+                        @update:model-value="enableIcon($event === true)"
                       />
                       <MdIconMangodisk v-if="!canReorder" :size="18" class="shrink-0" />
                       {{ t('systemStatus.showIcon') }}
@@ -443,12 +443,11 @@ onBeforeUnmount(() => {
                         <MdIcon :name="ICON_NAMES.grip" :size="15" />
                       </button>
                       <label :for="`status-${row.id}`">
-                        <input
+                        <MdCheckbox
                           :id="`status-${row.id}`"
-                          type="checkbox"
-                          :checked="row.enabled"
+                          :model-value="row.enabled"
                           :disabled="selectionLocked(row.enabled)"
-                          @change="enable(row.id, ($event.target as HTMLInputElement).checked)"
+                          @update:model-value="enable(row.id, $event === true)"
                         />
                         {{
                           row.id === 'cpu'
@@ -641,16 +640,6 @@ onBeforeUnmount(() => {
   place-items: center;
   flex: none;
   width: 24px;
-}
-.status-item input {
-  width: 14px;
-  height: 14px;
-  flex: none;
-  accent-color: var(--primary);
-  cursor: pointer;
-}
-.status-item input:disabled {
-  cursor: default;
 }
 .drag-handle,
 .selection-toggle {

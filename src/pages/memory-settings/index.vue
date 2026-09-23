@@ -6,7 +6,7 @@ import MdSettingsGroup from '@/components/custom/md-settings-group.vue';
 import MdSettingsRow from '@/components/custom/md-settings-row.vue';
 import MdResultSearch from '@/components/custom/md-result-search.vue';
 import MdSwitch from '@/components/custom/md-switch.vue';
-import { Checkbox } from '@/components/ui/checkbox';
+import MdCheckbox from '@/components/custom/md-checkbox.vue';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import MdIcon from '@/components/icons/md-icon.vue';
@@ -147,7 +147,7 @@ onBeforeUnmount(() => {
         <ul v-else class="application-list">
           <li v-for="app in filtered" :key="app.path">
             <label class="candidate"
-              ><Checkbox
+              ><MdCheckbox
                 :model-value="!!isAdded(app.path) || selected.includes(app.path)"
                 :value="app.path"
                 :disabled="isAdded(app.path)"
@@ -201,9 +201,11 @@ onBeforeUnmount(() => {
               </Select>
             </div>
             <label v-if="windows" class="foreground"
-              ><Checkbox v-model="draft.skipForeground" class="mt-0.5" :disabled="!draft.automatic || store.saving" />{{
-                t('memoryRelease.skipForeground')
-              }}</label
+              ><MdCheckbox
+                v-model="draft.skipForeground"
+                class="mt-0.5"
+                :disabled="!draft.automatic || store.saving"
+              />{{ t('memoryRelease.skipForeground') }}</label
             >
           </div>
         </MdSettingsGroup>

@@ -114,7 +114,7 @@ describe('storage-scan exclusions dialog', () => {
   it('uses the navigation label and explains the narrower cleanup scope without toggling it', async () => {
     const wrapper = mountDialog();
     const firstScope = wrapper.get('.exclusion-scope-item');
-    const checkbox = firstScope.get<HTMLInputElement>('input[type="checkbox"]');
+    const checkbox = firstScope.get('[role="checkbox"]');
     const help = firstScope.get('.exclusion-scope-help');
 
     expect(firstScope.get('.exclusion-scope').text()).toContain('Deep Cleanup');
@@ -125,7 +125,7 @@ describe('storage-scan exclusions dialog', () => {
         'Other Deep Cleanup items may still clean its contents'
       )
     );
-    expect(checkbox.element.checked).toBe(true);
+    expect(checkbox.attributes('aria-checked')).toBe('true');
     expect(wrapper.emitted('save')).toBeUndefined();
     wrapper.unmount();
   });
@@ -149,13 +149,13 @@ describe('storage-scan exclusions dialog', () => {
     }
   });
 
-  it('uses native checkboxes and saves changed scopes', async () => {
+  it('uses shared checkboxes and saves changed scopes', async () => {
     const wrapper = mountDialog();
-    const checkboxes = wrapper.findAll<HTMLInputElement>('.exclusion-row input[type="checkbox"]');
+    const checkboxes = wrapper.findAll('.exclusion-row [role="checkbox"]');
 
     expect(checkboxes).toHaveLength(8);
-    expect(checkboxes[0]!.element.checked).toBe(true);
-    await checkboxes[0]!.setValue(false);
+    expect(checkboxes[0]!.attributes('aria-checked')).toBe('true');
+    await checkboxes[0]!.trigger('click');
     await wrapper.get('.exclusion-footer-actions').findAll('button').at(-1)!.trigger('click');
 
     expect(wrapper.emitted('save')).toEqual([
@@ -170,18 +170,18 @@ describe('storage-scan exclusions dialog', () => {
 
   it('keeps the last enabled scope checked', () => {
     const wrapper = mountDialog([{ path: '/fixture/cache', scopes: ['largeFiles'] }]);
-    const checkboxes = wrapper.findAll<HTMLInputElement>('.exclusion-row input[type="checkbox"]');
+    const checkboxes = wrapper.findAll('.exclusion-row [role="checkbox"]');
 
-    expect(checkboxes[1]!.element.checked).toBe(true);
-    expect(checkboxes[1]!.element.disabled).toBe(true);
+    expect(checkboxes[1]!.attributes('aria-checked')).toBe('true');
+    expect(checkboxes[1]!.attributes('disabled')).toBeDefined();
   });
 
   it('allows opting a folder into space analysis without changing its other scopes', async () => {
     const wrapper = mountDialog([{ path: '/fixture/cache', scopes: ['largeFiles'] }]);
-    const checkboxes = wrapper.findAll<HTMLInputElement>('.exclusion-row input[type="checkbox"]');
+    const checkboxes = wrapper.findAll('.exclusion-row [role="checkbox"]');
 
-    expect(checkboxes[3]!.element.checked).toBe(false);
-    await checkboxes[3]!.setValue(true);
+    expect(checkboxes[3]!.attributes('aria-checked')).toBe('false');
+    await checkboxes[3]!.trigger('click');
     await wrapper.get('.exclusion-footer-actions').findAll('button').at(-1)!.trigger('click');
 
     expect(wrapper.emitted('save')).toEqual([[[{ path: '/fixture/cache', scopes: ['largeFiles', 'analysis'] }]]]);
@@ -221,10 +221,8 @@ describe('storage-scan exclusions dialog', () => {
     await flushPromises();
 
     expect(wrapper.findAll('.exclusion-row')).toHaveLength(1);
-    expect(wrapper.get('.exclusion-row').findAll('input[type="checkbox"]')).toHaveLength(4);
-    expect(wrapper.get('.exclusion-row').findAll<HTMLInputElement>('input[type="checkbox"]')[3]!.element.checked).toBe(
-      false
-    );
+    expect(wrapper.get('.exclusion-row').findAll('[role="checkbox"]')).toHaveLength(4);
+    expect(wrapper.get('.exclusion-row').findAll('[role="checkbox"]')[3]!.attributes('aria-checked')).toBe('false');
   });
 
   it('waits for folder validation before allowing the draft to be saved', async () => {

@@ -7,6 +7,7 @@ import MdDialogFooter from '@/components/custom/md-dialog-footer.vue';
 import MdDialogHeader from '@/components/custom/md-dialog-header.vue';
 import MdIconAction from '@/components/custom/md-icon-action.vue';
 import MdIcon from '@/components/icons/md-icon.vue';
+import MdCheckbox from '@/components/custom/md-checkbox.vue';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -244,11 +245,10 @@ onBeforeUnmount(() => {
               <div class="exclusion-scopes">
                 <span v-for="scope in scopes" :key="scope" class="exclusion-scope-item">
                   <label class="exclusion-scope">
-                    <input
-                      type="checkbox"
-                      :checked="folder.scopes.includes(scope)"
+                    <MdCheckbox
+                      :model-value="folder.scopes.includes(scope)"
                       :disabled="saving || (folder.scopes.length === 1 && folder.scopes.includes(scope))"
-                      @change="toggleScope(folder.path, scope, ($event.target as HTMLInputElement).checked)"
+                      @update:model-value="toggleScope(folder.path, scope, $event === true)"
                     />
                     {{ t(scopeLabels[scope]) }}
                   </label>
@@ -482,18 +482,6 @@ onBeforeUnmount(() => {
   font-size: var(--font-content-meta);
   cursor: pointer;
   white-space: nowrap;
-}
-
-.exclusion-scope input {
-  width: 14px;
-  height: 14px;
-  flex: none;
-  accent-color: var(--primary);
-  cursor: pointer;
-}
-
-.exclusion-scope input:disabled {
-  cursor: default;
 }
 
 .exclusion-scope-help {

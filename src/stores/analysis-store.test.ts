@@ -58,6 +58,35 @@ describe('analysis store', () => {
     expect(analysisStore.result).toEqual(result);
   });
 
+  it('starts the pending state before loading preferences and cancels before the native scan', async () => {
+    let finishInitialization: () => void = () => undefined;
+    const preferences = useStorageScanPreferencesStore();
+    vi.spyOn(preferences, 'initialize').mockImplementation(
+      () =>
+        new Promise<void>(resolve => {
+          finishInitialization = resolve;
+        })
+    );
+    const analyze = vi.spyOn(AnalysisService, 'analyze');
+    const cancel = vi.spyOn(AnalysisService, 'cancel');
+    const analysisStore = useAnalysisStore();
+    analysisStore.result = result;
+
+    const request = analysisStore.analyze('/fixture', true);
+    expect(analysisStore.pending).toBe(true);
+    expect(analysisStore.result).toEqual(result);
+
+    await analysisStore.cancel();
+    finishInitialization();
+    await request;
+
+    expect(analyze).not.toHaveBeenCalled();
+    expect(cancel).not.toHaveBeenCalled();
+    expect(analysisStore.result).toEqual(result);
+    expect(analysisStore.pending).toBe(false);
+    expect(analysisStore.cancelling).toBe(false);
+  });
+
   it('does not navigate when showing a cached result', async () => {
     const appStore = useAppStore();
     const analysisStore = useAnalysisStore();

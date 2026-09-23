@@ -286,7 +286,7 @@ function navigateHistory(index: number) {
 
     <article class="browser-card">
       <MdAnalysisBrowserToolbar
-        v-if="result"
+        v-if="result && !showPrimaryAnalysisProgress"
         :breadcrumbs="breadcrumbs"
         :busy="busy || deleting"
         :preserve-busy-appearance="folderNavigationPending"
@@ -298,11 +298,12 @@ function navigateHistory(index: number) {
         @home="analyze(homePath)"
         @navigate="analyze"
       />
-      <!-- The local overlay preserves workspace geometry during navigation. -->
+      <!-- Folder navigation keeps its toolbar; a primary analysis replaces the stale browser. -->
       <MdDelayedOperationWorkspace
         class="analysis-overlay"
-        :class="{ 'analysis-overlay--initial': !result }"
+        :class="{ 'analysis-overlay--full': !result || showPrimaryAnalysisProgress }"
         :active="busy"
+        :delay="showPrimaryAnalysisProgress ? 0 : undefined"
         mode="overlay"
         role="status"
         aria-live="polite"
@@ -340,7 +341,7 @@ function navigateHistory(index: number) {
       </MdEmptyState>
 
       <div
-        v-else
+        v-else-if="!showPrimaryAnalysisProgress"
         class="browser-content"
         :class="{ 'browser-content--details': viewMode === ANALYSIS_VIEW_IDS.details }"
         :inert="busy || undefined"
@@ -445,7 +446,7 @@ function navigateHistory(index: number) {
   --operation-workspace-overlay-top: calc(var(--layout-workspace-toolbar-height) + 36px + 2px);
 }
 
-.analysis-overlay--initial {
+.analysis-overlay--full {
   --operation-workspace-overlay-top: 0;
 }
 

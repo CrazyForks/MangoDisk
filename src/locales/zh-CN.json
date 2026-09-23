@@ -1,6 +1,5 @@
 {
   "ai": {
-    "sectionTitle": "AI",
     "configureAction": "配置…",
     "configurationGuide": "配置指南",
     "guideOpenInBrowser": "在浏览器中打开配置指南",
@@ -3569,8 +3568,6 @@
     "displaySettingsTitle": "任务栏与托盘设置",
     "autoSaveHint": "自动保存，即时生效",
     "done": "完成",
-    "menuBarTitle": "菜单栏",
-    "trayTitle": "状态显示",
     "showIcon": "Logo",
     "displayItems": "显示内容",
     "dragToReorder": "拖动排序",

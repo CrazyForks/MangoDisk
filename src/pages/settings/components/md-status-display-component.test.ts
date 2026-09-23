@@ -130,13 +130,13 @@ describe('status display interactions', () => {
     const wrapper = mount(Settings, { props: { isMacOs: false }, global: global() });
     wrappers.push(wrapper);
     await flushPromises();
-    expect(wrapper.get('.status-settings .settings-list [role="status"]').text()).toBe('systemStatus.taskbarNoSpace');
+    expect(wrapper.get('.status-settings [role="status"]').text()).toBe('systemStatus.taskbarNoSpace');
     expect(wrapper.find('#resident-display-options').exists()).toBe(false);
     expect(ResidentService.catalogue).not.toHaveBeenCalled();
     await wrapper.get('#resident-enabled').trigger('click');
     await flushPromises();
     expect(wrapper.find('#resident-configure').exists()).toBe(false);
-    expect(wrapper.find('.status-settings .settings-list [role="status"]').exists()).toBe(false);
+    expect(wrapper.find('.status-settings [role="status"]').exists()).toBe(false);
     expect(wrapper.get('#resident-enabled-hint').text()).toBe('systemStatus.displayHint');
   });
 

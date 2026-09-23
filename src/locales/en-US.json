@@ -1,6 +1,5 @@
 {
   "ai": {
-    "sectionTitle": "AI",
     "configureAction": "Configure…",
     "configurationGuide": "Configuration guide",
     "guideOpenInBrowser": "Open the configuration guide in your browser",
@@ -3569,8 +3568,6 @@
     "displaySettingsTitle": "Taskbar and system tray settings",
     "autoSaveHint": "Saved automatically, applied immediately",
     "done": "Done",
-    "menuBarTitle": "Menu bar",
-    "trayTitle": "Status display",
     "showIcon": "Logo",
     "displayItems": "Display items",
     "dragToReorder": "Drag to reorder",

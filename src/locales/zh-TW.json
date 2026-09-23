@@ -1,6 +1,5 @@
 {
   "ai": {
-    "sectionTitle": "AI",
     "configureAction": "設定…",
     "configurationGuide": "設定指南",
     "guideOpenInBrowser": "在瀏覽器中開啟設定指南",
@@ -3569,8 +3568,6 @@
     "displaySettingsTitle": "工作列與系統匣設定",
     "autoSaveHint": "自動儲存，即時生效",
     "done": "完成",
-    "menuBarTitle": "選單列",
-    "trayTitle": "狀態顯示",
     "showIcon": "Logo",
     "displayItems": "顯示內容",
     "dragToReorder": "拖曳排序",

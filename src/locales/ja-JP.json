@@ -1,6 +1,5 @@
 {
   "ai": {
-    "sectionTitle": "AI",
     "configureAction": "設定…",
     "configurationGuide": "設定ガイド",
     "guideOpenInBrowser": "ブラウザーで設定ガイドを開く",
@@ -3569,8 +3568,6 @@
     "displaySettingsTitle": "タスクバーとシステムトレイの設定",
     "autoSaveHint": "自動保存・即時反映",
     "done": "完了",
-    "menuBarTitle": "メニューバー",
-    "trayTitle": "ステータス表示",
     "showIcon": "Logo",
     "displayItems": "表示項目",
     "dragToReorder": "ドラッグで並べ替え",

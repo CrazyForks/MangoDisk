@@ -1,6 +1,5 @@
 {
   "ai": {
-    "sectionTitle": "AI",
     "configureAction": "설정…",
     "configurationGuide": "설정 가이드",
     "guideOpenInBrowser": "브라우저에서 설정 가이드 열기",
@@ -3569,8 +3568,6 @@
     "displaySettingsTitle": "작업 표시줄 및 시스템 트레이 설정",
     "autoSaveHint": "자동 저장 및 즉시 적용",
     "done": "완료",
-    "menuBarTitle": "메뉴 막대",
-    "trayTitle": "상태 표시",
     "showIcon": "Logo",
     "displayItems": "표시 항목",
     "dragToReorder": "드래그하여 순서 변경",

@@ -51,6 +51,7 @@ import MdSidebar from './components/md-sidebar.vue';
 import MdCleanupOperationOverlay from './components/md-cleanup-operation-overlay.vue';
 import MdGlobalErrorFeedback from './components/md-global-error-feedback.vue';
 import MdPrivacyOperationOverlay from './components/md-privacy-operation-overlay.vue';
+import MdStorageScanExclusionsEditor from './components/md-storage-scan-exclusions-editor.vue';
 import MdWindowTitlebar from './components/md-window-titlebar.vue';
 
 // Cleanup is the startup page. Secondary pages remain separate chunks, while
@@ -117,6 +118,10 @@ const cleanupOrchestrating = ref(false);
 const deepCleanupCancelling = ref(false);
 const cleanupCancellationRetried = ref(false);
 const settingsFocusRevision = ref(0);
+const scanExclusionsEditor = ref<InstanceType<typeof MdStorageScanExclusionsEditor> | null>(null);
+function openScanExclusions() {
+  void scanExclusionsEditor.value?.open();
+}
 const historyStore = useHistoryStore();
 const largeFilesStore = useLargeFilesStore();
 const privacyStore = usePrivacyStore();
@@ -637,10 +642,12 @@ async function cancelDeepCleanup() {
           @close-applications="closeApplicationsBeforeCleanup"
           @open="openPath"
           @privileged-scan="cleanupStore.scanPreviousInstallationsWithPrivileges()"
+          @open-exclusions="openScanExclusions"
         />
         <AnalysisPage
           v-else-if="store.currentPage === PAGE_IDS.analysis"
           :result="analysisStore.result"
+          :excluded-folders="analysisStore.scanExcludedFolders"
           :home-path="analysisStore.homePath"
           :disk="store.disk"
           :disks="store.disks"
@@ -651,6 +658,7 @@ async function cancelDeepCleanup() {
           @analyze="analyze"
           @cancel="analysisStore.cancel()"
           @error="store.reportError"
+          @open-exclusions="openScanExclusions"
           @open-entry="openAnalysisEntry"
           @reveal="openPath"
           @delete="deleteAnalysisEntryPermanently"
@@ -672,6 +680,7 @@ async function cancelDeepCleanup() {
           @open-entry="openLargeFileEntry"
           @reveal="openPath"
           @delete-many="deleteLargeFilesPermanently"
+          @open-exclusions="openScanExclusions"
         />
         <DuplicateFilesPage
           v-else-if="store.currentPage === PAGE_IDS.duplicateFiles"
@@ -696,6 +705,7 @@ async function cancelDeepCleanup() {
           @reveal="openPath"
           @delete="deleteDuplicateFilesPermanently"
           @load-more="duplicateFilesStore.loadMore"
+          @open-exclusions="openScanExclusions"
         />
         <ApplicationUninstallPage
           v-else-if="store.currentPage === PAGE_IDS.applicationUninstall"
@@ -755,11 +765,13 @@ async function cancelDeepCleanup() {
           :focus-revision="settingsFocusRevision"
           @save="saveSettings"
           @error="store.reportError"
+          @open-scan-exclusions="openScanExclusions"
         />
       </KeepAlive>
     </div>
 
     <MdGlobalErrorFeedback />
+    <MdStorageScanExclusionsEditor ref="scanExclusionsEditor" @error="store.reportError" />
     <MdCleanupOperationOverlay
       :rules="localizedCleanupScan?.rules ?? []"
       :cancelling="deepCleanupCancelling"

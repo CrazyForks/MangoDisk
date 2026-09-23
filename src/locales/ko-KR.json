@@ -2350,11 +2350,10 @@
   "settings": {
     "title": "설정",
     "generalSection": "일반",
-    "scanSection": "스캔",
+    "scanAnalysisSection": "스캔 및 분석",
     "scanExclusionsTitle": "제외된 폴더",
     "scanExclusionsDescription": "스캔별로 제외할 폴더를 설정",
     "scanExclusionsCount": "{count}개 폴더",
-    "macosPermissionsSection": "macOS 권한",
     "supportSection": "지원",
     "aboutSection": "정보",
     "languageTitle": "언어",

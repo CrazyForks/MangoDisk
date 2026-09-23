@@ -2350,11 +2350,10 @@
   "settings": {
     "title": "設定",
     "generalSection": "一般",
-    "scanSection": "掃描",
+    "scanAnalysisSection": "掃描與分析",
     "scanExclusionsTitle": "排除資料夾",
     "scanExclusionsDescription": "設定各功能掃描時要略過的資料夾",
     "scanExclusionsCount": "{count} 個資料夾",
-    "macosPermissionsSection": "macOS 權限",
     "supportSection": "支援",
     "aboutSection": "關於",
     "languageTitle": "介面語言",

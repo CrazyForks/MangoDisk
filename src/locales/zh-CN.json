@@ -2350,11 +2350,10 @@
   "settings": {
     "title": "设置",
     "generalSection": "常规",
-    "scanSection": "扫描",
+    "scanAnalysisSection": "扫描与分析",
     "scanExclusionsTitle": "排除文件夹",
     "scanExclusionsDescription": "设置各功能扫描时要跳过的文件夹",
     "scanExclusionsCount": "{count} 个文件夹",
-    "macosPermissionsSection": "macOS 权限",
     "supportSection": "支持",
     "aboutSection": "关于",
     "languageTitle": "界面语言",

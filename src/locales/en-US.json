@@ -2350,11 +2350,10 @@
   "settings": {
     "title": "Settings",
     "generalSection": "General",
-    "scanSection": "Scanning",
+    "scanAnalysisSection": "Scanning & analysis",
     "scanExclusionsTitle": "Excluded Folders",
     "scanExclusionsDescription": "Choose which scans skip each folder",
     "scanExclusionsCount": "{count} folders",
-    "macosPermissionsSection": "macOS Permissions",
     "supportSection": "Support",
     "aboutSection": "About",
     "languageTitle": "Language",

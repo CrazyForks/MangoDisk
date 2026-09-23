@@ -2350,11 +2350,10 @@
   "settings": {
     "title": "設定",
     "generalSection": "一般",
-    "scanSection": "スキャン",
+    "scanAnalysisSection": "スキャンと分析",
     "scanExclusionsTitle": "除外フォルダ",
     "scanExclusionsDescription": "スキャンごとに除外するフォルダを設定",
     "scanExclusionsCount": "{count} フォルダ",
-    "macosPermissionsSection": "macOS のアクセス権限",
     "supportSection": "サポート",
     "aboutSection": "概要",
     "languageTitle": "言語",

@@ -213,11 +213,10 @@ function updateTheme(value: unknown) {
         </Select>
       </MdSettingsRow>
       <MdAutostartSettings />
+      <MdStatusDisplaySettings :is-mac-os="isMacOs" />
     </MdSettingsGroup>
 
-    <MdStatusDisplaySettings :is-mac-os="isMacOs" />
-
-    <MdSettingsGroup :title="t('settings.scanSection')">
+    <MdSettingsGroup :title="t('settings.scanAnalysisSection')">
       <MdSettingsRow
         as="button"
         :disabled="scanExclusionsBusy"
@@ -232,14 +231,9 @@ function updateTheme(value: unknown) {
           <MdIcon :name="ICON_NAMES.chevronRight" :size="16" />
         </span>
       </MdSettingsRow>
-    </MdSettingsGroup>
-
-    <MdSettingsGroup :title="t('ai.sectionTitle')">
       <MdAiFeatureToggle @configure="aiSettingsOpen = true" />
-    </MdSettingsGroup>
-
-    <MdSettingsGroup v-if="isMacOs" :title="t('settings.macosPermissionsSection')">
       <MdSettingsRow
+        v-if="isMacOs"
         as="button"
         controls="responsive"
         :title="t('settings.fullDiskAccessTitle')"

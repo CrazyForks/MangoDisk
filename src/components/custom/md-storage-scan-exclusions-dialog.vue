@@ -261,7 +261,7 @@ onBeforeUnmount(() => {
                     <Tooltip :open="openHelpPath === folder.path" @update:open="setHelpOpen(folder.path, $event)">
                       <TooltipTrigger as-child>
                         <button
-                          class="exclusion-scope-help"
+                          class="md-help-action"
                           type="button"
                           :aria-label="t('storageScanExclusions.cleanupScopeHint')"
                           @click="setHelpOpen(folder.path, true)"
@@ -482,29 +482,6 @@ onBeforeUnmount(() => {
   font-size: var(--font-content-meta);
   cursor: pointer;
   white-space: nowrap;
-}
-
-.exclusion-scope-help {
-  display: grid;
-  width: 20px;
-  height: 20px;
-  flex: none;
-  place-items: center;
-  border-radius: 4px;
-  color: var(--muted-foreground);
-  cursor: help;
-}
-
-@media (hover: hover) {
-  .exclusion-scope-help:hover {
-    background: var(--surface-muted-subtle);
-    color: var(--foreground);
-  }
-}
-
-.exclusion-scope-help:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 1px;
 }
 
 .exclusion-empty-action {

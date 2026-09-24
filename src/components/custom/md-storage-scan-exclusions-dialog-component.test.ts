@@ -115,7 +115,7 @@ describe('storage-scan exclusions dialog', () => {
     const wrapper = mountDialog();
     const firstScope = wrapper.get('.exclusion-scope-item');
     const checkbox = firstScope.get('[role="checkbox"]');
-    const help = firstScope.get('.exclusion-scope-help');
+    const help = firstScope.get('.md-help-action');
 
     expect(firstScope.get('.exclusion-scope').text()).toContain('Deep Cleanup');
     expect(help.attributes('aria-label')).toBe(i18n.global.t('storageScanExclusions.cleanupScopeHint'));
@@ -140,7 +140,7 @@ describe('storage-scan exclusions dialog', () => {
         const scope = wrapper.get('.exclusion-scope-item');
         const hint = i18n.global.t('storageScanExclusions.cleanupScopeHint');
         expect(scope.get('.exclusion-scope').text()).toContain(i18n.global.t('navigation.cleanup'));
-        expect(scope.get('.exclusion-scope-help').attributes('aria-label')).toBe(hint);
+        expect(scope.get('.md-help-action').attributes('aria-label')).toBe(hint);
         expect(hint).not.toBe('storageScanExclusions.cleanupScopeHint');
       }
     } finally {

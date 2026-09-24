@@ -600,7 +600,7 @@ onBeforeUnmount(() => {
               </label>
               <Tooltip>
                 <TooltipTrigger as-child>
-                  <button class="rule-option-help" type="button">
+                  <button class="md-help-action" type="button">
                     <MdIcon :name="ICON_NAMES.help" :size="13" />
                     <span class="sr-only">{{ t('cleanup.customCleanup.includeSubdirectoriesDescription') }}</span>
                   </button>
@@ -621,7 +621,7 @@ onBeforeUnmount(() => {
               </label>
               <Tooltip>
                 <TooltipTrigger as-child>
-                  <button class="rule-option-help" type="button">
+                  <button class="md-help-action" type="button">
                     <MdIcon :name="ICON_NAMES.help" :size="13" />
                     <span class="sr-only">{{ t('cleanup.customCleanup.removeEmptyDirectoriesDescription') }}</span>
                   </button>
@@ -1058,22 +1058,6 @@ onBeforeUnmount(() => {
   cursor: pointer;
   font-size: var(--font-content-secondary);
   font-weight: var(--font-weight-label);
-}
-
-.rule-option-help {
-  @apply text-muted-foreground;
-  display: grid;
-  width: 20px;
-  height: 20px;
-  cursor: help;
-  place-items: center;
-  border-radius: 50%;
-  transition: color 140ms ease;
-}
-
-.rule-option-help:hover,
-.rule-option-help:focus-visible {
-  color: var(--foreground);
 }
 
 .empty-rules {

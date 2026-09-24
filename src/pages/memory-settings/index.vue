@@ -216,7 +216,7 @@ onBeforeUnmount(() => {
                 {{ t('memoryRelease.exclusions') }} <span>{{ draft.exclusions.length }}</span>
               </h2>
               <MdTooltip :text="t('memoryRelease.exclusionsHint')">
-                <button type="button" class="exclusion-help" :aria-label="t('memoryRelease.exclusionsHint')">
+                <button type="button" class="md-help-action" :aria-label="t('memoryRelease.exclusionsHint')">
                   <MdIcon :name="ICON_NAMES.help" :size="15" />
                 </button>
               </MdTooltip>
@@ -335,19 +335,6 @@ header p {
   align-items: center;
   gap: 6px;
 }
-.exclusion-help {
-  @apply text-muted-foreground rounded-sm;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  padding: 3px;
-  background-color: transparent;
-  cursor: help;
-}
-.exclusion-help:hover {
-  @apply text-foreground bg-accent;
-}
 h2 {
   font-size: 14px;
   font-weight: 600;
@@ -372,8 +359,7 @@ h2 span {
   opacity: 0.5;
   cursor: default;
 }
-.page-action:focus-visible,
-.exclusion-help:focus-visible {
+.page-action:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
 }

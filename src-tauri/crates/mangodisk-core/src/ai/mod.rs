@@ -46,7 +46,6 @@ pub enum AiError {
     EmptyResponse,
     ResponseTooLarge,
     FreeUnavailable,
-    FreeConsentRequired,
     FreeDailyLimit,
     FreeRateLimited,
     FreeConcurrent,

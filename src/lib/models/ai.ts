@@ -48,7 +48,6 @@ export interface InstalledLocalModel {
 export const AI_ERROR_LABELS = {
   disabled: 'ai.errors.disabled',
   freeUnavailable: 'ai.errors.freeUnavailable',
-  freeConsentRequired: 'ai.errors.freeConsentRequired',
   freeDailyLimit: 'ai.errors.freeDailyLimit',
   freeRateLimited: 'ai.errors.freeRateLimited',
   freeConcurrent: 'ai.errors.freeConcurrent',
@@ -78,6 +77,7 @@ export const AI_ERROR_LABELS = {
 export interface AiSettings {
   schemaVersion: 2;
   mode: AiServiceMode;
+  /** Legacy schema 2 field; free requests no longer require explicit consent. */
   freeConsent: boolean;
   freeAvailable: boolean;
   endpoint: string;
@@ -206,7 +206,6 @@ export interface AiUsage {
 export const AI_ERROR_CODES = [
   'disabled',
   'freeUnavailable',
-  'freeConsentRequired',
   'freeDailyLimit',
   'freeRateLimited',
   'freeConcurrent',

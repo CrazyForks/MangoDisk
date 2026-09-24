@@ -174,6 +174,38 @@ it.each(['zh-CN', 'zh-TW', 'en-US', 'ja-JP'] as const)(
   }
 );
 
+it('shows the first free explanation without an acceptance step', () => {
+  const pinia = createPinia();
+  const store = useAiStore(pinia);
+  store.$patch({ enabled: true, preferencesLoaded: true });
+  Object.assign(store.workspaces.startup, {
+    open: true,
+    context: (fixtures as AiContext[]).find(item => item.subject.module === 'startup')!,
+    settings: {
+      schemaVersion: 2,
+      mode: 'free',
+      freeConsent: false,
+      freeAvailable: true,
+      endpoint: '',
+      model: '',
+      hasKey: false,
+      reasoning: 'default',
+    },
+    status: 'generating',
+  });
+  const wrapper = mount(TooltipProvider, {
+    slots: { default: () => h(MdAiWorkspace, { module: 'startup' }) },
+    global: { plugins: [pinia, i18n], stubs: { MdAiSettingsDialog: true } },
+  });
+  try {
+    const body = wrapper.get('.overflow-y-auto');
+    expect(body.text()).toContain(i18n.global.t('ai.waiting'));
+    expect(body.find('button').exists()).toBe(false);
+  } finally {
+    wrapper.unmount();
+  }
+});
+
 it('keeps an existing answer and offers settings when the free service is disabled', async () => {
   streams.clear();
   const pinia = createPinia();

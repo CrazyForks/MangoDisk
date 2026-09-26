@@ -2823,6 +2823,11 @@
         "description": "Notion 生成的可重建网页、脚本、GPU、字典、日志与分区渲染缓存",
         "impact": "不会删除页面、离线内容、账号、Cookie、数据库、设置或登录状态；关闭 Notion 后清理。"
       },
+      "app.notion-service-worker-cache": {
+        "name": "Notion 网页响应缓存",
+        "description": "Notion 渲染分区中的 Service Worker 响应缓存",
+        "impact": "保留页面记录和账号数据；离线使用前，可能需要联网重新下载资源。请在关闭 Notion 后清理。"
+      },
       "app.netease-cloud-music-cache": {
         "name": "网易云音乐缓存",
         "description": "网易云音乐生成的可重建网页、脚本、GPU 与诊断日志缓存",
@@ -3252,6 +3257,11 @@
         "name": "Hugging Face 下载缓存",
         "description": "用于加快 Hugging Face 下载和上传的临时文件",
         "impact": "不会删除模型、数据集或未完成的上传任务，之后传输时可能重新下载这些文件。"
+      },
+      "ai.claude-code-cache": {
+        "name": "Claude Code 更新说明缓存",
+        "description": "Claude Code 下载的更新说明缓存",
+        "impact": "不会删除对话、提示词历史、插件、下载内容或设置；更新说明可重新下载。"
       },
       "special.ai-model-hugging-face": {
         "name": "Hugging Face 本地模型",

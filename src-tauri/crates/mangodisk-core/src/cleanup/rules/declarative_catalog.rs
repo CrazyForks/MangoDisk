@@ -527,6 +527,10 @@ const fn lifecycle(value: SourceLifecycle) -> RuleLifecycle {
     }
 }
 
+#[cfg(all(test, any(target_os = "macos", windows)))]
+#[path = "notion_and_claude_code_tests.rs"]
+mod notion_and_claude_code_tests;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -576,6 +580,65 @@ mod tests {
                 !suffixes.contains(&"Service Worker/ScriptCache"),
                 "{} must preserve registered service worker scripts",
                 parsed.source_name
+            );
+        }
+    }
+
+    #[test]
+    fn notion_and_claude_code_rules_keep_narrow_cross_platform_boundaries() {
+        let parsed = parse_catalog(EMBEDDED_DECLARATIVE_RULE_SOURCES)
+            .expect("embedded rules must pass runtime validation");
+        let notion = parsed
+            .iter()
+            .filter(|entry| entry.rule.id == "app.notion-service-worker-cache")
+            .collect::<Vec<_>>();
+        let claude = parsed
+            .iter()
+            .filter(|entry| entry.rule.id == "ai.claude-code-cache")
+            .collect::<Vec<_>>();
+
+        assert_eq!(notion.len(), 2, "Notion must cover macOS and Windows");
+        assert_eq!(claude.len(), 2, "Claude Code must cover macOS and Windows");
+
+        for entry in notion {
+            let rule = &entry.rule;
+            let (template, process) = match rule.platform {
+                SourcePlatform::Macos => ("${application_support}/Notion/Partitions", "Notion"),
+                SourcePlatform::Windows => ("${roaming_app_data}/Notion/Partitions", "Notion.exe"),
+                SourcePlatform::Linux => panic!("Notion has no verified Linux cleanup rule"),
+            };
+            assert_eq!(rule.risk, SourceRisk::Recoverable);
+            assert!(!rule.default_selected);
+            assert_eq!(rule.recommended_selected, Some(true));
+            assert!(rule.execution.requires_app_close());
+            assert_eq!(rule.required_stopped_processes, [process]);
+            assert_eq!(rule.roots.len(), 1);
+            assert_eq!(rule.roots[0].template, template);
+            assert_eq!(rule.roots[0].kind, DeclarativeRootKind::ChildDirectories);
+            assert!(rule.roots[0].include_all_children);
+            assert_eq!(rule.roots[0].suffixes, ["Service Worker/CacheStorage"]);
+            assert!(rule.roots[0].verified_rebuildable);
+            assert_eq!(rule.matcher, DeclarativeMatcherSource::All);
+        }
+
+        for entry in claude {
+            let rule = &entry.rule;
+            assert_eq!(rule.risk, SourceRisk::Safe);
+            assert!(!rule.execution.requires_app_close());
+            assert!(rule.required_stopped_processes.is_empty());
+            assert_eq!(rule.roots.len(), 1);
+            assert_eq!(rule.roots[0].kind, DeclarativeRootKind::Static);
+            assert_eq!(rule.roots[0].template, "${home}/.claude/cache");
+            assert_eq!(
+                rule.matcher,
+                DeclarativeMatcherSource::AllOf {
+                    items: vec![
+                        DeclarativeMatcherSource::NameEquals {
+                            values: vec!["changelog.md".to_string()],
+                        },
+                        DeclarativeMatcherSource::MaxDepth { depth: 1 },
+                    ],
+                }
             );
         }
     }

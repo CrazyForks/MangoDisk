@@ -2823,6 +2823,11 @@
         "description": "Notion が生成する再作成可能な Web、スクリプト、GPU、辞書、ログ、パーティションレンダリングキャッシュ。",
         "impact": "ページ、オフラインコンテンツ、アカウント、Cookie、データベース、設定、サインイン状態は保持されます。クリーンアップ前に Notion を終了してください。"
       },
+      "app.notion-service-worker-cache": {
+        "name": "Notion Web応答キャッシュ",
+        "description": "Notionのレンダラーパーティションに保存されたService Worker応答キャッシュ。",
+        "impact": "ページの記録とアカウント情報は保持されます。オフラインで使う前に、オンラインでリソースを再ダウンロードする必要がある場合があります。クリーンアップ前にNotionを終了してください。"
+      },
       "app.netease-cloud-music-cache": {
         "name": "NetEase Cloud Music キャッシュ",
         "description": "NetEase Cloud Music が生成する再作成可能な Web、スクリプト、GPU、診断ログのキャッシュ。",
@@ -3252,6 +3257,11 @@
         "name": "Hugging Faceダウンロードキャッシュ",
         "description": "Hugging Faceのダウンロードおよびアップロードを高速化するために使用される一時ファイル。",
         "impact": "モデル、データセット、および未完了のアップロードは保持されます。将来の転送でこれらのファイルが再度ダウンロードされる場合があります。"
+      },
+      "ai.claude-code-cache": {
+        "name": "Claude Codeリリースノートキャッシュ",
+        "description": "Claude Codeがダウンロードした変更履歴のキャッシュ。",
+        "impact": "会話、入力履歴、プラグイン、ダウンロード、設定は保持されます。リリースノートは再ダウンロードできます。"
       },
       "special.ai-model-hugging-face": {
         "name": "Hugging Faceローカルモデル",

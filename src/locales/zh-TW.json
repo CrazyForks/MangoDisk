@@ -2823,6 +2823,11 @@
         "description": "Notion 產生的可重建網頁、腳本、GPU、字典、記錄檔與分區渲染快取",
         "impact": "不會刪除頁面、離線內容、帳號、Cookie、資料庫、設定或登入狀態；關閉 Notion 後清理。"
       },
+      "app.notion-service-worker-cache": {
+        "name": "Notion 網頁回應快取",
+        "description": "Notion 渲染分區中的 Service Worker 回應快取",
+        "impact": "保留頁面記錄和帳號資料；離線使用前，可能需要連網重新下載資源。請在關閉 Notion 後清理。"
+      },
       "app.netease-cloud-music-cache": {
         "name": "網易雲音樂快取",
         "description": "網易雲音樂產生的可重建網頁、腳本、GPU 與診斷記錄檔快取",
@@ -3252,6 +3257,11 @@
         "name": "Hugging Face 下載快取",
         "description": "用於加快 Hugging Face 下載和上傳的暫存檔案",
         "impact": "不會刪除模型、資料集或未完成的上傳任務，之後傳輸時可能重新下載這些檔案。"
+      },
+      "ai.claude-code-cache": {
+        "name": "Claude Code 更新說明快取",
+        "description": "Claude Code 下載的更新說明快取",
+        "impact": "不會刪除對話、提示詞歷史、外掛程式、下載內容或設定；更新說明可重新下載。"
       },
       "special.ai-model-hugging-face": {
         "name": "Hugging Face 本機模型",

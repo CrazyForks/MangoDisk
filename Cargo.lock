@@ -2649,6 +2649,7 @@ dependencies = [
  "serde_json",
  "sysinfo",
  "system-configuration",
+ "tempfile",
  "walkdir",
  "windows",
  "windows-core 0.61.2",

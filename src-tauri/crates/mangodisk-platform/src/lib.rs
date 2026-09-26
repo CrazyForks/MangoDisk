@@ -70,7 +70,8 @@ pub use file_icon::{
 pub use inventory::detect_git_executable;
 #[cfg(target_os = "macos")]
 pub use macos::{
-    macos_privileged_application_removal_supported, remove_application_bundle_with_privileges,
+    macos_enabled_login_item_paths, macos_privileged_application_removal_supported,
+    remove_application_bundle_with_privileges,
 };
 pub use startup_helper::run_startup_helper_mode;
 #[cfg(windows)]

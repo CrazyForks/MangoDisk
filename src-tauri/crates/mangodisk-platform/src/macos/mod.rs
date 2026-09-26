@@ -14,6 +14,8 @@ mod system_maintenance;
 mod system_settings;
 mod volumes;
 
+pub use startup::macos_enabled_login_item_paths;
+
 use std::{
     ffi::{OsStr, OsString},
     fs,
